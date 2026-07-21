@@ -1,0 +1,5 @@
+.claude/
+.DS_Store
+Thumbs.db
+img/*.orig.mp4
+img/_clip2frame.jpg

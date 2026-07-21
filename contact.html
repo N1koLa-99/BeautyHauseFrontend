@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FBF6F2">
+    <title>Контакти — Beauty House</title>
+    <meta name="description" content="Свържи се с Beauty House — адрес, телефон, работно време и локация.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <header class="nav">
+        <div class="nav__inner">
+            <a class="brand" href="index.html"><span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span><span>Beauty <b>House</b></span></a>
+            <nav class="nav__links" id="nav-links">
+                <a class="nav__link" href="index.html">Начало</a>
+                <a class="nav__link" href="services.html">Услуги</a>
+                <a class="nav__link" href="team.html">Екип</a>
+                <a class="nav__link" href="booking.html">Запази час</a>
+                <a class="nav__link" href="contact.html">Контакти</a>
+            </nav>
+            <div class="nav__actions">
+                <div class="nav__actions" id="nav-auth"></div>
+                <button class="nav__toggle" id="nav-toggle" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+            </div>
+        </div>
+    </header>
+
+    <section class="section" style="padding-top:calc(var(--nav-h) + 60px)">
+        <div class="container">
+            <div class="section__head center" style="margin-inline:auto">
+                <span class="eyebrow reveal" style="justify-content:center">На една ръка разстояние</span>
+                <h1 class="reveal" data-delay="1" style="margin:1rem 0 .8rem">Свържи се с нас</h1>
+                <p class="lead reveal" data-delay="2">Отбий се, обади се или ни пиши — с радост ще те посрещнем.</p>
+            </div>
+
+            <div class="grid" style="grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+                <!-- Контактни данни -->
+                <div class="reveal">
+                    <div class="cards" style="gap:16px">
+                        <div class="card" style="display:flex;gap:1rem;align-items:center" data-tilt="4">
+                            <div class="service-card__icon ic--rose" style="margin:0" data-icon="map-pin"></div>
+                            <div><small class="hint">Адрес</small><h3 style="font-size:1.15rem" data-salon="address"></h3></div>
+                        </div>
+                        <a class="card" href="https://studio24.bg/beauty-house-s2278" target="_blank" rel="noopener" style="display:flex;gap:1rem;align-items:center;text-decoration:none;color:inherit" data-tilt="4">
+                            <div class="service-card__icon ic--gold" style="margin:0" data-icon="calendar"></div>
+                            <div><small class="hint">Запази час онлайн</small><h3 style="font-size:1.15rem">Studio24 →</h3></div>
+                        </a>
+                        <a class="card" href="https://www.facebook.com/BeautyHouse19R/" target="_blank" rel="noopener" style="display:flex;gap:1rem;align-items:center;text-decoration:none;color:inherit" data-tilt="4">
+                            <div class="service-card__icon ic--mauve" style="margin:0" data-icon="facebook"></div>
+                            <div><small class="hint">Facebook</small><h3 style="font-size:1.15rem">BeautyHouse19R →</h3></div>
+                        </a>
+                        <div class="card" style="display:flex;gap:1rem;align-items:center" data-tilt="4">
+                            <div class="service-card__icon" style="margin:0" data-icon="clock"></div>
+                            <div><small class="hint">Работно време</small><h3 style="font-size:1.15rem" data-salon="hours"></h3></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Форма (визуална) -->
+                <div class="panel reveal" data-delay="1">
+                    <h3 style="margin-bottom:.4rem">Пиши ни съобщение</h3>
+                    <p class="hint" style="margin-bottom:1.4rem">Ще ти отговорим възможно най-бързо.</p>
+                    <form id="contact-form">
+                        <div class="field"><label>Име</label><input class="input" name="name" required placeholder="Твоето име"></div>
+                        <div class="field"><label>Имейл</label><input class="input" type="email" name="email" required placeholder="ти@example.com"></div>
+                        <div class="field"><label>Съобщение</label><textarea class="input" name="msg" required placeholder="Как можем да помогнем?"></textarea></div>
+                        <button class="btn btn--primary btn--block" type="submit">Изпрати <span class="btn__arrow">→</span></button>
+                        <div id="contact-note" style="margin-top:1rem"></div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="reveal" style="margin-top:48px">
+                <div class="section__head center" style="margin-inline:auto;margin-bottom:1.2rem">
+                    <h2 style="margin:0">Заповядай при нас</h2>
+                    <p class="hint" style="margin-top:.4rem">Горна Оряховица, пл. „Георги Измирлиев" 3 — в самия център.</p>
+                </div>
+                <iframe title="Карта — Beauty House" width="100%" height="380" style="border:0;border-radius:20px;box-shadow:var(--shadow-soft,0 20px 50px rgba(0,0,0,.08))" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://www.google.com/maps?q=43.122374837,25.688019991&z=17&output=embed"></iframe>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__grid">
+                <div class="footer__about">
+                    <a class="brand" href="index.html"><span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span><span>Beauty <b>House</b></span></a>
+                    <p>Салон за красота, където всеки детайл е грижа за теб.</p>
+                </div>
+                <div><h4>Разглеждай</h4><div class="footer__links">
+                    <a href="index.html">Начало</a><a href="services.html">Услуги</a><a href="team.html">Екип</a><a href="booking.html">Запази час</a>
+                </div></div>
+                <div><h4>Салон</h4><div class="footer__links">
+                    <a href="contact.html">Контакти</a><a href="auth.html">Вход / Регистрация</a><a href="account.html">Моите часове</a>
+                </div></div>
+                <div><h4>Открий ни</h4><div class="footer__links">
+                    <a href="https://www.facebook.com/BeautyHouse19R/" target="_blank" rel="noopener">Facebook</a>
+                    <a href="https://studio24.bg/beauty-house-s2278" target="_blank" rel="noopener">Запази час · Studio24</a>
+                    <span class="hint" data-salon="address"></span><br><span class="hint" data-salon="hours"></span>
+                </div></div>
+            </div>
+            <div class="footer__bottom"><span>© <span id="year"></span> Beauty House. Всички права запазени.</span><span>Изработено с грижа <span class="heart-mark" data-icon="heart" data-icon-size="14"></span></span></div>
+        </div>
+    </footer>
+
+    <script src="js/icons.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/interactions.js"></script>
+    <script>
+        document.getElementById('contact-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const note = document.getElementById('contact-note');
+            note.innerHTML = `<div class="alert alert--ok">Благодарим! Съобщението е готово за изпращане — ще се свържем скоро.</div>`;
+            e.target.reset();
+        });
+    </script>
+</body>
+</html>

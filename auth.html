@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FBF6F2">
+    <title>Вход / Регистрация — Beauty House</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <header class="nav">
+        <div class="nav__inner">
+            <a class="brand" href="index.html"><span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span><span>Beauty <b>House</b></span></a>
+            <nav class="nav__links" id="nav-links">
+                <a class="nav__link" href="index.html">Начало</a>
+                <a class="nav__link" href="services.html">Услуги</a>
+                <a class="nav__link" href="team.html">Екип</a>
+                <a class="nav__link" href="booking.html">Запази час</a>
+                <a class="nav__link" href="contact.html">Контакти</a>
+            </nav>
+            <div class="nav__actions">
+                <div class="nav__actions" id="nav-auth"></div>
+                <button class="nav__toggle" id="nav-toggle" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+            </div>
+        </div>
+    </header>
+
+    <section class="section" style="padding-top:calc(var(--nav-h) + 60px);min-height:100svh;display:flex;align-items:center">
+        <div class="container" style="max-width:520px">
+            <div class="panel reveal">
+                <div class="center" style="margin-bottom:1.6rem">
+                    <span class="eyebrow" style="justify-content:center">Добре дошъл</span>
+                    <h2 style="margin-top:.8rem" id="auth-title">Влез в профила си</h2>
+                </div>
+
+                <!-- Табове -->
+                <div class="center" style="margin-bottom:1.8rem">
+                    <div class="tabs" id="auth-tabs">
+                        <span class="tabs__thumb" id="tabs-thumb"></span>
+                        <button class="tab active" data-tab="login">Вход</button>
+                        <button class="tab" data-tab="register">Регистрация</button>
+                    </div>
+                </div>
+
+                <!-- Вход -->
+                <form id="login-form">
+                    <div class="field"><label>Имейл</label><input class="input" type="email" name="email" required placeholder="ти@example.com"></div>
+                    <div class="field"><label>Парола</label><input class="input" type="password" name="password" required placeholder="••••••••"></div>
+                    <button class="btn btn--primary btn--block btn--lg" type="submit">Влез</button>
+                </form>
+
+                <!-- Регистрация -->
+                <form id="register-form" hidden>
+                    <div class="field"><label>Име и фамилия</label><input class="input" name="fullName" required placeholder="Име Фамилия"></div>
+                    <div class="field"><label>Имейл</label><input class="input" type="email" name="email" required placeholder="ти@example.com"></div>
+                    <div class="field"><label>Телефон</label><input class="input" type="tel" name="phone" required placeholder="+359..."></div>
+                    <div class="field"><label>Парола</label><input class="input" type="password" name="password" required minlength="6" placeholder="мин. 6 символа"></div>
+                    <button class="btn btn--primary btn--block btn--lg" type="submit">Създай профил</button>
+                </form>
+
+                <!-- Потвърждение — първо имейл, после телефон -->
+                <form id="verify-form" hidden>
+                    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
+                        <span class="pill" id="vstep-1">1 · Имейл</span>
+                        <span style="color:var(--muted)">→</span>
+                        <span class="pill" id="vstep-2" style="opacity:.5">2 · Телефон</span>
+                    </div>
+                    <p class="hint" id="verify-info" style="margin-bottom:1rem"></p>
+                    <div class="field"><label id="verify-label">Код от имейла</label><input class="input" id="verify-code" required inputmode="numeric" autocomplete="one-time-code" placeholder="6-цифрен код"></div>
+                    <button class="btn btn--primary btn--block btn--lg" type="submit" id="verify-btn">Потвърди имейла</button>
+                    <p class="hint center" style="margin-top:1rem"><a href="#" id="resend-link">Изпрати кода отново</a></p>
+                </form>
+
+                <div id="auth-note" style="margin-top:1.2rem"></div>
+                <p class="hint center" style="margin-top:1.4rem">Запазването на час изисква профил — отнема секунди.</p>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/icons.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/interactions.js"></script>
+    <script src="js/auth-page.js"></script>
+</body>
+</html>

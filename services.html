@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FBF6F2">
+    <title>Услуги — Beauty House</title>
+    <meta name="description" content="Разгледай услугите на Beauty House — коса, нокти, грижа за лице и още. Запази час онлайн.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <header class="nav">
+        <div class="nav__inner">
+            <a class="brand" href="index.html"><span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span><span>Beauty <b>House</b></span></a>
+            <nav class="nav__links" id="nav-links">
+                <a class="nav__link" href="index.html">Начало</a>
+                <a class="nav__link" href="services.html">Услуги</a>
+                <a class="nav__link" href="team.html">Екип</a>
+                <a class="nav__link" href="booking.html">Запази час</a>
+                <a class="nav__link" href="contact.html">Контакти</a>
+            </nav>
+            <div class="nav__actions">
+                <div class="nav__actions" id="nav-auth"></div>
+                <button class="nav__toggle" id="nav-toggle" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Заглавна лента -->
+    <section class="section" style="padding-top:calc(var(--nav-h) + 60px)">
+        <div class="container center">
+            <span class="eyebrow reveal" style="justify-content:center">Нашата селекция</span>
+            <h1 class="reveal" data-delay="1" style="margin:1rem 0 1rem">Услуги</h1>
+            <p class="lead reveal" data-delay="2" style="max-width:620px;margin:0 auto">
+                Всеки специалист определя собствена цена и продължителност — затова виждаш „от" цена. Точната стойност избираш при запазване.
+            </p>
+        </div>
+    </section>
+
+    <!-- Списък услуги -->
+    <section class="section" style="padding-top:0">
+        <div class="container">
+            <div class="cards cards--3" id="services-list">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="section section--tight">
+        <div class="container">
+            <div class="panel center reveal">
+                <h2 style="margin-bottom:1rem">Намери своя момент</h2>
+                <p class="lead" style="max-width:480px;margin:0 auto 1.8rem">Избери специалист и свободен час, който ти пасва.</p>
+                <a href="booking.html" class="btn btn--primary btn--lg">Запази час <span class="btn__arrow">→</span></a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__grid">
+                <div class="footer__about">
+                    <a class="brand" href="index.html"><span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span><span>Beauty <b>House</b></span></a>
+                    <p>Салон за красота, където всеки детайл е грижа за теб.</p>
+                </div>
+                <div><h4>Разглеждай</h4><div class="footer__links">
+                    <a href="index.html">Начало</a><a href="services.html">Услуги</a><a href="team.html">Екип</a><a href="booking.html">Запази час</a>
+                </div></div>
+                <div><h4>Салон</h4><div class="footer__links">
+                    <a href="contact.html">Контакти</a><a href="auth.html">Вход / Регистрация</a><a href="account.html">Моите часове</a>
+                </div></div>
+                <div><h4>Открий ни</h4><div class="footer__links">
+                    <a href="https://www.facebook.com/BeautyHouse19R/" target="_blank" rel="noopener">Facebook</a>
+                    <a href="https://studio24.bg/beauty-house-s2278" target="_blank" rel="noopener">Запази час · Studio24</a>
+                    <span class="hint" data-salon="address"></span><br><span class="hint" data-salon="hours"></span>
+                </div></div>
+            </div>
+            <div class="footer__bottom"><span>© <span id="year"></span> Beauty House. Всички права запазени.</span><span>Изработено с грижа <span class="heart-mark" data-icon="heart" data-icon-size="14"></span></span></div>
+        </div>
+    </footer>
+
+    <script src="js/icons.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/interactions.js"></script>
+    <script src="js/services.js"></script>
+</body>
+</html>

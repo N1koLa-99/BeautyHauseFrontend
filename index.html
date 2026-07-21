@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FBF6F2">
+    <title>Beauty House — Салон за красота</title>
+    <meta name="description" content="Beauty House — салон за красота. Запази своя час онлайн за коса, маникюр и грижа с нашия екип от професионалисти.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://picsum.photos">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <!-- ================= NAV ================= -->
+    <header class="nav nav--on-hero">
+        <div class="nav__inner">
+            <a class="brand" href="index.html">
+                <span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span>
+                <span>Beauty <b>House</b></span>
+            </a>
+            <nav class="nav__links" id="nav-links">
+                <a class="nav__link" href="index.html">Начало</a>
+                <a class="nav__link" href="services.html">Услуги</a>
+                <a class="nav__link" href="team.html">Екип</a>
+                <a class="nav__link" href="booking.html">Запази час</a>
+                <a class="nav__link" href="contact.html">Контакти</a>
+                <div class="nav__links-footer">
+                    <div class="nav__links-social">
+                        <a class="social-btn" href="#" data-salon="instagram" data-href-only target="_blank" rel="noopener" aria-label="Instagram"><span data-icon="instagram"></span></a>
+                        <a class="social-btn" href="#" data-salon="facebook" data-href-only target="_blank" rel="noopener" aria-label="Facebook"><span data-icon="facebook"></span></a>
+                        <a class="social-btn" href="#" data-salon="tiktok" data-href-only target="_blank" rel="noopener" aria-label="TikTok"><span data-icon="tiktok"></span></a>
+                    </div>
+                    <span class="hint" data-salon="hours"></span>
+                </div>
+            </nav>
+            <div class="nav__actions">
+                <div class="nav__actions" id="nav-auth"></div>
+                <button class="nav__toggle" id="nav-toggle" aria-label="Меню" aria-expanded="false">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================= HERO ================= -->
+    <section class="hero">
+        <div class="hero__aura" aria-hidden="true">
+            <span class="hero__aura-blob hero__aura-blob--1"></span>
+            <span class="hero__aura-blob hero__aura-blob--2"></span>
+            <span class="hero__aura-blob hero__aura-blob--3"></span>
+            <span class="hero__aura-blob hero__aura-blob--4"></span>
+            <span class="hero__aura-grain"></span>
+        </div>
+        <div class="container hero__inner">
+            <div class="hero__grid">
+                <div class="hero__copy">
+                    <span class="eyebrow anim">Салон за красота · Горна Оряховица</span>
+                    <h1 class="hero__title">
+                        <span class="wd" style="animation-delay:.22s"><span class="wd__inner">Красотата</span></span>
+                        <span class="wd" style="animation-delay:.28s"><span class="wd__inner">е</span></span>
+                        <span class="wd accent" style="animation-delay:.34s"><span class="wd__inner">изкуство.</span></span><br>
+                        <span class="wd" style="animation-delay:.42s"><span class="wd__inner">Ти</span></span>
+                        <span class="wd" style="animation-delay:.48s"><span class="wd__inner">си</span></span>
+                        <span class="wd accent" style="animation-delay:.54s"><span class="wd__inner">платното.</span></span>
+                    </h1>
+                    <div class="hero__cta anim">
+                        <a href="booking.html" class="btn btn--primary btn--lg" data-magnetic>Запази час <span class="btn__arrow">→</span></a>
+                        <a href="services.html" class="btn btn--ghost btn--lg">Виж услугите</a>
+                    </div>
+                    <div class="hero__stats anim">
+                        <div class="hero__stat"><b data-count="12" data-suffix="+">0</b><span>Години опит</span></div>
+                        <div class="hero__stat"><b data-count="3">0</b><span>Специалисти</span></div>
+                        <div class="hero__stat"><b data-count="84">0</b><span>5-звездни отзива</span></div>
+                    </div>
+                </div>
+                <div class="hero__visual">
+                    <div class="hero__frame">
+                        <span class="hero__frame-line" aria-hidden="true"></span>
+                        <figure class="ph hero__frame-photo">
+                            <img class="hero__frame-img" src="img/HeroSectionImage.jpg" alt="Beauty House" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                            <video class="hero__frame-video" data-scroll-video src="img/HeroClip.mp4" poster="img/HeroSectionImage.jpg" muted loop playsinline preload="auto"></video>
+                            <span class="ph__mark"><span data-icon="sparkle"></span></span>
+                        </figure>
+                        <span class="hero__frame-label">Beauty House · Горна Оряховица</span>
+                        <div class="hero__frame-tag">
+                            <div class="hero__frame-tag__stars"><span data-icon="star" data-icon-size="12"></span><span data-icon="star" data-icon-size="12"></span><span data-icon="star" data-icon-size="12"></span><span data-icon="star" data-icon-size="12"></span><span data-icon="star" data-icon-size="12"></span></div>
+                            <div><strong>5.0</strong> <span>от 84 отзива</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="scroll-hint">
+            <div class="scroll-hint__mouse"></div>
+            Скролни
+        </div>
+    </section>
+
+    <!-- ================= MARQUEE ================= -->
+    <div class="marquee">
+        <div class="marquee__track">
+            <span><span data-icon="sparkle"></span> Ламиниране на вежди</span>
+            <span><span data-icon="sparkle"></span> Гел маникюр</span>
+            <span><span data-icon="sparkle"></span> Почистване на лице</span>
+            <span><span data-icon="sparkle"></span> Грижа за лице</span>
+            <span><span data-icon="sparkle"></span> Кола маска</span>
+            <span><span data-icon="sparkle"></span> Удължаване на мигли</span>
+            <span><span data-icon="sparkle"></span> Ламиниране на мигли</span>
+            <span><span data-icon="sparkle"></span> Нейл арт</span>
+            <span><span data-icon="sparkle"></span> Ламиниране на вежди</span>
+            <span><span data-icon="sparkle"></span> Гел маникюр</span>
+            <span><span data-icon="sparkle"></span> Почистване на лице</span>
+            <span><span data-icon="sparkle"></span> Грижа за лице</span>
+            <span><span data-icon="sparkle"></span> Кола маска</span>
+            <span><span data-icon="sparkle"></span> Удължаване на мигли</span>
+            <span><span data-icon="sparkle"></span> Ламиниране на мигли</span>
+            <span><span data-icon="sparkle"></span> Нейл арт</span>
+        </div>
+    </div>
+
+    <!-- ================= ФИЛОСОФИЯ (editorial split) ================= -->
+    <section class="section">
+        <div class="container">
+            <div class="split">
+                <div class="split__art reveal reveal-clip">
+                    <figure class="ph split__photo split__photo--main">
+                        <img src="img/BHInterior2.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                        <span class="ph__mark"><span data-icon="gem"></span></span>
+                    </figure>
+                    <figure class="ph split__photo split__photo--accent">
+                        <img src="img/BHInterior3.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                        <span class="ph__mark"><span data-icon="leaf"></span></span>
+                    </figure>
+                </div>
+                <div class="split__copy">
+                    <span class="eyebrow reveal reveal--right">Нашата философия</span>
+                    <h2 class="reveal reveal--right" data-delay="1">Място, където се чувстваш <em>у дома</em></h2>
+                    <p class="lead reveal reveal--right" data-delay="2">Стилна атмосфера и професионална грижа. Екип с дълъг опит в маникюр, мигли, вежди и терапии за лице — отдадени на професията си.</p>
+                    <ul class="check-list reveal reveal--right" data-delay="3">
+                        <li><span data-icon="check"></span> Сертифицирани специалисти</li>
+                        <li><span data-icon="check"></span> Премиум продукти</li>
+                        <li><span data-icon="check"></span> Индивидуален подход към всеки</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= УСЛУГИ (bento) ================= -->
+    <section class="section" id="services">
+        <div class="container">
+            <div class="section__head center">
+                <span class="eyebrow reveal">Какво предлагаме</span>
+                <h2 class="reveal" data-delay="1">Услуги, скроени с грижа</h2>
+                <p class="lead reveal" data-delay="2">Изберете от нашата селекция — точната цена и продължителност зависят от специалиста.</p>
+            </div>
+            <div class="bento reveal reveal-stagger" data-delay="1">
+                <article class="bento-tile bento-tile--a" data-tilt="6">
+                    <figure class="ph bento-tile__photo">
+                        <img src="img/Migli.jpeg" alt="Удължаване на мигли" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                        <span class="ph__mark"><span data-icon="sparkle"></span></span>
+                    </figure>
+                    <div class="bento-tile__body">
+                        <div class="service-card__icon" data-icon="sparkle"></div>
+                        <h3>Мигли</h3>
+                        <p>Удължаване и ламиниране на мигли за изразителен, естествен поглед.</p>
+                        <div class="bento-tile__meta"><span class="pill">Популярно</span><a href="services.html">Виж <span data-icon="arrow-right" data-icon-size="14"></span></a></div>
+                    </div>
+                </article>
+                <article class="bento-tile bento-tile--b" data-tilt="5">
+                    <figure class="ph bento-tile__photo">
+                        <img src="img/Nokti.jpeg" alt="Маникюр и педикюр" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                        <span class="ph__mark"><span data-icon="sparkle"></span></span>
+                    </figure>
+                    <div class="bento-tile__body">
+                        <div class="service-card__icon" data-icon="sparkle"></div>
+                        <h3>Нокти</h3>
+                        <p>Класически и гел маникюр, педикюр и нейл арт по идея.</p>
+                        <div class="bento-tile__meta"><span class="pill">Любимо</span><a href="services.html">Виж <span data-icon="arrow-right" data-icon-size="14"></span></a></div>
+                    </div>
+                </article>
+                <article class="bento-tile bento-tile--c" data-tilt="5">
+                    <figure class="ph bento-tile__photo">
+                        <img src="img/Lice.jpeg" alt="Грижа за лице" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                        <span class="ph__mark"><span data-icon="flower"></span></span>
+                    </figure>
+                    <div class="bento-tile__body">
+                        <div class="service-card__icon" data-icon="flower"></div>
+                        <h3>Лице</h3>
+                        <p>Почистване и терапии за лице с професионална козметика Tahe.</p>
+                        <div class="bento-tile__meta"><a href="services.html">Виж <span data-icon="arrow-right" data-icon-size="14"></span></a></div>
+                    </div>
+                </article>
+                <article class="bento-tile bento-tile--d" data-tilt="5">
+                    <figure class="ph bento-tile__photo">
+                        <img src="img/KolaMaska.png" alt="Кола маска" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')">
+                        <span class="ph__mark"><span data-icon="leaf"></span></span>
+                    </figure>
+                    <div class="bento-tile__body">
+                        <div class="service-card__icon" data-icon="leaf"></div>
+                        <h3>Кола маска</h3>
+                        <p>Гладка кожа — кола маска по зони по избор.</p>
+                        <div class="bento-tile__meta"><a href="services.html">Виж <span data-icon="arrow-right" data-icon-size="14"></span></a></div>
+                    </div>
+                </article>
+            </div>
+            <div class="center" style="margin-top:2.6rem">
+                <a href="services.html" class="btn btn--ghost reveal">Всички услуги <span class="btn__arrow">→</span></a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= ЕКИП ================= -->
+    <section class="section" style="background:linear-gradient(180deg, transparent, rgba(231,207,166,.16), transparent)">
+        <div class="container">
+            <div class="section__head center">
+                <span class="eyebrow reveal">Запознай се</span>
+                <h2 class="reveal" data-delay="1">Ръцете зад магията</h2>
+                <p class="lead reveal" data-delay="2">Малък екип от отдадени специалисти, всеки със свой почерк и стил.</p>
+            </div>
+            <div class="cards cards--3" id="team-preview">
+                <div class="spinner"></div>
+            </div>
+            <div class="center" style="margin-top:2.6rem">
+                <a href="team.html" class="btn btn--ghost reveal">Целият екип <span class="btn__arrow">→</span></a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= ГАЛЕРИЯ ================= -->
+    <section class="section section--tight">
+        <div class="container">
+            <div class="section__head center">
+                <span class="eyebrow reveal">Един поглед</span>
+                <h2 class="reveal" data-delay="1">Атмосферата в Beauty House</h2>
+            </div>
+            <div class="gallery reveal reveal-clip" data-delay="1">
+                <figure class="gallery__item"><span class="ph"><img src="img/BHInterior1.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="gem"></span></span></span></figure>
+                <figure class="gallery__item"><span class="ph"><img src="img/BHInterior2.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="scissors"></span></span></span></figure>
+                <figure class="gallery__item"><span class="ph"><img src="img/BHInterior3.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="wand"></span></span></span></figure>
+                <figure class="gallery__item"><span class="ph"><img src="img/BHInterior4.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="flower"></span></span></span></figure>
+                <figure class="gallery__item"><span class="ph"><img src="img/BHInterior1.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="sparkle"></span></span></span></figure>
+                <figure class="gallery__item"><span class="ph"><img src="img/BHInterior4.webp" alt="Beauty House — интериор" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="leaf"></span></span></span></figure>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= ЦИТАТ (parallax band) ================= -->
+    <section class="parallax-band">
+        <video class="parallax-band__video" data-scroll-video src="img/Clip2.mp4" muted loop playsinline preload="none"></video>
+        <span class="eyebrow reveal" style="justify-content:center;color:rgba(255,255,255,.85)">Beauty House процес</span>
+        <p class="parallax-band__quote reveal" data-delay="1">Тук красотата е процес,<br>а не бързане.</p>
+        <a href="booking.html" class="btn btn--outline-light reveal" data-delay="2" data-magnetic>Резервирай своя момент <span class="btn__arrow">→</span></a>
+    </section>
+
+    <!-- ================= ЗАЩО НАС ================= -->
+    <section class="section">
+        <div class="container">
+            <div class="section__head center">
+                <span class="eyebrow reveal">Защо Beauty House</span>
+                <h2 class="reveal" data-delay="1">Грижа, на която се доверяваш</h2>
+            </div>
+            <div class="cards cards--4 feature-grid">
+                <article class="card reveal" data-tilt="4">
+                    <div class="service-card__icon ic--rose" data-icon="calendar-check"></div>
+                    <h3>Онлайн запазване</h3>
+                    <p>Специалист, услуга и свободен час — за под минута.</p>
+                </article>
+                <article class="card reveal" data-delay="1" data-tilt="4">
+                    <div class="service-card__icon ic--gold" data-icon="flask"></div>
+                    <h3>Качествени продукти</h3>
+                    <p>Работим само с марки, на които вярваме.</p>
+                </article>
+                <article class="card reveal" data-delay="2" data-tilt="4">
+                    <div class="service-card__icon ic--mauve" data-icon="clock"></div>
+                    <h3>Без чакане</h3>
+                    <p>Точни часове, уважение към твоето време.</p>
+                </article>
+                <article class="card reveal" data-delay="3" data-tilt="4">
+                    <div class="service-card__icon" data-icon="gem"></div>
+                    <h3>Личен подход</h3>
+                    <p>Слушаме и създаваме визия, която подчертава теб.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= СТЪПКИ ================= -->
+    <section class="section section--tight">
+        <div class="container">
+            <div class="section__head center">
+                <span class="eyebrow reveal">Лесно е</span>
+                <h2 class="reveal" data-delay="1">Три стъпки до новото ти <em>аз</em></h2>
+            </div>
+            <div class="steps-grid">
+                <article class="step-tile reveal">
+                    <span class="step-tile__num">01</span>
+                    <div class="service-card__icon" data-icon="user"></div>
+                    <h3>Избери</h3>
+                    <p>Специалист и услуга, които ти допадат.</p>
+                </article>
+                <article class="step-tile reveal" data-delay="1">
+                    <span class="step-tile__num">02</span>
+                    <div class="service-card__icon" data-icon="calendar-check"></div>
+                    <h3>Запази</h3>
+                    <p>Виж свободните часове и потвърди за секунди.</p>
+                </article>
+                <article class="step-tile reveal" data-delay="2">
+                    <span class="step-tile__num">03</span>
+                    <div class="service-card__icon" data-icon="sparkle"></div>
+                    <h3>Ела &amp; блести</h3>
+                    <p>Останалото оставяш на нашите ръце.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= ОТЗИВИ ================= -->
+    <section class="section">
+        <div class="container">
+            <div class="section__head center">
+                <span class="eyebrow reveal">Какво казват клиентите</span>
+                <h2 class="reveal" data-delay="1">Доверието, което ни движи</h2>
+            </div>
+            <div class="testimonials" id="reviews-list">
+                <article class="testimonial reveal">
+                    <div class="testimonial__stars"><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span></div>
+                    <p>„Най-добрата прическа, която съм имала. Екипът наистина слуша какво искаш.“</p>
+                    <div class="testimonial__who">
+                        <figure class="ph"><img src="img/client1.svg" alt="Клиент" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="user"></span></span></figure>
+                        <div><b>Мария Иванова</b><span>Редовен клиент</span></div>
+                    </div>
+                </article>
+                <article class="testimonial reveal" data-delay="1">
+                    <div class="testimonial__stars"><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span></div>
+                    <p>„Онлайн резервацията е супер удобна, а маникюрът — перфектен всеки път.“</p>
+                    <div class="testimonial__who">
+                        <figure class="ph"><img src="img/client2.svg" alt="Клиент" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="user"></span></span></figure>
+                        <div><b>George Petrov</b><span>Клиент от 2022</span></div>
+                    </div>
+                </article>
+                <article class="testimonial reveal" data-delay="2">
+                    <div class="testimonial__stars"><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span></div>
+                    <p>„Атмосферата е спокойна и луксозна. Излизам всеки път по-уверена.“</p>
+                    <div class="testimonial__who">
+                        <figure class="ph"><img src="img/client3.svg" alt="Клиент" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="user"></span></span></figure>
+                        <div><b>Диана Стоянова</b><span>Редовен клиент</span></div>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= CTA ================= -->
+    <section class="section cta-section">
+        <figure class="ph cta-section__bg"><img src="img/cta.svg" alt="" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"></figure>
+        <div class="container">
+            <div class="panel center reveal" style="padding:clamp(2.4rem,5vw,4.6rem)">
+                <span class="eyebrow" style="justify-content:center">Готова ли си?</span>
+                <h2 style="margin:1rem 0 1rem">Твоят момент на грижа те чака</h2>
+                <p class="lead" style="max-width:520px;margin:0 auto 2rem">Запази своя час днес и си подари малко повече красота и спокойствие.</p>
+                <a href="booking.html" class="btn btn--primary btn--lg">Запази час сега <span class="btn__arrow">→</span></a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= FOOTER ================= -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__grid">
+                <div class="footer__about">
+                    <a class="brand" href="index.html"><span class="brand__mark brand__mark--logo"><img src="img/LogoBH.jpg" alt="Beauty House"></span><span>Beauty <b>House</b></span></a>
+                    <p>Салон за красота, където всеки детайл е грижа за теб. Заповядай — ще се почувстваш прекрасно.</p>
+                    <div class="footer__social">
+                        <a class="social-btn" href="#" data-salon="instagram" data-href-only target="_blank" rel="noopener" aria-label="Instagram"><span data-icon="instagram"></span></a>
+                        <a class="social-btn" href="#" data-salon="facebook" data-href-only target="_blank" rel="noopener" aria-label="Facebook"><span data-icon="facebook"></span></a>
+                        <a class="social-btn" href="#" data-salon="tiktok" data-href-only target="_blank" rel="noopener" aria-label="TikTok"><span data-icon="tiktok"></span></a>
+                    </div>
+                </div>
+                <div>
+                    <h4>Разглеждай</h4>
+                    <div class="footer__links">
+                        <a href="index.html">Начало</a>
+                        <a href="services.html">Услуги</a>
+                        <a href="team.html">Екип</a>
+                        <a href="booking.html">Запази час</a>
+                    </div>
+                </div>
+                <div>
+                    <h4>Салон</h4>
+                    <div class="footer__links">
+                        <a href="contact.html">Контакти</a>
+                        <a href="auth.html">Вход / Регистрация</a>
+                        <a href="account.html">Моите часове</a>
+                    </div>
+                </div>
+                <div>
+                    <h4>Открий ни</h4>
+                    <div class="footer__links">
+                        <a href="https://www.facebook.com/BeautyHouse19R/" target="_blank" rel="noopener">Facebook</a>
+                        <a href="https://studio24.bg/beauty-house-s2278" target="_blank" rel="noopener">Запази час · Studio24</a>
+                        <span class="hint" data-salon="address"></span><br>
+                        <span class="hint" data-salon="hours"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <span>© <span id="year"></span> Beauty House. Всички права запазени.</span>
+                <span>Изработено с грижа <span class="heart-mark" data-icon="heart" data-icon-size="14"></span></span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/icons.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/interactions.js"></script>
+    <script src="js/home.js"></script>
+    <script src="js/reviews.js"></script>
+</body>
+</html>

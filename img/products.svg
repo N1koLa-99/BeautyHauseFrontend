@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 760" width="700" height="760" role="img">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7DAD3"/>
+      <stop offset="1" stop-color="#E7CFA6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="44%" r="55%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".38"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="700" height="760" fill="url(#g)"/>
+  <rect width="700" height="760" fill="url(#glow)"/>
+    <circle cx="112" cy="137" r="4" fill="#fff" opacity=".35"/>
+    <circle cx="588" cy="167" r="6" fill="#fff" opacity=".25"/>
+    <circle cx="560" cy="608" r="4" fill="#fff" opacity=".30"/>
+    <circle cx="140" cy="623" r="5" fill="#fff" opacity=".22"/>
+  <circle cx="350" cy="350" r="182" fill="#ffffff" opacity=".12"/>
+  <g transform="translate(350.0,349.6) scale(8.750) translate(-12,-12)"
+     fill="none" stroke="#ffffff" stroke-width="1.15" stroke-linecap="round"
+     stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity=".9"
+     style="filter:drop-shadow(0 2px 6px rgba(90,50,55,.25))">
+    <path d="M9.5 3.5h5M10.2 3.5v6.3L5.6 18a2 2 0 0 0 1.8 3h9.2a2 2 0 0 0 1.8-3l-4.6-8.2V3.5"/><path d="M7.4 15.5h9.2"/>
+  </g>
+</svg>

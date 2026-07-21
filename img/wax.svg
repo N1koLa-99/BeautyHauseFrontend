@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800" width="1000" height="800" role="img">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EDE6CE"/>
+      <stop offset="1" stop-color="#D8C489"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="44%" r="55%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".38"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1000" height="800" fill="url(#g)"/>
+  <rect width="1000" height="800" fill="url(#glow)"/>
+    <circle cx="170" cy="150" r="4" fill="#fff" opacity=".35"/>
+    <circle cx="835" cy="180" r="6" fill="#fff" opacity=".25"/>
+    <circle cx="806" cy="636" r="4" fill="#fff" opacity=".30"/>
+    <circle cx="205" cy="652" r="5" fill="#fff" opacity=".22"/>
+  <circle cx="500" cy="368" r="208" fill="#ffffff" opacity=".12"/>
+  <g transform="translate(500.0,384.0) scale(11.000) translate(-12,-12)"
+     fill="none" stroke="#ffffff" stroke-width="1.15" stroke-linecap="round"
+     stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity=".92"
+     style="filter:drop-shadow(0 2px 6px rgba(90,50,55,.25))">
+    <path d="M12 3.4 C12 3.4 6.4 10 6.4 15 a5.6 5.6 0 0 0 11.2 0 C17.6 10 12 3.4 12 3.4 Z"/>
+    <path d="M9.5 15.2 a2.5 2.5 0 0 0 2.5 2.4"/>
+    <path d="M19.4 6.2 l.5 1.4 1.4 .5 -1.4 .5 -.5 1.4 -.5 -1.4 -1.4 -.5 1.4 -.5 z"/>
+    <path d="M4.4 8.4 l.4 1 1 .4 -1 .4 -.4 1 -.4 -1 -1 -.4 1 -.4 z"/>
+  </g>
+</svg>
