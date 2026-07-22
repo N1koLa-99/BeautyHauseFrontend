@@ -223,6 +223,63 @@ em, .italic { font-style: italic; }
 /* Лого-изображение в кръглата значка на бранда */
 .brand__mark--logo { background: none; overflow: hidden; }
 .brand__mark--logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* На тесен екран поздравът в навигацията се крие, за да не е претъпкано */
+@media (max-width: 640px) { .nav__auth-hi { display: none; } }
+
+/* ---- Долна навигация на таблото (стил мобилно приложение) ---- */
+/* Светла лента (стил iOS app) с централен кръгъл бутон за График. */
+.dash-bottomnav {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 90;
+    display: flex; align-items: center; gap: .2rem;
+    background: rgba(255, 255, 255, .98);
+    border: 1px solid rgba(60, 47, 51, .07);
+    border-radius: 24px;
+    padding: .55rem .8rem;
+    box-shadow: 0 12px 34px rgba(60, 30, 35, .16), 0 2px 8px rgba(60, 30, 35, .07);
+    max-width: calc(100vw - 20px);
+}
+.dash-bottomnav .dash-tab {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: .26rem;
+    min-width: 58px; padding: .25rem .4rem .15rem;
+    color: #A79A9D; font-family: inherit;
+    transition: color .3s var(--ease-out);
+}
+.dash-tab__ic {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center; color: inherit;
+    background: transparent; margin-top: 0;
+    transition: width .35s var(--ease-out), height .35s var(--ease-out),
+                margin-top .35s var(--ease-out), background .35s var(--ease-out),
+                color .35s var(--ease-out), box-shadow .35s var(--ease-out);
+}
+.dash-tab__lb {
+    font-size: .6rem; font-weight: 600; letter-spacing: .02em; white-space: nowrap;
+    transition: color .3s;
+}
+.dash-bottomnav .dash-tab:hover { color: var(--ink); }
+
+/* ИЗБРАНИЯТ таб (който и да е) се уголемява в издигнат цветен кръг */
+.dash-bottomnav .dash-tab.active { color: var(--rose-deep); }
+.dash-bottomnav .dash-tab.active .dash-tab__ic {
+    width: 54px; height: 54px;
+    background: var(--grad-rose); color: #fff;
+    margin-top: -26px;
+    box-shadow: 0 10px 22px rgba(206, 122, 120, .52), 0 0 0 5px rgba(255, 255, 255, .98);
+    animation: dashPop .5s var(--ease-out);
+}
+.dash-bottomnav .dash-tab.active .dash-tab__lb { font-weight: 800; }
+@keyframes dashPop {
+    0%   { transform: scale(.7); }
+    55%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+@media (max-width: 420px) {
+    .dash-bottomnav .dash-tab { min-width: 52px; padding-inline: .25rem; }
+    .dash-tab__lb { font-size: .56rem; }
+}
 
 .nav__links { display: flex; align-items: center; gap: 2rem; }
 .nav__links-footer { display: none; }

@@ -16,32 +16,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     ];
     const catFor = (name) => CATS.find(c => c.test.test(name || '')) || { icon: 'gem', photo: '1512290923902-8a9f81dc236c' };
 
-    try {
-        const services = await API.get('/services');
-        if (!services || services.length === 0) {
-            box.innerHTML = `<p class="hint center" style="grid-column:1/-1">Услугите се обновяват. Заповядай скоро отново.</p>`;
-            return;
-        }
-
-        // Опит да съберем минимална цена за всяка услуга от всички специалисти.
-        const minPrice = {}; // serviceId -> min price
-        try {
-            const employees = await API.get('/employees');
-            const lists = await Promise.all(
-                (employees || []).map(e => API.get('/employees/' + e.id + '/services').catch(() => []))
-            );
-            lists.flat().forEach(es => {
-                if (es && typeof es.price === 'number') {
-                    if (minPrice[es.serviceId] === undefined || es.price < minPrice[es.serviceId])
-                        minPrice[es.serviceId] = es.price;
-                }
-            });
-        } catch { /* цените са по избор — продължаваме без тях */ }
-
+    function renderCards(services, minPrice) {
         box.innerHTML = services.map((s, i) => {
             const price = minPrice[s.id];
-            const priceHtml = price !== undefined
-                ? `<span class="price">от ${price.toFixed(0)} <small>€</small></span>`
+            const priceHtml = price !== undefined && price !== null
+                ? `<span class="price">от ${Number(price).toFixed(0)} <small>€</small></span>`
                 : `<span class="hint">Цена при избор</span>`;
             const cat = catFor(s.name);
             return `
@@ -62,7 +41,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             </article>`;
         }).join('');
         revealNew(box);
+    }
+
+    // Резервен каталог (без сървър).
+    function useFallback() {
+        const fb = (window.BH_FALLBACK && BH_FALLBACK.services) || [];
+        if (!fb.length) { box.innerHTML = `<p class="hint center" style="grid-column:1/-1">Услугите се обновяват. Заповядай скоро отново.</p>`; return; }
+        const minPrice = {};
+        fb.forEach(s => { minPrice[s.id] = s.price; });
+        renderCards(fb, minPrice);
+    }
+
+    try {
+        const services = await API.get('/services');
+        if (!services || services.length === 0) { useFallback(); return; }
+
+        // Опит да съберем минимална цена за всяка услуга от всички специалисти.
+        const minPrice = {}; // serviceId -> min price
+        try {
+            const employees = await API.get('/employees');
+            const lists = await Promise.all(
+                (employees || []).map(e => API.get('/employees/' + e.id + '/services').catch(() => []))
+            );
+            lists.flat().forEach(es => {
+                if (es && typeof es.price === 'number') {
+                    if (minPrice[es.serviceId] === undefined || es.price < minPrice[es.serviceId])
+                        minPrice[es.serviceId] = es.price;
+                }
+            });
+        } catch { /* цените са по избор — продължаваме без тях */ }
+
+        renderCards(services, minPrice);
     } catch (err) {
-        box.innerHTML = `<div class="alert alert--err" style="grid-column:1/-1">${esc(err.message)}</div>`;
+        useFallback(); // без сървър → резервен каталог
     }
 });

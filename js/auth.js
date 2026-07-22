@@ -40,6 +40,19 @@ function renderAuthNav() {
             <a href="#" class="nav__link" id="logout-btn" style="white-space:nowrap">Изход</a>`;
         const lb = document.getElementById('logout-btn');
         if (lb) lb.addEventListener('click', (e) => { e.preventDefault(); Session.logout(); });
+
+        // „График" в основното меню — само за екипа (служител/шеф).
+        // Клиенти и гости не го виждат. Шефът отива директно на раздел „График".
+        if (role === 'employee' || role === 'boss') {
+            const links = document.getElementById('nav-links');
+            if (links && !links.querySelector('.nav__link--schedule')) {
+                const a = document.createElement('a');
+                a.className = 'nav__link nav__link--schedule';
+                a.href = role === 'boss' ? 'account.html?tab=calendar' : 'account.html';
+                a.textContent = 'График';
+                links.appendChild(a);
+            }
+        }
     } else {
         box.innerHTML = `
             <a class="nav__link" href="auth.html">Вход</a>

@@ -90,44 +90,51 @@ document.addEventListener('DOMContentLoaded', () => {
             const b = (emps || []).find(e => e.role === 'boss');
             if (b) BOSS_ID = b.id;
         } catch (e) {}
+        // Долна навигация тип мобилно приложение: График в средата, Настройки най-вдясно.
         box.innerHTML = `
-            <div style="display:flex;gap:.4rem;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:.7rem;margin-bottom:1.6rem">
-                <button class="btn dash-tab" data-t="overview" style="--pad-y:.5rem;--pad-x:1rem;font-size:.9rem">Табло</button>
-                <button class="btn dash-tab" data-t="stats" style="--pad-y:.5rem;--pad-x:1rem;font-size:.9rem">Статистики</button>
-                <button class="btn dash-tab" data-t="calendar" style="--pad-y:.5rem;--pad-x:1rem;font-size:.9rem">График</button>
-                <button class="btn dash-tab" data-t="noshow" style="--pad-y:.5rem;--pad-x:1rem;font-size:.9rem">Некоректни</button>
-                <button class="btn dash-tab" data-t="settings" style="--pad-y:.5rem;--pad-x:1rem;font-size:.9rem">Настройки</button>
-            </div>
             <div class="dash-panel" data-p="overview"><div class="spinner"></div></div>
             <div class="dash-panel" data-p="stats" hidden></div>
             <div class="dash-panel" data-p="calendar" hidden></div>
             <div class="dash-panel" data-p="noshow" hidden></div>
-            <div class="dash-panel" data-p="settings" hidden></div>`;
+            <div class="dash-panel" data-p="settings" hidden></div>
+            <nav class="dash-bottomnav" aria-label="Навигация на таблото">
+                <button class="dash-tab" data-t="overview"><span class="dash-tab__ic">${Icon('crown', { size: 20 })}</span><span class="dash-tab__lb">Табло</span></button>
+                <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
+                <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
+                <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('alert', { size: 20 })}</span><span class="dash-tab__lb">Некоректни</span></button>
+                <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
+            </nav>`;
+        box.style.paddingBottom = '240px'; // въздух отдолу — удобно скролване под лентата
 
-        const tabs = [...box.querySelectorAll('.dash-tab')];
+        // Лентата се закача директно към <body>, за да е ВИНАГИ залепена за
+        // екрана (никой родителски елемент не може да я повлече при скрол).
+        document.querySelectorAll('body > .dash-bottomnav').forEach(n => n.remove());
+        const bottomNav = box.querySelector('.dash-bottomnav');
+        document.body.appendChild(bottomNav);
+
+        const tabs = [...bottomNav.querySelectorAll('.dash-tab')];
         const panels = {};
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
         const loaders = { overview: renderOverview, stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, settings: renderSettings };
 
         function show(name) {
-            tabs.forEach(t => {
-                const on = t.dataset.t === name;
-                t.classList.toggle('btn--primary', on);
-                t.classList.toggle('btn--ghost', !on);
-            });
+            tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
             Object.entries(panels).forEach(([k, el]) => el.hidden = k !== name);
             if (!loaded[name]) { loaded[name] = true; loaders[name](panels[name]); }
         }
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
-        show('overview');
+        // ?tab=calendar (от менюто „График") отваря директно съответния раздел.
+        const wanted = new URLSearchParams(location.search).get('tab');
+        show(loaders[wanted] ? wanted : 'overview');
     }
 
+    // Компактна KPI карта: етикетът е ОТГОРЕ (ясно кое за какво е), стойността под него.
     const stat = (label, value, hint) => `
-        <div class="card" style="flex:1;min-width:150px;text-align:center">
-            <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--rose-deep);line-height:1.1">${value}</div>
-            <div class="hint" style="margin-top:.3rem">${label}</div>
-            ${hint ? `<div class="hint" style="font-size:.72rem;opacity:.8">${hint}</div>` : ''}
+        <div class="card" style="flex:1;min-width:145px;padding:1rem 1.15rem;text-align:left">
+            <div class="hint" style="font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:.4rem">${label}</div>
+            <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--rose-deep);line-height:1.15;white-space:nowrap">${value}</div>
+            ${hint ? `<div class="hint" style="font-size:.7rem;margin-top:.35rem">${hint}</div>` : ''}
         </div>`;
 
     // ---- Раздел ТАБЛО ----
@@ -268,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Раздел ГРАФИК ----
     async function renderCalendarTab(box) {
         box.innerHTML = `
-            <p class="hint" style="margin:0 0 .9rem">Виж график по месеци. В своя (и на всяка) можеш да добавяш телефонни резервации и да задаваш работно време.</p>
             <label class="hint" style="display:block;margin-bottom:1rem">Специалист:
                 <select id="boss-who" class="select" style="width:auto;min-width:230px;margin-top:.5rem"></select>
             </label>
@@ -400,14 +406,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===============================================================
     if (role === 'boss') {
         title.textContent = 'Табло на салона';
-        sub.textContent = 'Оборот, статистики и график на салона.';
+        sub.textContent = '';
         renderBoss(list);
         return;
     }
 
     if (role === 'employee') {
         title.textContent = 'Моят график';
-        sub.textContent = 'Календар на часовете ти — добавяй телефонни резервации и работно време.';
+        sub.textContent = '';
         mountMyCalendar(list);
         return;
     }

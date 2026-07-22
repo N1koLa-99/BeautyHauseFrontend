@@ -6,20 +6,15 @@
    За разработка срещу локалния backend: сложи USE_LOCAL_BACKEND = true.
    ===================================================================== */
 (function () {
-    // Публикуваното API в Azure.
+    // Публикуваното API в Azure — ползва се ВИНАГИ (и локално, и публикувано).
     var AZURE_API_BASE = 'https://beautyhouse.azurewebsites.net/api';
 
-    // Локален backend (виж launchSettings.json).
+    // (Локален backend — само ако някога решиш да разработваш срещу него.)
     var LOCAL_API_BASE = 'https://localhost:7066/api';
-
-    // Автоматично: локално (localhost/127.0.0.1) -> локален backend;
-    // публикуван сайт -> Azure API. Не се пипа при качване.
-    var host = location.hostname;
-    var isLocal = host === 'localhost' || host === '127.0.0.1' || host === '' || host === '::1';
 
     window.BH_CONFIG = {
         // Основен адрес на API-то (без завършващ слаш).
-        API_BASE: isLocal ? LOCAL_API_BASE : AZURE_API_BASE,
+        API_BASE: AZURE_API_BASE,
 
         SALON: {
             name: 'Beauty House',
