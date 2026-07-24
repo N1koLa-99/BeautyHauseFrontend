@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="bg">
+<html lang="bg" translate="no">
 <head>
     <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#FBF6F2">
     <title>Запази час — Beauty House</title>
@@ -84,12 +85,12 @@
                 <!-- Обобщение -->
                 <aside class="panel booking-panel-summary">
                     <h4 style="font-family:var(--font-body);letter-spacing:.14em;text-transform:uppercase;font-size:.78rem;color:var(--muted);margin-bottom:1.2rem">Твоята резервация</h4>
-                    <div class="stack-sm" id="bk-summary">
-                        <div style="display:flex;justify-content:space-between"><span class="hint">Услуга</span><strong id="sum-srv">—</strong></div>
-                        <div style="display:flex;justify-content:space-between"><span class="hint">Специалист</span><strong id="sum-emp">—</strong></div>
-                        <div style="display:flex;justify-content:space-between"><span class="hint">Продължителност</span><strong id="sum-dur">—</strong></div>
-                        <div style="display:flex;justify-content:space-between"><span class="hint">Кога</span><strong id="sum-time">—</strong></div>
-                        <div style="display:flex;justify-content:space-between;padding-top:.8rem;border-top:1px dashed var(--line);margin-top:.4rem"><span class="hint">Цена</span><span class="price" id="sum-price">—</span></div>
+                    <div class="bk-sum" id="bk-summary">
+                        <div class="bk-sum__row"><span class="bk-sum__lb">Услуга</span><strong class="bk-sum__val" id="sum-srv">—</strong></div>
+                        <div class="bk-sum__row"><span class="bk-sum__lb">Специалист</span><strong class="bk-sum__val" id="sum-emp">—</strong></div>
+                        <div class="bk-sum__row"><span class="bk-sum__lb">Продължителност</span><strong class="bk-sum__val" id="sum-dur">—</strong></div>
+                        <div class="bk-sum__row"><span class="bk-sum__lb">Кога</span><strong class="bk-sum__val" id="sum-time">—</strong></div>
+                        <div class="bk-sum__row bk-sum__row--total"><span class="bk-sum__lb">Цена</span><span class="price" id="sum-price">—</span></div>
                     </div>
                     <div class="field" style="margin-top:1.4rem">
                         <label>Бележка <span class="hint">(по избор)</span></label>

@@ -45,17 +45,29 @@ document.addEventListener('DOMContentLoaded', () => {
         let services = [];
         try { services = await API.get(`/employees/${staffId}/services`); } catch (e) {}
         Calendar.mount(container, {
-            editable: true, staffId: staffId,
+            editable: true, staffId: staffId, canManage: role === 'boss',
             services: (services || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes })),
             fetchMonth: (f, t) => API.get(`/reports/employee-calendar?employeeId=${staffId}&from=${f}&to=${t}`),
             createBooking: (dto) => API.post(`/reports/bookings?employeeId=${staffId}`, dto),
-            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st })
+            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
+            setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
+            deleteBk: (id) => API.del(`/reports/bookings/${id}`)
         });
     }
-    function mountAllCalendar(container) {
+    async function mountAllCalendar(container) {
+        let employees = [];
+        try { employees = (await API.get('/employees')) || []; } catch (e) {}
         Calendar.mount(container, {
-            editable: false, showEmployee: true,
-            fetchMonth: (f, t) => API.get(`/reports/calendar?from=${f}&to=${t}`)
+            editable: true, showEmployee: true, canManage: role === 'boss',
+            employees: employees.map(e => ({ id: e.id, name: e.fullName })),
+            servicesFor: (empId) => API.get(`/employees/${empId}/services`),
+            fetchMonth: (f, t) => API.get(`/reports/calendar?from=${f}&to=${t}`),
+            createBooking: (dto) => API.post(`/reports/bookings?employeeId=${dto.employeeId}`, dto),
+            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
+            setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
+            deleteBk: (id) => API.del(`/reports/bookings/${id}`)
         });
     }
 
@@ -92,13 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {}
         // Долна навигация тип мобилно приложение: График в средата, Настройки най-вдясно.
         box.innerHTML = `
-            <div class="dash-panel" data-p="overview"><div class="spinner"></div></div>
-            <div class="dash-panel" data-p="stats" hidden></div>
+            <div class="dash-panel" data-p="stats"><div class="spinner"></div></div>
             <div class="dash-panel" data-p="calendar" hidden></div>
             <div class="dash-panel" data-p="noshow" hidden></div>
             <div class="dash-panel" data-p="settings" hidden></div>
             <nav class="dash-bottomnav" aria-label="Навигация на таблото">
-                <button class="dash-tab" data-t="overview"><span class="dash-tab__ic">${Icon('crown', { size: 20 })}</span><span class="dash-tab__lb">Табло</span></button>
                 <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
                 <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('alert', { size: 20 })}</span><span class="dash-tab__lb">Некоректни</span></button>
@@ -116,17 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const panels = {};
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
-        const loaders = { overview: renderOverview, stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, settings: renderSettings };
+        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, settings: renderSettings };
 
         function show(name) {
             tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
             Object.entries(panels).forEach(([k, el]) => el.hidden = k !== name);
             if (!loaded[name]) { loaded[name] = true; loaders[name](panels[name]); }
+            // Плаващото кръгче за филтър се вижда само в раздел „График".
+            document.querySelectorAll('body > .cal-fab').forEach(f => { f.style.display = (name === 'calendar') ? '' : 'none'; });
         }
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
         // ?tab=calendar (от менюто „График") отваря директно съответния раздел.
         const wanted = new URLSearchParams(location.search).get('tab');
-        show(loaders[wanted] ? wanted : 'overview');
+        show(loaders[wanted] ? wanted : 'stats');
     }
 
     // Компактна KPI карта: етикетът е ОТГОРЕ (ясно кое за какво е), стойността под него.
@@ -137,64 +149,122 @@ document.addEventListener('DOMContentLoaded', () => {
             ${hint ? `<div class="hint" style="font-size:.7rem;margin-top:.35rem">${hint}</div>` : ''}
         </div>`;
 
-    // ---- Раздел ТАБЛО ----
-    function renderOverview(box) {
-        let period = 'week';
-        box.innerHTML = `
-            <div style="display:flex;gap:.5rem;margin-bottom:1.2rem;flex-wrap:wrap">
-                <button class="btn ov-day" style="--pad-y:.5rem;--pad-x:1rem;font-size:.86rem">Днес</button>
-                <button class="btn ov-week" style="--pad-y:.5rem;--pad-x:1rem;font-size:.86rem">Тази седмица</button>
-                <button class="btn ov-month" style="--pad-y:.5rem;--pad-x:1rem;font-size:.86rem">Този месец</button>
-            </div>
-            <div class="ov-body"><div class="spinner"></div></div>`;
-        const body = box.querySelector('.ov-body');
-        const btns = { day: box.querySelector('.ov-day'), week: box.querySelector('.ov-week'), month: box.querySelector('.ov-month') };
-        function setActive() { Object.entries(btns).forEach(([p, b]) => { b.classList.toggle('btn--primary', p === period); b.classList.toggle('btn--ghost', p !== period); }); }
-        Object.entries(btns).forEach(([p, b]) => b.addEventListener('click', () => { period = p; setActive(); load(); }));
-        setActive();
-
-        async function load() {
-            body.innerHTML = `<div class="spinner"></div>`;
-            const label = period === 'day' ? 'днес' : (period === 'week' ? 'тази седмица' : 'този месец');
-            try {
-                const rep = await API.get(`/reports/revenue?period=${period}&date=${todayStr()}`);
-                const rows = rep.breakdown || [];
-                const count = rows.reduce((s, r) => s + (r.count || 0), 0);
-                const avg = count ? rep.grandTotal / count : 0;
-                const { persons } = computeShares(rows, rep.bossName);
-
-                const people = persons.map(p => `
-                    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.6rem">
-                        <div>
-                            <strong>${esc(p.name)}${p.isBoss ? ' 👑' : ''}</strong>
-                            <div class="hint">${p.isBoss ? 'своите 100% + комисионните от екипа' : ('взема ' + p.pct + '% от своите процедури')}</div>
-                        </div>
-                        <span class="pill" style="font-size:1rem">${money(p.net)}</span>
-                    </div>`).join('');
-
-                body.innerHTML = `
-                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.4rem">
-                        ${stat(`Оборот (${label})`, money(rep.grandTotal))}
-                        ${stat('Проведени часове', count)}
-                        ${stat('Среден чек', money(avg))}
-                    </div>
-                    ${count
-                        ? `<h3 style="margin:0 0 .8rem">Кой колко взема</h3>${people}`
-                        : `<div class="alert alert--info">Няма проведени часове за ${label}. Виж раздел „График" за предстоящите.</div>`}`;
-            } catch (err) {
-                body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
-            }
-        }
-        load();
+    // ---- Помощно: диапазон [from, to) според избрания период ----
+    function periodRange(period, cFrom, cTo) {
+        const isoD = x => `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+        const d = new Date();
+        if (period === 'day') { const e = new Date(d); e.setDate(e.getDate() + 1); return [isoD(d), isoD(e)]; }
+        if (period === 'week') { const s = new Date(d); s.setDate(s.getDate() - ((s.getDay() + 6) % 7)); const e = new Date(s); e.setDate(e.getDate() + 7); return [isoD(s), isoD(e)]; }
+        if (period === 'month') { return [isoD(new Date(d.getFullYear(), d.getMonth(), 1)), isoD(new Date(d.getFullYear(), d.getMonth() + 1, 1))]; }
+        const e = new Date((cTo || todayStr()) + 'T00:00:00'); e.setDate(e.getDate() + 1);
+        return [cFrom || todayStr(), isoD(e)];
     }
 
-    // ---- Раздел СТАТИСТИКИ ----
+    // ---- Помощно: лента с период (Ден/Седмица/Месец/Период) + ключ Затворени/Общо ----
+    function periodBar(box, onChange) {
+        let period = 'week', cFrom = todayStr(), cTo = todayStr();
+        box.innerHTML = `
+            <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.7rem">
+                <button class="btn ov-p" data-p="day" style="--pad-y:.45rem;--pad-x:.9rem;font-size:.85rem">Ден</button>
+                <button class="btn ov-p" data-p="week" style="--pad-y:.45rem;--pad-x:.9rem;font-size:.85rem">Седмица</button>
+                <button class="btn ov-p" data-p="month" style="--pad-y:.45rem;--pad-x:.9rem;font-size:.85rem">Месец</button>
+                <button class="btn ov-p" data-p="period" style="--pad-y:.45rem;--pad-x:.9rem;font-size:.85rem">Период</button>
+            </div>
+            <div class="ov-range" hidden style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.7rem">
+                <input type="date" class="input ov-from" style="width:auto" value="${cFrom}">
+                <span class="hint">–</span>
+                <input type="date" class="input ov-to" style="width:auto" value="${cTo}">
+            </div>
+            <label style="display:inline-flex;align-items:center;gap:.6rem;margin-bottom:1.3rem;cursor:pointer;font-size:.9rem;color:var(--ink-soft)">
+                <span>Затворени</span>
+                <span class="switch"><input type="checkbox" class="ov-mode"><span class="switch__slider"></span></span>
+                <span>Общо</span>
+            </label>
+            <div class="ov-body"><div class="spinner"></div></div>`;
+        const body = box.querySelector('.ov-body');
+        const pbtns = [...box.querySelectorAll('.ov-p')];
+        const range = box.querySelector('.ov-range');
+        const modeInp = box.querySelector('.ov-mode');
+        const fromInp = box.querySelector('.ov-from'), toInp = box.querySelector('.ov-to');
+
+        function fire() {
+            const [from, to] = periodRange(period, fromInp.value, toInp.value);
+            onChange(body, from, to, modeInp.checked);
+        }
+        function setActive() {
+            pbtns.forEach(b => { const on = b.dataset.p === period; b.classList.toggle('btn--primary', on); b.classList.toggle('btn--ghost', !on); });
+            range.hidden = period !== 'period';
+        }
+        pbtns.forEach(b => b.addEventListener('click', () => { period = b.dataset.p; setActive(); fire(); }));
+        modeInp.addEventListener('change', fire);
+        fromInp.addEventListener('change', () => period === 'period' && fire());
+        toInp.addEventListener('change', () => period === 'period' && fire());
+        setActive(); fire();
+    }
+
+    // Цвят на специалист — същият като в календара (по id).
+    const EARN_COLORS = ['#E29A93', '#C7A16B', '#B98BA0', '#8FB0A0', '#7BA7C7', '#CE7A78'];
+    const earnColor = id => EARN_COLORS[Math.abs(+id || 0) % EARN_COLORS.length];
+
+    const earnCard = (name, isBoss, rows, color) => {
+        const initials = (name || '?').split(' ').map(w => w.charAt(0)).slice(0, 2).join('').toUpperCase();
+        return `
+        <div class="card earn-card" style="border-top:3px solid ${color}">
+            <div class="earn-card__head">
+                <span class="earn-card__avatar" style="background:${color}">${initials}</span>
+                <div class="earn-card__title"><strong>${esc(name)}</strong>${isBoss ? `<span class="earn-card__badge">${Icon('crown', { size: 13 })} Управител</span>` : ''}</div>
+            </div>
+            ${rows.map(r => `<div class="earn-card__row${r.total ? ' earn-card__row--total' : ''}"><span>${r.label}</span><b>${money(r.value)}</b></div>`).join('')}
+        </div>`;
+    };
+
+    // ---- Печалба по специалист (карти) — ползва се в „Статистики" ----
+    async function bossEarnings(body, from, to, all) {
+        body.innerHTML = `<div class="spinner"></div>`;
+        try {
+            const rows = await API.get(`/reports/earnings?from=${from}&to=${to}&all=${all}`);
+            const boss = (rows || []).find(r => r.isBoss);
+            const workers = (rows || []).filter(r => !r.isBoss);
+            const fromOthers = workers.reduce((s, r) => s + (r.commissionToBoss || 0), 0);
+            const bossTotal = (boss ? boss.take : 0) + fromOthers;
+
+            const cards = [];
+            if (boss) cards.push(earnCard(boss.name, true, [
+                { label: 'Твоят дял', value: boss.take },
+                { label: '+ от Анелия и Ирина', value: fromOthers },
+                { label: 'Общо ще вземеш', value: bossTotal, total: true }
+            ], earnColor(boss.employeeId)));
+            workers.forEach(w => cards.push(earnCard(w.name, false, [
+                { label: 'Изкарала', value: w.gross },
+                { label: `Удръжка (${100 - w.percent}%)`, value: -(w.gross - w.take) },
+                { label: 'Ще вземе', value: w.take, total: true }
+            ], earnColor(w.employeeId))));
+
+            body.innerHTML = `<div class="cards cards--3" style="gap:14px">${cards.join('')}</div>
+                <p class="hint" style="margin-top:1rem">${all ? 'Включени са и записаните (предстоящи) часове — приблизително.' : 'Само проведените (затворени) часове.'}</p>`;
+        } catch (err) {
+            body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+        }
+    }
+
+    // ---- Раздел СТАТИСТИКИ (печалба по специалист + диаграми) ----
     async function renderStats(box) {
-        box.innerHTML = `<div class="spinner"></div>`;
         const now = new Date();
         const from = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
         const to = `${now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()}-${pad((now.getMonth() + 1) % 12 + 1)}-01`;
         const monthName = now.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' });
+
+        box.innerHTML = `
+            <h3 style="margin:0 0 .9rem">Печалба по специалист</h3>
+            <div class="stats-earn" style="margin-bottom:2rem"></div>
+            <h3 style="margin:0 0 .3rem">Статистики за <b>${monthName}</b></h3>
+            <div class="stats-diagrams" style="margin-top:1rem"><div class="spinner"></div></div>`;
+
+        // Горе: картите по специалист с избор Ден/Седмица/Месец/Период + ключ.
+        periodBar(box.querySelector('.stats-earn'), bossEarnings);
+
+        // Долу: месечните диаграми.
+        const dbox = box.querySelector('.stats-diagrams');
         try {
             const [rep, cal, commissions] = await Promise.all([
                 API.get(`/reports/revenue?period=month&date=${todayStr()}`),
@@ -213,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const perDay = {};
             (cal || []).filter(b => b.status === 'completed').forEach(b => {
                 const k = b.startAt.slice(0, 10);
-                perDay[k] = (perDay[k] || 0) + (b.priceSnapshot || 0);
+                perDay[k] = (perDay[k] || 0) + ((b.priceFinal != null ? b.priceFinal : b.priceSnapshot) || 0);
             });
             const dayBars = Object.keys(perDay).sort().map(k => ({ label: +k.slice(8, 10), value: perDay[k] }));
 
@@ -240,21 +310,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 : (b.priceSnapshot || 0) * (100 - (comm[b.employeeId] != null ? comm[b.employeeId] : 100)) / 100;
             const bossProjected = (cal || []).filter(b => b.status === 'completed' || b.status === 'booked').reduce((s, b) => s + bossShareOf(b), 0);
 
-            box.innerHTML = `
-                <p class="hint" style="margin:0 0 1rem">Статистики за <b>${monthName}</b>.</p>
-                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem">
-                    ${stat('Оборот (проведени)', money(rep.grandTotal))}
-                    ${stat('Оборот общо до края', '≈ ' + money(projected), 'проведени + записани · приблизително')}
-                    ${stat('Радина ще вземе', '≈ ' + money(bossProjected), 'нейният дял + комисионните · приблизително')}
-                </div>
+            dbox.innerHTML = `
                 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.6rem">
                     ${stat('Часове (общо)', totalBookings, completed + ' проведени')}
                     ${stat('Най-натоварен ден', busiest.label, busiest.value + ' часа')}
-                </div>
-
-                <h3 style="margin:0 0 .6rem">Разпределение на парите</h3>
-                <div class="panel" style="margin-bottom:1.6rem">
-                    ${persons.length ? Charts.doughnut(persons.map(p => ({ label: p.name, value: p.net }))) : '<p class="hint">Няма данни за месеца.</p>'}
                 </div>
 
                 <h3 style="margin:0 0 .6rem">Оборот по дни</h3>
@@ -268,36 +327,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h3 style="margin:0 0 .6rem">Натовареност по дни от седмицата</h3>
                 <div class="panel">${Charts.bars(wdBars, { color: '#B98BA0' })}</div>`;
         } catch (err) {
-            box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            dbox.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
     }
 
     // ---- Раздел ГРАФИК ----
     async function renderCalendarTab(box) {
-        box.innerHTML = `
-            <label class="hint" style="display:block;margin-bottom:1rem">Специалист:
-                <select id="boss-who" class="select" style="width:auto;min-width:230px;margin-top:.5rem"></select>
-            </label>
-            <div id="boss-cal"><div class="spinner"></div></div>`;
-        const who = box.querySelector('#boss-who');
-        const cal = box.querySelector('#boss-cal');
-        let employees = [];
-        try { employees = await API.get('/employees'); } catch (e) {}
-        // Шефът е „Аз" — махаме го от списъка с работнички (по роля), за да не се дублира.
-        const others = (employees || []).filter(e => e.role !== 'boss');
-        const firstName = (Session.name() || '').split(' ')[0];
-        who.innerHTML = `<option value="all">Целият салон</option><option value="me">Аз${firstName ? ' (' + esc(firstName) + ')' : ''}</option>` +
-            others.map(e => `<option value="${e.id}">${esc(e.fullName)}</option>`).join('');
-        who.addEventListener('change', () => mountFor(who.value));
-        function mountFor(val) {
-            cal.innerHTML = '';
-            if (val === 'all') mountAllCalendar(cal);
-            // „Аз" = шефът: през надеждния BOSS_ID (шефски ендпойнт), не през /me
-            // (чийто токен може да е от преди презареждане на базата).
-            else if (val === 'me') { if (BOSS_ID) mountReadonlyCalendar(cal, BOSS_ID); else mountMyCalendar(cal); }
-            else mountReadonlyCalendar(cal, +val);
-        }
-        mountFor('all');
+        // Целият салон + плаващ филтър по специалист (кръгчето долу вдясно).
+        box.innerHTML = `<div id="boss-cal"><div class="spinner"></div></div>`;
+        mountAllCalendar(box.querySelector('#boss-cal'));
     }
 
     // ---- Раздел НЕКОРЕКТНИ КЛИЕНТИ ----
@@ -314,21 +352,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('bg-BG', { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return '—'; } };
+            const phoneSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
+            const clockSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
             body.innerHTML = rows.map(c => {
-                const phone = c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : '<span class="hint">без телефон</span>';
+                const phone = c.phone
+                    ? `<span class="ns-meta-row">${phoneSvg}<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></span>`
+                    : `<span class="ns-meta-row">${phoneSvg}<span>без телефон</span></span>`;
+                const last = `<span class="ns-meta-row">${clockSvg}<span>последно неявяване: ${fmtDate(c.lastNoShow)}</span></span>`;
                 const upcoming = c.upcomingCount > 0
-                    ? `<span class="alert alert--err" style="padding:.12rem .5rem;font-size:.72rem;white-space:nowrap">⚠ има ${c.upcomingCount} предстоящ${c.upcomingCount === 1 ? '' : 'и'} час${c.upcomingCount === 1 ? '' : 'а'}</span>`
-                    : `<span class="hint" style="font-size:.74rem">няма предстоящи</span>`;
+                    ? `<span class="ns-badge-up">⚠ има ${c.upcomingCount} предстоящ${c.upcomingCount === 1 ? '' : 'и'} час${c.upcomingCount === 1 ? '' : 'а'}</span>`
+                    : `<span class="ns-badge-none">няма предстоящи часове</span>`;
                 return `
-                <div class="card" style="display:flex;align-items:center;gap:.9rem;padding:.7rem .9rem;border-left:7px solid #D9534F;background:#D9534F14;margin-bottom:.6rem">
-                    <div style="flex:none;width:34px;height:34px;border-radius:9px;background:#D9534F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:800">⚠</div>
-                    <div style="flex:1;min-width:0">
-                        <strong>${esc(c.clientName || 'Клиент')}</strong>
-                        <div class="hint" style="margin-top:.15rem">${phone} · последно: ${fmtDate(c.lastNoShow)}</div>
-                    </div>
-                    <div style="text-align:right;display:flex;flex-direction:column;gap:.3rem;align-items:flex-end">
-                        <span style="font-weight:700;color:#B02A26">${c.noShowCount}× не се яви</span>
-                        ${upcoming}
+                <div class="ns-card">
+                    <div class="ns-ic">⚠</div>
+                    <div class="ns-main">
+                        <div class="ns-top">
+                            <span class="ns-name">${esc(c.clientName || 'Клиент')}</span>
+                            <span class="ns-count">${c.noShowCount}× не се яви</span>
+                        </div>
+                        <div class="ns-meta">${phone}${last}</div>
+                        <div class="ns-upcoming">${upcoming}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -342,14 +385,20 @@ document.addEventListener('DOMContentLoaded', () => {
         box.innerHTML = `
             <h3 style="margin:0 0 .3rem">Натовареност на графика</h3>
             <p class="hint" style="margin:0 0 .9rem">Прагове за цветовете в календара (брой часове за целия салон на ден).</p>
-            <div class="card" style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:1.8rem">
-                <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#E7B100"></span>
-                <span class="hint">жълто над</span>
-                <input class="input ld-yellow" type="number" min="1" max="100" style="width:80px">
-                <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#D9534F;margin-left:.6rem"></span>
-                <span class="hint">червено над</span>
-                <input class="input ld-red" type="number" min="1" max="100" style="width:80px">
-                <button class="btn btn--gold ld-save" style="--pad-y:.4rem;--pad-x:.9rem;font-size:.82rem">Запази</button>
+            <div class="card set-card" style="display:grid;margin-bottom:1.8rem">
+                <div class="set-thresh">
+                    <div class="set-trow">
+                        <span class="set-dot" style="background:#E7B100"></span>
+                        <span class="set-trow__lb">Умерено натоварен<small>Ден с повече от толкова часа свети в жълто</small></span>
+                        <span class="set-field"><input class="input ld-yellow" type="number" min="1" max="100"><span class="set-field__u">часа</span></span>
+                    </div>
+                    <div class="set-trow">
+                        <span class="set-dot" style="background:#D9534F"></span>
+                        <span class="set-trow__lb">Много натоварен<small>Ден с повече от толкова часа свети в червено</small></span>
+                        <span class="set-field"><input class="input ld-red" type="number" min="1" max="100"><span class="set-field__u">часа</span></span>
+                    </div>
+                </div>
+                <button class="btn btn--gold ld-save set-save" style="--pad-y:.5rem;--pad-x:1.2rem;font-size:.85rem">Запази праговете</button>
             </div>
 
             <h3 style="margin:0 0 .3rem">Комисионни</h3>
@@ -373,20 +422,28 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const listc = await API.get('/reports/commissions');
             if (!listc || !listc.length) { cbox.innerHTML = `<div class="hint">Няма работнички.</div>`; return; }
+            const AV_COLORS = ['#E29A93', '#C7A16B', '#B98BA0', '#8FB0A0', '#7BA7C7', '#CE7A78'];
+            const avColor = id => AV_COLORS[Math.abs(+id || 0) % AV_COLORS.length];
+            const initials = n => (String(n || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('') || '?').toUpperCase();
             cbox.innerHTML = listc.map(c => `
-                <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.6rem">
-                    <strong>${esc(c.name)}</strong>
-                    <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
-                        <span class="hint">за нея</span>
-                        <input class="input comm-input" data-id="${c.employeeId}" type="number" min="0" max="100" value="${c.percent}" style="width:90px;display:inline-block">
-                        <span class="hint">% · за теб <b class="comm-boss">${100 - c.percent}%</b></span>
-                        <button class="btn btn--gold comm-save" data-id="${c.employeeId}" style="--pad-y:.4rem;--pad-x:.9rem;font-size:.82rem">Запази</button>
+                <div class="card comm-card">
+                    <div class="comm-head">
+                        <span class="comm-av" style="background:${avColor(c.employeeId)}">${initials(c.name)}</span>
+                        <div class="comm-name"><strong>${esc(c.name)}</strong><div class="hint">Комисионно разпределение</div></div>
+                        <span class="comm-boss-pill">за теб <b class="comm-boss">${100 - c.percent}%</b></span>
+                    </div>
+                    <div class="comm-bar"><span class="comm-bar__her" style="width:${c.percent}%"></span></div>
+                    <div class="comm-ctrl">
+                        <span class="hint">Дял за нея</span>
+                        <span class="set-field"><input class="input comm-input" data-id="${c.employeeId}" type="number" min="0" max="100" value="${c.percent}"><span class="set-field__u">%</span></span>
+                        <button class="btn btn--gold comm-save" data-id="${c.employeeId}" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Запази</button>
                     </div>
                 </div>`).join('');
             cbox.querySelectorAll('.comm-input').forEach(inp => inp.addEventListener('input', () => {
-                const b = inp.closest('.card').querySelector('.comm-boss');
+                const card = inp.closest('.card');
                 const v = Math.max(0, Math.min(100, +inp.value || 0));
-                if (b) b.textContent = (100 - v) + '%';
+                const b = card.querySelector('.comm-boss'); if (b) b.textContent = (100 - v) + '%';
+                const bar = card.querySelector('.comm-bar__her'); if (bar) bar.style.width = v + '%';
             }));
             cbox.querySelectorAll('.comm-save').forEach(btn => btn.addEventListener('click', async () => {
                 const inp = cbox.querySelector(`.comm-input[data-id="${btn.dataset.id}"]`);
@@ -414,7 +471,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (role === 'employee') {
         title.textContent = 'Моят график';
         sub.textContent = '';
-        mountMyCalendar(list);
+        // Собствена печалба за период (вижда само своята) + календар отдолу.
+        const earnBox = document.createElement('div');
+        earnBox.style.marginBottom = '2rem';
+        const calBox = document.createElement('div');
+        list.appendChild(earnBox);
+        list.appendChild(calBox);
+
+        periodBar(earnBox, async (body, from, to, all) => {
+            body.innerHTML = `<div class="spinner"></div>`;
+            try {
+                const m = await API.get(`/me/earnings?from=${from}&to=${to}&all=${all}`);
+                if (!m) { body.innerHTML = `<div class="alert alert--info">Няма данни за периода.</div>`; return; }
+                body.innerHTML = `<div style="max-width:420px">${earnCard(m.name, false, [
+                    { label: 'Изкарала', value: m.gross },
+                    { label: `Удръжка (${100 - m.percent}%)`, value: -(m.gross - m.take) },
+                    { label: 'Ще вземеш', value: m.take, total: true }
+                ], earnColor(m.employeeId))}</div>
+                <p class="hint" style="margin-top:.7rem">${all ? 'Включени са и предстоящите записани часове.' : 'Само проведените часове.'}</p>`;
+            } catch (err) {
+                body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            }
+        });
+
+        mountMyCalendar(calBox);
         return;
     }
 
@@ -443,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div>
                 <strong style="font-size:1.08rem">${esc(b.serviceName)}</strong>
                 <div class="team-card__role" style="color:var(--muted);font-weight:500">при ${esc(b.employeeName)}</div>
-                <div class="hint" style="margin-top:.35rem;display:flex;align-items:center;gap:.4rem">${Icon('calendar', { size: 14 })} ${fmt(b.startAt)} · ${b.priceSnapshot.toFixed(0)} €</div>
+                <div class="hint" style="margin-top:.35rem;display:flex;align-items:center;gap:.4rem">${Icon('calendar', { size: 14 })} ${fmt(b.startAt)} · ${((b.priceFinal != null ? b.priceFinal : b.priceSnapshot) || 0).toFixed(0)} €</div>
             </div>
             <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
                 <span class="alert ${st.cls}" style="padding:.35rem .7rem;font-size:.78rem">${st.label}</span>

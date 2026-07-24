@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="bg">
+<html lang="bg" translate="no">
 <head>
     <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#FBF6F2">
     <title>Услуги — Beauty House</title>
@@ -35,17 +36,15 @@
             <span class="eyebrow reveal" style="justify-content:center">Нашата селекция</span>
             <h1 class="reveal" data-delay="1" style="margin:1rem 0 1rem">Услуги</h1>
             <p class="lead reveal" data-delay="2" style="max-width:620px;margin:0 auto">
-                Всеки специалист определя собствена цена и продължителност — затова виждаш „от" цена. Точната стойност избираш при запазване.
+                Избери категория — Нокти, Лице, Епилация или всички — и виж цена и времетраене за всяка процедура.
             </p>
         </div>
     </section>
 
-    <!-- Списък услуги -->
+    <!-- Каталог с услуги -->
     <section class="section" style="padding-top:0">
         <div class="container">
-            <div class="cards cards--3" id="services-list">
-                <div class="spinner"></div>
-            </div>
+            <div id="bh-catalog" class="reveal"></div>
         </div>
     </section>
 
@@ -90,6 +89,7 @@
     <script src="js/auth.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/interactions.js"></script>
-    <script src="js/services.js"></script>
+    <script src="js/catalog-data.js"></script>
+    <script src="js/catalog.js"></script>
 </body>
 </html>

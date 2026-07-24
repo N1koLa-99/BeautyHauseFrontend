@@ -14,6 +14,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const steps = document.querySelectorAll('.step');
     const $ = (id) => document.getElementById(id);
 
+    // Предварителен избор от каталога: ?srv=<услуга>&label=<процедура>
+    const PRE = new URLSearchParams(location.search);
+    const preSrv = PRE.get('srv');
+    const preLabel = PRE.get('label');
+
+    // Банер „Избрана процедура" (вижда се на всички стъпки).
+    function showPickedBanner(txt) {
+        const main = document.querySelector('.booking-panel-main');
+        let b = document.getElementById('bk-picked');
+        if (!b) {
+            b = document.createElement('div');
+            b.id = 'bk-picked'; b.className = 'alert alert--info';
+            b.style.cssText = 'margin-bottom:1.4rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap';
+            main.prepend(b);
+        }
+        b.innerHTML = `<span>Избрана процедура: <strong>${esc(txt)}</strong></span>
+            <a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени процедура</a>`;
+    }
+
     // --- Навигация между стъпки ---
     function goStep(n) {
         panes.forEach(p => p.hidden = (+p.dataset.pane !== n));
@@ -63,13 +82,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadSpecialists(id);
                     goStep(2);
                 }));
+
+            // Предварителен избор от каталога → маркирай услугата и прескочи напред.
+            if (preSrv) {
+                const s = list.find(x => (x.name || '').toLowerCase() === preSrv.toLowerCase());
+                if (s) {
+                    state.srv = { serviceId: s.id, serviceName: preLabel || s.name };
+                    state.emp = null; state.sel = null; state.slot = null;
+                    showPickedBanner(state.srv.serviceName);
+                    updateSummary();
+                    goStep(2);
+                    loadSpecialists(s.id, true);
+                }
+            }
         } catch (err) {
             box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
     }
 
     // --- Стъпка 2: специалисти, които правят избраната услуга ---
-    async function loadSpecialists(serviceId) {
+    async function loadSpecialists(serviceId, auto) {
         const box = $('bk-employees');
         box.innerHTML = `<div class="spinner"></div>`;
         try {
@@ -106,17 +138,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </button>`;
             }).join('');
+            const choose = (p) => {
+                state.emp = p.emp;
+                state.sel = { price: p.price, durationMinutes: p.durationMinutes };
+                state.slot = null;
+                updateSummary();
+                goStep(3);
+                initDate();
+            };
             box.querySelectorAll('.bk-pick').forEach(btn =>
                 btn.addEventListener('click', () => {
                     const id = +btn.dataset.id;
-                    const p = providers.find(x => x.emp.id === id);
-                    state.emp = p.emp;
-                    state.sel = { price: p.price, durationMinutes: p.durationMinutes };
-                    state.slot = null;
-                    updateSummary();
-                    goStep(3);
-                    initDate();
+                    choose(providers.find(x => x.emp.id === id));
                 }));
+
+            // Ако идваме от каталога и услугата се прави само от 1 специалист —
+            // избираме го автоматично, за да остане само изборът на час.
+            if (auto && providers.length === 1) choose(providers[0]);
         } catch (err) {
             box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
