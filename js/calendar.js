@@ -216,6 +216,8 @@ window.Calendar = (function () {
         function wireTools() {
             detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; navigate(); }));
             detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
+                // Като намалиш под минимума на деня -> преминаваш към седмичен изглед.
+                if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; zoom = Z_MIN; navigate(); return; }
                 zoom = clampZoom(zoom * (b.dataset.z === 'in' ? 1.12 : 0.9)); // фини стъпки
                 localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
                 renderDetail();
@@ -240,7 +242,7 @@ window.Calendar = (function () {
             hardLock(el);
             const pts = new Map();
             let mode = null, decided = null, sx = 0, sy = 0, dx = 0;
-            let pinchStart = 1, pinchZoom = zoom, pinchTarget = zoom, busy = false;
+            let pinchStart = 1, pinchZoom = zoom, pinchTarget = zoom, pinchRatio = 1, busy = false;
             const twoDist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
             const reset = () => { el.style.transform = ''; el.style.opacity = '1'; };
 
@@ -256,7 +258,8 @@ window.Calendar = (function () {
                 if (busy || !pts.has(e.pointerId)) return;
                 pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
                 if (mode === 'pinch' && pts.size >= 2) {
-                    pinchTarget = clampZoom(pinchZoom * (twoDist() / pinchStart));
+                    pinchRatio = twoDist() / pinchStart;
+                    pinchTarget = clampZoom(pinchZoom * pinchRatio);
                     el.style.transform = `scaleY(${(pinchTarget / zoom).toFixed(3)})`;
                     return;
                 }
@@ -277,6 +280,8 @@ window.Calendar = (function () {
                 pts.delete(e.pointerId);
                 if (mode === 'pinch' && pts.size < 2) {
                     mode = null; reset();
+                    // Стигнал си минимума на деня и още смаляваш -> седмичен изглед.
+                    if (pinchTarget <= Z_MIN + 0.01 && pinchRatio < 0.98) { view = 'week'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate(); return; }
                     if (Math.abs(pinchTarget - zoom) > 0.02) { zoom = pinchTarget; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
                     return;
                 }
@@ -372,11 +377,22 @@ window.Calendar = (function () {
             if (!el) return;
             hardLock(el);
             let sx = 0, sy = 0, decided = null, active = false, dx = 0, busy = false;
+            // Пинч навътре (разтваряне на пръстите) в седмица -> обратно към ден.
+            const pts = new Map();
+            let pinchStart = 0;
+            const twoDist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
             el.addEventListener('pointerdown', (e) => {
                 if (busy || e.pointerType === 'mouse' && e.button !== 0) return;
+                pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pts.size === 2) { active = false; pinchStart = twoDist() || 1; return; }
                 active = true; decided = null; sx = e.clientX; sy = e.clientY; dx = 0; el.style.transition = 'none';
             });
             el.addEventListener('pointermove', (e) => {
+                if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pts.size >= 2) {
+                    if (twoDist() / pinchStart > 1.18 && !busy) { busy = true; view = 'day'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate(); }
+                    return;
+                }
                 if (!active) return;
                 dx = e.clientX - sx; const dy = e.clientY - sy;
                 if (decided === null) {
@@ -386,6 +402,9 @@ window.Calendar = (function () {
                 }
                 if (decided === 'x') { el.style.transform = `translateX(${dx.toFixed(0)}px)`; el.style.opacity = String(Math.max(.5, 1 - Math.abs(dx) / 900)); }
             });
+            const clearPt = (e) => pts.delete(e.pointerId);
+            el.addEventListener('pointerup', clearPt);
+            el.addEventListener('pointercancel', clearPt);
             const up = () => {
                 if (!active) return; active = false;
                 if (decided === 'x' && Math.abs(dx) > 10) { wkSwiped = true; setTimeout(() => { wkSwiped = false; }, 350); }
