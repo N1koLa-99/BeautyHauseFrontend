@@ -46,7 +46,8 @@ window.Calendar = (function () {
         let selBk = null;         // избран час в дневната времева решетка
         let empFilter = null;     // филтър по специалист (в „Целият салон")
         // Мащаб (zoom) на дневната решетка + изглед (ден/седмица). Пазят се локално.
-        const Z_MIN = 1.3, Z_MAX = 5.0;
+        // Много широк, плавен диапазон на мащаба (клетките се смаляват/уголемяват през всяко ниво).
+        const Z_MIN = 0.6, Z_MAX = 9.0;
         let zoom = Math.min(Z_MAX, Math.max(Z_MIN, parseFloat(localStorage.getItem('bh_cal_zoom')) || 2.2));
         let view = 'day';         // 'day' | 'week'
         const clampZoom = z => Math.min(Z_MAX, Math.max(Z_MIN, z));
@@ -215,8 +216,7 @@ window.Calendar = (function () {
         function wireTools() {
             detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; navigate(); }));
             detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
-                if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; navigate(); return; }
-                zoom = clampZoom(zoom * (b.dataset.z === 'in' ? 1.28 : 0.78));
+                zoom = clampZoom(zoom * (b.dataset.z === 'in' ? 1.12 : 0.9)); // фини стъпки
                 localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
                 renderDetail();
             }));
@@ -225,8 +225,19 @@ window.Calendar = (function () {
         // Единен жестов контрол чрез Pointer Events (мишка + докосване):
         //  • 2 пръста -> мащаб;  • 1 хоризонтално (пръст/мишка) -> смяна на деня;
         //  • 1 вертикално -> нормален скрол;  • Ctrl+колелце (десктоп) -> мащаб.
+        // Твърдо заключване на браузърния зум САМО върху дадения елемент (графика):
+        // блокира щипката на Safari (gesture* събития) и всеки 2-пръстов жест,
+        // без да пипа останалата част от сайта.
+        function hardLock(el) {
+            if (!el) return;
+            el.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length >= 2) e.preventDefault(); }, { passive: false });
+            ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+                el.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+        }
+
         function wireGestures(el) {
             if (!el) return;
+            hardLock(el);
             const pts = new Map();
             let mode = null, decided = null, sx = 0, sy = 0, dx = 0;
             let pinchStart = 1, pinchZoom = zoom, pinchTarget = zoom, busy = false;
@@ -266,7 +277,6 @@ window.Calendar = (function () {
                 pts.delete(e.pointerId);
                 if (mode === 'pinch' && pts.size < 2) {
                     mode = null; reset();
-                    if (pinchTarget <= Z_MIN + 0.01 && pinchTarget < pinchZoom - 0.01) { view = 'week'; navigate(); return; }
                     if (Math.abs(pinchTarget - zoom) > 0.02) { zoom = pinchTarget; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
                     return;
                 }
@@ -348,7 +358,7 @@ window.Calendar = (function () {
                 </button>`;
             }).join('');
             return `<div class="wk-zoom" style="transform-origin:top center;touch-action:pan-y">
-                <div style="display:flex;margin-top:.5rem;overflow-x:auto">
+                <div style="display:flex;margin-top:.5rem;overflow:hidden">
                     <div style="flex:0 0 34px;position:relative;height:${(HEAD + H).toFixed(0)}px">${gut}</div>
                     <div style="flex:1;display:flex;min-width:0">${cols}</div>
                 </div>
@@ -360,6 +370,7 @@ window.Calendar = (function () {
         let wkSwiped = false;
         function wireWeekSwipe(el) {
             if (!el) return;
+            hardLock(el);
             let sx = 0, sy = 0, decided = null, active = false, dx = 0, busy = false;
             el.addEventListener('pointerdown', (e) => {
                 if (busy || e.pointerType === 'mouse' && e.button !== 0) return;

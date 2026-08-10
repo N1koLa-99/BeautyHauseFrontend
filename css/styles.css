@@ -85,6 +85,7 @@ body {
     background: var(--cream);
     line-height: 1.6;
     font-weight: 400;
+    touch-action: manipulation; /* спира двойно-тап зуума (вкл. Safari) */
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
