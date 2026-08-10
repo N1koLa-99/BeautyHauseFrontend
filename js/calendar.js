@@ -232,6 +232,30 @@ window.Calendar = (function () {
             el.addEventListener('touchcancel', end);
         }
 
+        // Хоризонтално плъзгане по графика = смяна на деня (напред/назад).
+        function wireSwipe(el) {
+            if (!el) return;
+            let x0 = 0, y0 = 0, axis = null, active = false;
+            el.addEventListener('touchstart', (e) => {
+                if (e.touches.length !== 1) { active = false; return; }
+                active = true; axis = null; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+            }, { passive: true });
+            el.addEventListener('touchmove', (e) => {
+                if (!active || e.touches.length !== 1) { active = false; return; }
+                const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+                if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+                if (axis === 'x') e.preventDefault(); // хоризонтално => не скролвай страницата
+            }, { passive: false });
+            const end = (e) => {
+                if (!active) return; active = false;
+                const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+                const dx = t.clientX - x0, dy = t.clientY - y0;
+                if (axis === 'x' && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) shiftDay(dx < 0 ? 1 : -1);
+            };
+            el.addEventListener('touchend', end);
+            el.addEventListener('touchcancel', () => { active = false; });
+        }
+
         // Седмичен изглед: 7 колони с малки блокчета; клик на ден => дневен изглед.
         function weekHtml() {
             const sd = new Date(selKey + 'T00:00:00');
@@ -464,10 +488,10 @@ window.Calendar = (function () {
             }).join('');
 
             const tlHtml = `
-                <div class="tl-zoom" style="display:flex;margin-top:.4rem;transform-origin:top center">
+                <div class="tl-zoom" style="display:flex;margin-top:.4rem;transform-origin:top center;touch-action:pan-y">
                     <div style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
-                    <div class="tl-wrap" style="flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch">
-                        <div style="position:relative;height:${(H + 10).toFixed(0)}px;min-width:${(lanes * LANE_MIN)}px">
+                    <div class="tl-wrap" style="flex:1;min-width:0;overflow:hidden">
+                        <div style="position:relative;height:${(H + 10).toFixed(0)}px">
                             ${hourBands}${gridLines}${nowLine}
                             <div class="tl-canvas" style="position:absolute;left:2px;right:2px;top:0;bottom:10px">${blocks}</div>
                         </div>
@@ -485,7 +509,9 @@ window.Calendar = (function () {
                 ${tlHtml}
                 ${schedHtml}`;
             wireTools();
-            wirePinch(detail.querySelector('.tl-zoom'));
+            const zoomEl = detail.querySelector('.tl-zoom');
+            wirePinch(zoomEl);
+            wireSwipe(zoomEl);
 
             // Клик на час -> попъп с детайли/действия.
             detail.querySelectorAll('.tl-bk').forEach(btn =>
