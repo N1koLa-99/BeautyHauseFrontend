@@ -234,40 +234,57 @@ window.Calendar = (function () {
         //   • мишка влачене ↔ -> смяна на ден/седмица;  Ctrl+колелце -> мащаб
         // opts: { pinch: bool, step: 1|7, onPinchEnd(zoomOut) }
         // ---------------------------------------------------------------
-        function wireGestures(el, opts) {
-            if (!el) return;
-            const o = opts || {};
-            const STEP = o.step || 1;
+        // Закача се ВЕДНЪЖ върху постоянния контейнер `detail`, за да не се
+        // губят слушателите при пре-рендиране. При щипка НЕ разтягаме с
+        // transform (текстът се деформира), а пре-рендираме на живо —
+        // клетките се преоразмеряват, шрифтът остава нормален.
+        function wireGestures() {
+            const el = detail;
             let busy = false;
-            const reset = () => { el.style.transform = ''; el.style.opacity = '1'; };
-            const anim = (ms) => { el.style.transition = `transform ${ms}ms ease-out, opacity ${ms}ms ease-out`; };
+            const slider = () => detail.querySelector('.tl-zoom, .wk-zoom');
+            const resetSlide = () => { const s = slider(); if (s) { s.style.transform = ''; s.style.opacity = '1'; } };
 
             // Safari: спираме собствената му щипка САМО тук.
             ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
                 el.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
 
             const commitSwipe = (dx) => {
+                const step = (view === 'week') ? 7 : 1;
+                const s = slider();
                 if (Math.abs(dx) > 45) {
-                    busy = true; anim(150);
-                    el.style.transform = `translateX(${dx < 0 ? '-110%' : '110%'})`;
-                    el.style.opacity = '0';
-                    setTimeout(() => shiftDay(dx < 0 ? STEP : -STEP), 145);
-                } else { anim(180); reset(); }
+                    busy = true;
+                    if (s) { s.style.transition = 'transform .15s ease-out, opacity .15s ease-out'; s.style.transform = `translateX(${dx < 0 ? '-110%' : '110%'})`; s.style.opacity = '0'; }
+                    setTimeout(() => { busy = false; shiftDay(dx < 0 ? step : -step); }, 145);
+                } else if (s) { s.style.transition = 'transform .18s ease-out, opacity .18s ease-out'; resetSlide(); }
+            };
+
+            // Плавно пре-рендиране на живо (макс. 1 път на кадър).
+            let rafOn = false, wantZoom = zoom;
+            const applyZoom = (z) => {
+                wantZoom = clampZoom(z);
+                if (rafOn) return;
+                rafOn = true;
+                requestAnimationFrame(() => {
+                    rafOn = false;
+                    if (Math.abs(wantZoom - zoom) < 0.005) return;
+                    zoom = wantZoom;
+                    localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
+                    renderDetail();
+                });
             };
 
             // ---------- Докосване ----------
             let mode = null, sx = 0, sy = 0, dx = 0;
-            let pStart = 1, pFrom = zoom, pTo = zoom;
+            let pStart = 1, pFrom = zoom, pRatio = 1;
             const d2 = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 
             el.addEventListener('touchstart', (e) => {
                 if (busy) return;
-                el.style.transition = 'none';
                 if (e.touches.length >= 2) {
-                    if (o.pinch === false) { mode = 'pinch-off'; return; }
-                    mode = 'pinch'; pStart = d2(e.touches) || 1; pFrom = zoom; pTo = zoom;
+                    mode = 'pinch'; pStart = d2(e.touches) || 1; pFrom = zoom; pRatio = 1;
                 } else if (e.touches.length === 1) {
                     mode = null; sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0;
+                    const s = slider(); if (s) s.style.transition = 'none';
                 }
             }, { passive: true });
 
@@ -276,17 +293,23 @@ window.Calendar = (function () {
                 // Всеки 2-пръстов жест е наш -> браузърът да не зумва.
                 if (e.touches.length >= 2) {
                     e.preventDefault();
-                    if (mode === 'pinch-off') {
-                        // В седмица: разтваряне на пръстите => обратно към ден.
-                        if (d2(e.touches) / (pStart || 1) > 1.15 && o.onPinchIn) { busy = true; o.onPinchIn(); }
+                    if (mode !== 'pinch') { mode = 'pinch'; pStart = d2(e.touches) || 1; pFrom = zoom; }
+                    pRatio = d2(e.touches) / pStart;
+                    if (view === 'week') {
+                        // Разтваряне на пръстите в седмица -> обратно към ден.
+                        if (pRatio > 1.15) { busy = true; view = 'day'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate(); setTimeout(() => busy = false, 300); }
                         return;
                     }
-                    if (mode !== 'pinch') { mode = 'pinch'; pStart = d2(e.touches) || 1; pFrom = zoom; pTo = zoom; }
-                    pTo = clampZoom(pFrom * (d2(e.touches) / pStart));
-                    el.style.transform = `scaleY(${(pTo / zoom).toFixed(3)})`;
+                    const target = clampZoom(pFrom * pRatio);
+                    // Смаляване под минимума -> седмичен изглед.
+                    if (target <= Z_MIN + 0.01 && pRatio < 0.9) {
+                        busy = true; view = 'week'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate();
+                        setTimeout(() => busy = false, 300); mode = null; return;
+                    }
+                    applyZoom(target);   // жив, неразтегнат резултат
                     return;
                 }
-                if (e.touches.length !== 1 || mode === 'pinch' || mode === 'pinch-off') return;
+                if (e.touches.length !== 1 || mode === 'pinch') return;
                 dx = e.touches[0].clientX - sx;
                 const dy = e.touches[0].clientY - sy;
                 if (mode === null) {
@@ -295,29 +318,25 @@ window.Calendar = (function () {
                 }
                 if (mode === 'swipe') {
                     e.preventDefault();   // не скролвай страницата настрани
-                    el.style.transform = `translateX(${dx.toFixed(0)}px)`;
-                    el.style.opacity = String(Math.max(.5, 1 - Math.abs(dx) / 800));
+                    const s = slider();
+                    if (s) { s.style.transform = `translateX(${dx.toFixed(0)}px)`; s.style.opacity = String(Math.max(.5, 1 - Math.abs(dx) / 800)); }
                 }
             }, { passive: false });
 
             el.addEventListener('touchend', (e) => {
-                if (busy || e.touches.length) return;   // изчакай последния пръст
+                if (e.touches.length) return;          // изчакай последния пръст
                 const was = mode; mode = null;
-                if (was === 'pinch') {
-                    reset();
-                    const zoomedOut = pTo < pFrom - 0.005;
-                    if (o.onPinchEnd && o.onPinchEnd(zoomedOut, pTo)) return;
-                    if (Math.abs(pTo - zoom) > 0.01) { zoom = pTo; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
-                } else if (was === 'swipe') commitSwipe(dx);
-                else reset();
+                if (busy) return;
+                if (was === 'swipe') commitSwipe(dx);
             });
-            el.addEventListener('touchcancel', () => { mode = null; el.style.transition = ''; reset(); });
+            el.addEventListener('touchcancel', () => { mode = null; resetSlide(); });
 
             // ---------- Мишка (десктоп): влачене настрани = смяна ----------
             let mDown = false, mx = 0, my = 0, mdx = 0, mAxis = null;
             el.addEventListener('mousedown', (e) => {
                 if (busy || e.button !== 0) return;
-                mDown = true; mAxis = null; mx = e.clientX; my = e.clientY; mdx = 0; el.style.transition = 'none';
+                mDown = true; mAxis = null; mx = e.clientX; my = e.clientY; mdx = 0;
+                const s = slider(); if (s) s.style.transition = 'none';
             });
             window.addEventListener('mousemove', (e) => {
                 if (!mDown || busy) return;
@@ -328,8 +347,8 @@ window.Calendar = (function () {
                 }
                 if (mAxis === 'x') {
                     e.preventDefault();
-                    el.style.transform = `translateX(${mdx.toFixed(0)}px)`;
-                    el.style.opacity = String(Math.max(.5, 1 - Math.abs(mdx) / 800));
+                    const s = slider();
+                    if (s) { s.style.transform = `translateX(${mdx.toFixed(0)}px)`; s.style.opacity = String(Math.max(.5, 1 - Math.abs(mdx) / 800)); }
                 }
             });
             window.addEventListener('mouseup', () => {
@@ -339,16 +358,13 @@ window.Calendar = (function () {
             });
 
             // ---------- Десктоп: Ctrl + колелце = мащаб ----------
-            if (o.pinch !== false) {
-                let pending = false;
-                el.addEventListener('wheel', (e) => {
-                    if (!e.ctrlKey) return;
-                    e.preventDefault();
-                    zoom = clampZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.91));
-                    if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }); }
-                }, { passive: false });
-            }
+            el.addEventListener('wheel', (e) => {
+                if (!e.ctrlKey || view === 'week') return;
+                e.preventDefault();
+                applyZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.91));
+            }, { passive: false });
         }
+        wireGestures();
 
         // Седмичен изглед: 7 колони с малки блокчета; клик на ден => дневен изглед.
         function weekHtml() {
@@ -363,13 +379,25 @@ window.Calendar = (function () {
             let ws = 9 * 60, we = 19 * 60;
             days.forEach(d => listFor(d).forEach(b => { ws = Math.min(ws, toMin(b.startAt)); we = Math.max(we, b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30); }));
             ws = Math.floor(ws / 60) * 60; we = Math.ceil(we / 60) * 60;
-            const WPX = 0.9, HEAD = 50, H = (we - ws) * WPX;
-            let gut = '', lines = '';
+            const WPX = 1.15, HEAD = 56, H = (we - ws) * WPX;
+
+            // Часова колона + линии/ленти (по-четимо).
+            let gut = '', lines = '', bands = '';
             for (let mm = ws; mm <= we; mm += 60) {
                 const top = (mm - ws) * WPX;
-                gut += `<span style="position:absolute;left:0;top:${(HEAD + top - 6).toFixed(0)}px;font-size:.6rem;font-weight:600;color:var(--muted)">${minToHHMM(mm)}</span>`;
-                lines += `<div style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:1px solid rgba(60,47,51,.08)"></div>`;
+                gut += `<span class="wk-gut">${minToHHMM(mm)}</span>`.replace('<span', `<span style="top:${(HEAD + top - 7).toFixed(0)}px"`);
+                lines += `<div class="wk-line" style="top:${top.toFixed(0)}px"></div>`;
+                if (mm < we && Math.round(mm / 60) % 2 === 0)
+                    bands += `<div class="wk-band" style="top:${top.toFixed(0)}px;height:${(60 * WPX).toFixed(0)}px"></div>`;
             }
+
+            // Линия „сега" (само ако днешният ден е в тази седмица).
+            const nm2 = now.getHours() * 60 + now.getMinutes();
+            const showNow = days.some(d => kk(d) === todayK) && nm2 >= ws && nm2 <= we;
+            const nowTop = (nm2 - ws) * WPX;
+
+            const totalCount = days.reduce((n, d) => n + listFor(d).length, 0);
+
             const cols = days.map((d, di) => {
                 const k = kk(d);
                 const arr = listFor(d).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
@@ -378,35 +406,51 @@ window.Calendar = (function () {
                 const lanes = Math.max(1, laneEnd.length);
                 const blk = arr.map((b, i) => {
                     const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30;
-                    const top = (s - ws) * WPX, hh = Math.max(5, (e - s) * WPX - 1);
+                    const top = (s - ws) * WPX, hh = Math.max(7, (e - s) * WPX - 2);
                     const flg = b.noShowCount > 0 || b.status === 'no_show';
                     const bg = flg ? '#D9534F' : empColor(b.employeeId);
                     const w = 100 / lanes, left = laneOf[i] * w;
                     const t0 = b.startAt.slice(11, 16), nm = esc(b.serviceName);
-                    const title = `${t0} · ${nm}${b.clientName ? ' · ' + esc(b.clientName) : ''}${flg ? ' · ⚠' : ''}`;
-                    // Етикет вътре в блока (когато има място) — час + услуга, за да е ясно за какво е.
-                    const lab = hh >= 18
-                        ? `<div style="font-size:.55rem;font-weight:700;color:#fff;line-height:1.08;padding:2px 3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${hh >= 44 ? 3 : 2};-webkit-box-orient:vertical;word-break:break-word">${t0} ${nm}</div>`
+                    const title = `${t0} · ${nm}${b.clientName ? ' · ' + esc(b.clientName) : ''}${flg ? ' · ⚠ некоректен' : ''}`;
+                    const lab = hh >= 22
+                        ? `<span class="wk-bk__t">${t0}</span><span class="wk-bk__n" style="-webkit-line-clamp:${hh >= 50 ? 3 : 1}">${nm}</span>`
                         : '';
-                    return `<div title="${title}" style="position:absolute;top:${top.toFixed(0)}px;height:${hh.toFixed(0)}px;left:calc(${left}% + 1px);width:calc(${w}% - 2px);background:${bg};border-radius:3px;overflow:hidden;opacity:${b.status === 'completed' ? .7 : .97}">${lab}</div>`;
+                    return `<div class="wk-bk${flg ? ' is-flag' : ''}" title="${title}" style="top:${top.toFixed(0)}px;height:${hh.toFixed(0)}px;left:calc(${left}% + 1.5px);width:calc(${w}% - 3px);background:${bg};${b.status === 'completed' ? 'opacity:.68;' : ''}">${lab}</div>`;
                 }).join('');
-                const isSel = k === selKey, isToday = k === todayK;
-                const numS = isSel ? 'background:var(--rose-deep);color:#fff' : (isToday ? 'color:var(--rose-deep);font-weight:800' : 'color:var(--ink)');
-                return `<button class="cal-wk-col" data-k="${k}" style="flex:1;min-width:0;border:0;border-left:1px solid rgba(60,47,51,.06);background:${isSel ? 'rgba(206,122,120,.06)' : 'transparent'};cursor:pointer;padding:0;display:block">
-                    <div style="height:${HEAD}px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem">
-                        <span style="font-size:.6rem;font-weight:600;color:var(--muted)">${WD[di]}</span>
-                        <span style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;${numS}">${d.getDate()}</span>
+                const isSel = k === selKey, isToday = k === todayK, isWknd = di >= 5;
+                const cnt = arr.length;
+                const loadColor = cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76');
+                return `<button class="cal-wk-col${isSel ? ' is-sel' : ''}${isWknd ? ' is-wknd' : ''}" data-k="${k}">
+                    <div class="wk-head" style="height:${HEAD}px">
+                        <span class="wk-head__wd">${WD[di]}</span>
+                        <span class="wk-head__n${isSel ? ' is-sel' : (isToday ? ' is-today' : '')}">${d.getDate()}</span>
+                        <span class="wk-head__dot" style="background:${cnt ? loadColor : 'transparent'}"></span>
                     </div>
-                    <div style="position:relative;height:${H.toFixed(0)}px">${lines}${blk}</div>
+                    <div class="wk-body" style="height:${H.toFixed(0)}px">${bands}${lines}${blk}${
+                        showNow && isToday ? `<div class="wk-now" style="top:${nowTop.toFixed(0)}px"></div>` : ''}</div>
                 </button>`;
             }).join('');
+
+            // Заглавие на седмицата (диапазон) + общ брой часове.
+            const last = days[6];
+            const rangeTxt = (monday.getMonth() === last.getMonth())
+                ? `${monday.getDate()}–${last.getDate()} ${MON[last.getMonth()]} ${last.getFullYear()}`
+                : `${monday.getDate()} ${MON[monday.getMonth()].slice(0, 3)} – ${last.getDate()} ${MON[last.getMonth()].slice(0, 3)} ${last.getFullYear()}`;
+
+            // Легенда по специалисти (само в „Целият салон").
+            const legend = (cfg.showEmployee && cfg.employees && cfg.employees.length)
+                ? `<div class="wk-legend">${empsSorted().map(e =>
+                    `<span class="wk-leg"><i style="background:${empColor(e.id)}"></i>${esc(e.name)}</span>`).join('')}</div>`
+                : '';
+
             return `<div class="wk-zoom" style="transform-origin:top center;touch-action:pan-y">
-                <div style="display:flex;margin-top:.5rem;overflow:hidden">
-                    <div style="flex:0 0 34px;position:relative;height:${(HEAD + H).toFixed(0)}px">${gut}</div>
-                    <div style="flex:1;display:flex;min-width:0">${cols}</div>
+                <div class="wk-title"><strong>${rangeTxt}</strong><span class="hint">${totalCount} ${totalCount === 1 ? 'час' : 'часа'}</span></div>
+                <div class="wk-grid">
+                    <div class="wk-gutcol" style="height:${(HEAD + H).toFixed(0)}px">${gut}</div>
+                    <div class="wk-cols">${cols}</div>
                 </div>
-            </div>
-            <p class="hint" style="margin:.8rem 0 0;text-align:center">Докосни ден, за да го отвориш · плъзни настрани за друга седмица.</p>`;
+                ${legend}
+            </div>`;
         }
 
 
@@ -416,11 +460,6 @@ window.Calendar = (function () {
             if (view === 'week') {
                 detail.innerHTML = toolsHtml() + weekHtml();
                 wireTools();
-                // Седмица: плъзгане ↔ = друга седмица; разтваряне на пръсти = обратно към ден.
-                wireGestures(detail.querySelector('.wk-zoom'), {
-                    pinch: false, step: 7,
-                    onPinchIn: () => { view = 'day'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate(); }
-                });
                 detail.querySelectorAll('.cal-wk-col').forEach(c => c.addEventListener('click', () => {
                     selKey = c.dataset.k; selBk = null; view = 'day'; paintNav(); renderDetail();
                 }));
@@ -611,17 +650,6 @@ window.Calendar = (function () {
                 ${tlHtml}
                 ${schedHtml}`;
             wireTools();
-            // Ден: щипка = мащаб; при смаляване под минимума -> седмичен изглед.
-            wireGestures(detail.querySelector('.tl-zoom'), {
-                step: 1,
-                onPinchEnd: (zoomedOut, target) => {
-                    if (zoomedOut && target <= Z_MIN + 0.02) {
-                        view = 'week'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate();
-                        return true;
-                    }
-                    return false;
-                }
-            });
 
             // Клик на час -> попъп с детайли/действия.
             detail.querySelectorAll('.tl-bk').forEach(btn =>

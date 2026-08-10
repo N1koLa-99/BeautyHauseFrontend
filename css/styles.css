@@ -891,7 +891,42 @@ textarea.input { resize: vertical; min-height: 110px; }
 .cal-zoom__b:hover { background: var(--blush-soft); }
 .cal-zoom__b:active { transform: scale(.92); }
 .tl-zoom { will-change: transform; touch-action: pan-x pan-y; }
-.cal-wk-col:active { background: rgba(206,122,120,.1) !important; }
+
+/* ---- Седмичен изглед ---- */
+.wk-title { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; margin: .1rem .1rem .5rem; }
+.wk-title strong { font-family: var(--font-display); font-size: 1.05rem; color: var(--ink); }
+.wk-grid { display: flex; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #fff; }
+.wk-gutcol { flex: 0 0 40px; position: relative; background: var(--ivory); border-right: 1px solid var(--line); }
+.wk-gut { position: absolute; left: 0; right: 5px; text-align: right; font-size: .62rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wk-cols { flex: 1; display: flex; min-width: 0; }
+
+.cal-wk-col { flex: 1; min-width: 0; border: 0; border-left: 1px solid var(--line); background: transparent; cursor: pointer; padding: 0; display: block; transition: background .15s; }
+.cal-wk-col:first-child { border-left: 0; }
+.cal-wk-col.is-wknd { background: rgba(60,47,51,.022); }
+.cal-wk-col.is-sel { background: rgba(206,122,120,.07); box-shadow: inset 0 0 0 1.5px rgba(206,122,120,.45); }
+@media (hover: hover) { .cal-wk-col:hover { background: rgba(206,122,120,.06); } }
+.cal-wk-col:active { background: rgba(206,122,120,.12); }
+
+.wk-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .18rem; border-bottom: 1px solid var(--line); background: var(--ivory); }
+.wk-head__wd { font-size: .6rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.wk-head__n { width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: var(--ink); }
+.wk-head__n.is-today { color: var(--rose-deep); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--rose); }
+.wk-head__n.is-sel { background: var(--grad-rose); color: #fff; box-shadow: 0 3px 8px rgba(206,122,120,.4); }
+.wk-head__dot { width: 5px; height: 5px; border-radius: 50%; }
+
+.wk-body { position: relative; }
+.wk-band { position: absolute; left: 0; right: 0; background: rgba(60,47,51,.022); pointer-events: none; }
+.wk-line { position: absolute; left: 0; right: 0; border-top: 1px solid rgba(60,47,51,.09); pointer-events: none; }
+.wk-now { position: absolute; left: 0; right: 0; border-top: 2px solid #EA4335; z-index: 3; pointer-events: none; }
+
+.wk-bk { position: absolute; border-radius: 5px; overflow: hidden; color: #fff; padding: 2px 3px; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.wk-bk.is-flag { box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px #D9534F; }
+.wk-bk__t { display: block; font-size: .55rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; opacity: .95; }
+.wk-bk__n { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; font-size: .56rem; font-weight: 700; line-height: 1.12; margin-top: 1px; word-break: break-word; }
+
+.wk-legend { display: flex; flex-wrap: wrap; gap: .35rem .9rem; justify-content: center; margin-top: .8rem; }
+.wk-leg { display: inline-flex; align-items: center; gap: .35rem; font-size: .74rem; font-weight: 600; color: var(--ink-soft); }
+.wk-leg i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
 
 /* Обобщение на резервацията — чисти редове с разделители */
 .bk-sum { display: flex; flex-direction: column; }
