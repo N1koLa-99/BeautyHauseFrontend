@@ -880,6 +880,18 @@ textarea.input { resize: vertical; min-height: 110px; }
 }
 .cal-fab__opt.is-on .cal-fab__av { box-shadow: 0 0 0 3px var(--ink), 0 6px 16px rgba(60,30,35,.28); }
 
+/* ---- График: лента Ден/Седмица + мащаб ---- */
+.cal-tools { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .55rem; }
+.cal-seg { display: inline-flex; background: var(--ivory); border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+.cal-seg__b { border: 0; background: transparent; cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--ink-soft); padding: .34rem .95rem; border-radius: 999px; transition: background .18s, color .18s; }
+.cal-seg__b.is-on { background: var(--grad-rose); color: #fff; box-shadow: 0 3px 10px rgba(206,122,120,.35); }
+.cal-zoom { display: inline-flex; gap: .35rem; }
+.cal-zoom__b { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 1.25rem; font-weight: 700; color: var(--rose-deep); line-height: 1; display: grid; place-items: center; transition: transform .12s, background .15s; }
+.cal-zoom__b:hover { background: var(--blush-soft); }
+.cal-zoom__b:active { transform: scale(.92); }
+.tl-zoom { will-change: transform; touch-action: pan-x pan-y; }
+.cal-wk-col:active { background: rgba(206,122,120,.1) !important; }
+
 /* Обобщение на резервацията — чисти редове с разделители */
 .bk-sum { display: flex; flex-direction: column; }
 .bk-sum__row { display: flex; align-items: baseline; justify-content: space-between; gap: 1.1rem; padding: .8rem 0; border-bottom: 1px solid var(--line); }

@@ -45,6 +45,11 @@ window.Calendar = (function () {
         let data = {};            // 'YYYY-MM-DD' -> [bookings]
         let selBk = null;         // избран час в дневната времева решетка
         let empFilter = null;     // филтър по специалист (в „Целият салон")
+        // Мащаб (zoom) на дневната решетка + изглед (ден/седмица). Пазят се локално.
+        const Z_MIN = 1.3, Z_MAX = 5.0;
+        let zoom = Math.min(Z_MAX, Math.max(Z_MIN, parseFloat(localStorage.getItem('bh_cal_zoom')) || 2.2));
+        let view = 'day';         // 'day' | 'week'
+        const clampZoom = z => Math.min(Z_MAX, Math.max(Z_MIN, z));
         // Прагове за натовареност (Радина ги задава от Настройки; пазят се локално).
         const loadY = parseInt(localStorage.getItem('bh_load_yellow'), 10) || 10;
         const loadR = parseInt(localStorage.getItem('bh_load_red'), 10) || 15;
@@ -177,7 +182,125 @@ window.Calendar = (function () {
             weekEl.querySelectorAll('.cal-wday').forEach(el => el.addEventListener('click', () => goToDate(el.dataset.k)));
         }
 
+        // Лента: превключване Ден/Седмица + мащаб (±). Ползва се в двата изгледа.
+        function toolsHtml() {
+            return `
+                <div class="cal-tools">
+                    <div class="cal-seg">
+                        <button class="cal-seg__b${view === 'day' ? ' is-on' : ''}" data-view="day">Ден</button>
+                        <button class="cal-seg__b${view === 'week' ? ' is-on' : ''}" data-view="week">Седмица</button>
+                    </div>
+                    ${view === 'day' ? `<div class="cal-zoom">
+                        <button class="cal-zoom__b" data-z="out" aria-label="Намали">−</button>
+                        <button class="cal-zoom__b" data-z="in" aria-label="Увеличи">+</button>
+                    </div>` : ''}
+                </div>`;
+        }
+        function wireTools() {
+            detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; renderDetail(); }));
+            detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
+                if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; renderDetail(); return; }
+                zoom = clampZoom(zoom * (b.dataset.z === 'in' ? 1.28 : 0.78));
+                localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
+                renderDetail();
+            }));
+        }
+
+        // Щипка с два пръста върху графика = мащабиране (živ преглед + запис при пускане).
+        function wirePinch(el) {
+            if (!el) return;
+            let startDist = 0, startZoom = zoom, lastK = 1, pinching = false;
+            const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+            el.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) { pinching = true; startDist = dist(e.touches) || 1; startZoom = zoom; lastK = 1; el.style.transition = 'none'; }
+            }, { passive: true });
+            el.addEventListener('touchmove', (e) => {
+                if (!pinching || e.touches.length !== 2) return;
+                e.preventDefault();
+                const target = clampZoom(startZoom * (dist(e.touches) / startDist));
+                lastK = target / startZoom;
+                el.style.transform = `scaleY(${(target / zoom).toFixed(3)})`;
+            }, { passive: false });
+            const end = () => {
+                if (!pinching) return;
+                pinching = false; el.style.transform = '';
+                const nz = clampZoom(startZoom * lastK);
+                if (nz <= Z_MIN + 0.01 && lastK < 0.85) { view = 'week'; renderDetail(); return; }
+                if (Math.abs(nz - zoom) > 0.02) { zoom = nz; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
+            };
+            el.addEventListener('touchend', end);
+            el.addEventListener('touchcancel', end);
+        }
+
+        // Седмичен изглед: 7 колони с малки блокчета; клик на ден => дневен изглед.
+        function weekHtml() {
+            const sd = new Date(selKey + 'T00:00:00');
+            const monday = new Date(sd); monday.setDate(sd.getDate() - ((sd.getDay() + 6) % 7));
+            const todayK = key(now.getFullYear(), now.getMonth(), now.getDate());
+            const kk = d => key(d.getFullYear(), d.getMonth(), d.getDate());
+            const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
+            const days = [];
+            for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d); }
+            const listFor = d => { const a = data[kk(d)] || []; return empFilter != null ? a.filter(b => b.employeeId === empFilter) : a; };
+            let ws = 9 * 60, we = 19 * 60;
+            days.forEach(d => listFor(d).forEach(b => { ws = Math.min(ws, toMin(b.startAt)); we = Math.max(we, b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30); }));
+            ws = Math.floor(ws / 60) * 60; we = Math.ceil(we / 60) * 60;
+            const WPX = 0.9, HEAD = 50, H = (we - ws) * WPX;
+            let gut = '', lines = '';
+            for (let mm = ws; mm <= we; mm += 60) {
+                const top = (mm - ws) * WPX;
+                gut += `<span style="position:absolute;left:0;top:${(HEAD + top - 6).toFixed(0)}px;font-size:.6rem;font-weight:600;color:var(--muted)">${minToHHMM(mm)}</span>`;
+                lines += `<div style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:1px solid rgba(60,47,51,.08)"></div>`;
+            }
+            const cols = days.map((d, di) => {
+                const k = kk(d);
+                const arr = listFor(d).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
+                const laneEnd = [], laneOf = [];
+                arr.forEach((b, i) => { const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30; let l = laneEnd.findIndex(x => x <= s); if (l === -1) { l = laneEnd.length; laneEnd.push(e); } else laneEnd[l] = e; laneOf[i] = l; });
+                const lanes = Math.max(1, laneEnd.length);
+                const blk = arr.map((b, i) => {
+                    const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30;
+                    const top = (s - ws) * WPX, hh = Math.max(5, (e - s) * WPX - 1);
+                    const flg = b.noShowCount > 0 || b.status === 'no_show';
+                    const bg = flg ? '#D9534F' : empColor(b.employeeId);
+                    const w = 100 / lanes, left = laneOf[i] * w;
+                    const t0 = b.startAt.slice(11, 16), nm = esc(b.serviceName);
+                    const title = `${t0} · ${nm}${b.clientName ? ' · ' + esc(b.clientName) : ''}${flg ? ' · ⚠' : ''}`;
+                    // Етикет вътре в блока (когато има място) — час + услуга, за да е ясно за какво е.
+                    const lab = hh >= 18
+                        ? `<div style="font-size:.55rem;font-weight:700;color:#fff;line-height:1.08;padding:2px 3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${hh >= 44 ? 3 : 2};-webkit-box-orient:vertical;word-break:break-word">${t0} ${nm}</div>`
+                        : '';
+                    return `<div title="${title}" style="position:absolute;top:${top.toFixed(0)}px;height:${hh.toFixed(0)}px;left:calc(${left}% + 1px);width:calc(${w}% - 2px);background:${bg};border-radius:3px;overflow:hidden;opacity:${b.status === 'completed' ? .7 : .97}">${lab}</div>`;
+                }).join('');
+                const isSel = k === selKey, isToday = k === todayK;
+                const numS = isSel ? 'background:var(--rose-deep);color:#fff' : (isToday ? 'color:var(--rose-deep);font-weight:800' : 'color:var(--ink)');
+                return `<button class="cal-wk-col" data-k="${k}" style="flex:1;min-width:0;border:0;border-left:1px solid rgba(60,47,51,.06);background:${isSel ? 'rgba(206,122,120,.06)' : 'transparent'};cursor:pointer;padding:0;display:block">
+                    <div style="height:${HEAD}px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem">
+                        <span style="font-size:.6rem;font-weight:600;color:var(--muted)">${WD[di]}</span>
+                        <span style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;${numS}">${d.getDate()}</span>
+                    </div>
+                    <div style="position:relative;height:${H.toFixed(0)}px">${lines}${blk}</div>
+                </button>`;
+            }).join('');
+            return `<div style="display:flex;margin-top:.5rem;overflow-x:auto">
+                <div style="flex:0 0 34px;position:relative;height:${(HEAD + H).toFixed(0)}px">${gut}</div>
+                <div style="flex:1;display:flex;min-width:0">${cols}</div>
+            </div>
+            <p class="hint" style="margin:.8rem 0 0;text-align:center">Докосни ден, за да го отвориш · или „Ден"/(+) за детайли.</p>`;
+        }
+
         function renderDetail() {
+            renderFab();
+            // ---- Седмичен изглед (out-zoom): виждат се всички дни ----
+            if (view === 'week') {
+                detail.innerHTML = toolsHtml() + weekHtml();
+                wireTools();
+                detail.querySelectorAll('.cal-wk-col').forEach(c => c.addEventListener('click', () => {
+                    selKey = c.dataset.k; selBk = null; view = 'day'; paintNav(); renderDetail();
+                }));
+                return;
+            }
+
             const fullList = (data[selKey] || []).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
             // Филтър по специалист (избран от плаващото кръгче). Пази се между дните.
             const list = (empFilter != null) ? fullList.filter(b => b.employeeId === empFilter) : fullList;
@@ -192,9 +315,6 @@ window.Calendar = (function () {
                 const last = list.map(b => (b.endAt || b.startAt).slice(11, 16)).sort().slice(-1)[0];
                 span = `<span class="hint">${list.length} ${list.length === 1 ? 'час' : 'часа'} · ${first}–${last}</span>`;
             }
-
-            // Плаващ филтър по специалист (кръгчето долу вдясно) — обновяваме състоянието.
-            renderFab();
 
             // Карта с детайли/действия за ЕДИН час (отваря се при докосване на блок).
             const bookingCardHtml = (b) => {
@@ -253,7 +373,7 @@ window.Calendar = (function () {
 
             // ---- Дневна времева решетка (Google/Apple стил) ----
             const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
-            const PX = 2.2, GUT = 46, LANE_MIN = 185;
+            const PX = zoom, GUT = 46, LANE_MIN = 185;
             let tStart = 9 * 60, tEnd = 19 * 60; // работни часове; разширяват се спрямо реалните
             if (list.length) {
                 tStart = Math.min(tStart, Math.min(...list.map(b => toMin(b.startAt))));
@@ -344,7 +464,7 @@ window.Calendar = (function () {
             }).join('');
 
             const tlHtml = `
-                <div style="display:flex;margin-top:.4rem">
+                <div class="tl-zoom" style="display:flex;margin-top:.4rem;transform-origin:top center">
                     <div style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
                     <div class="tl-wrap" style="flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch">
                         <div style="position:relative;height:${(H + 10).toFixed(0)}px;min-width:${(lanes * LANE_MIN)}px">
@@ -360,9 +480,12 @@ window.Calendar = (function () {
             const schedHtml = (cfg.editable && cfg.staffId) ? `<div class="panel sched-panel" style="margin-top:1.4rem"><div class="spinner"></div></div>` : '';
 
             detail.innerHTML = `
+                ${toolsHtml()}
                 ${addHint}
                 ${tlHtml}
                 ${schedHtml}`;
+            wireTools();
+            wirePinch(detail.querySelector('.tl-zoom'));
 
             // Клик на час -> попъп с детайли/действия.
             detail.querySelectorAll('.tl-bk').forEach(btn =>
