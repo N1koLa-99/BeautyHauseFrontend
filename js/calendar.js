@@ -206,54 +206,74 @@ window.Calendar = (function () {
             }));
         }
 
-        // Щипка с два пръста върху графика = мащабиране (živ преглед + запис при пускане).
-        function wirePinch(el) {
+        // Единен жестов контрол върху графика (за да няма конфликти):
+        //  • 2 пръста  -> мащабиране (жив преглед, запис при пускане)
+        //  • 1 пръст хоризонтално -> смяна на деня (със слайд анимация)
+        //  • 1 пръст вертикално -> нормален скрол на страницата
+        function wireGestures(el) {
             if (!el) return;
-            let startDist = 0, startZoom = zoom, lastK = 1, pinching = false;
             const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-            el.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 2) { pinching = true; startDist = dist(e.touches) || 1; startZoom = zoom; lastK = 1; el.style.transition = 'none'; }
-            }, { passive: true });
-            el.addEventListener('touchmove', (e) => {
-                if (!pinching || e.touches.length !== 2) return;
-                e.preventDefault();
-                const target = clampZoom(startZoom * (dist(e.touches) / startDist));
-                lastK = target / startZoom;
-                el.style.transform = `scaleY(${(target / zoom).toFixed(3)})`;
-            }, { passive: false });
-            const end = () => {
-                if (!pinching) return;
-                pinching = false; el.style.transform = '';
-                const nz = clampZoom(startZoom * lastK);
-                if (nz <= Z_MIN + 0.01 && lastK < 0.85) { view = 'week'; renderDetail(); return; }
-                if (Math.abs(nz - zoom) > 0.02) { zoom = nz; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
-            };
-            el.addEventListener('touchend', end);
-            el.addEventListener('touchcancel', end);
-        }
+            let mode = null;                 // 'pinch' | 'swipe' | 'scroll'
+            let x0 = 0, y0 = 0, dx = 0;
+            let startDist = 1, startZoom = zoom, targetZoom = zoom, busy = false;
 
-        // Хоризонтално плъзгане по графика = смяна на деня (напред/назад).
-        function wireSwipe(el) {
-            if (!el) return;
-            let x0 = 0, y0 = 0, axis = null, active = false;
             el.addEventListener('touchstart', (e) => {
-                if (e.touches.length !== 1) { active = false; return; }
-                active = true; axis = null; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+                if (busy) return;
+                el.style.transition = 'none';
+                if (e.touches.length === 2) {
+                    mode = 'pinch'; startDist = dist(e.touches) || 1; startZoom = zoom; targetZoom = zoom;
+                } else if (e.touches.length === 1) {
+                    mode = null; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0;
+                }
             }, { passive: true });
+
             el.addEventListener('touchmove', (e) => {
-                if (!active || e.touches.length !== 1) { active = false; return; }
-                const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
-                if (axis === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-                if (axis === 'x') e.preventDefault(); // хоризонтално => не скролвай страницата
+                if (busy) return;
+                if (mode === 'pinch') {
+                    if (e.touches.length < 2) return;
+                    e.preventDefault();
+                    targetZoom = clampZoom(startZoom * (dist(e.touches) / startDist));
+                    el.style.transform = `scaleY(${(targetZoom / zoom).toFixed(3)})`;
+                    return;
+                }
+                if (e.touches.length !== 1) return;
+                dx = e.touches[0].clientX - x0;
+                const dy = e.touches[0].clientY - y0;
+                if (mode === null) {
+                    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+                    mode = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'swipe' : 'scroll';
+                }
+                if (mode === 'swipe') {
+                    e.preventDefault();
+                    el.style.transform = `translateX(${dx.toFixed(0)}px)`;
+                    el.style.opacity = String(Math.max(.55, 1 - Math.abs(dx) / 900));
+                }
             }, { passive: false });
-            const end = (e) => {
-                if (!active) return; active = false;
-                const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
-                const dx = t.clientX - x0, dy = t.clientY - y0;
-                if (axis === 'x' && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) shiftDay(dx < 0 ? 1 : -1);
+
+            const finish = () => {
+                if (busy) return;
+                if (mode === 'pinch') {
+                    el.style.transform = '';
+                    if (targetZoom <= Z_MIN + 0.01 && targetZoom < startZoom - 0.01) { view = 'week'; renderDetail(); }
+                    else if (Math.abs(targetZoom - zoom) > 0.02) { zoom = targetZoom; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
+                } else if (mode === 'swipe') {
+                    if (Math.abs(dx) > 55) {
+                        const dir = dx < 0 ? 1 : -1;
+                        busy = true;
+                        el.style.transition = 'transform .16s ease-out, opacity .16s ease-out';
+                        el.style.transform = `translateX(${dx < 0 ? '-110%' : '110%'})`;
+                        el.style.opacity = '0';
+                        setTimeout(() => { shiftDay(dir); }, 150); // re-render заменя елемента
+                    } else {
+                        el.style.transition = 'transform .2s ease-out, opacity .2s ease-out';
+                        el.style.transform = 'translateX(0)';
+                        el.style.opacity = '1';
+                    }
+                }
+                mode = null;
             };
-            el.addEventListener('touchend', end);
-            el.addEventListener('touchcancel', () => { active = false; });
+            el.addEventListener('touchend', finish);
+            el.addEventListener('touchcancel', () => { el.style.transform = ''; el.style.opacity = '1'; el.style.transition = ''; mode = null; });
         }
 
         // Седмичен изглед: 7 колони с малки блокчета; клик на ден => дневен изглед.
@@ -509,9 +529,7 @@ window.Calendar = (function () {
                 ${tlHtml}
                 ${schedHtml}`;
             wireTools();
-            const zoomEl = detail.querySelector('.tl-zoom');
-            wirePinch(zoomEl);
-            wireSwipe(zoomEl);
+            wireGestures(detail.querySelector('.tl-zoom'));
 
             // Клик на час -> попъп с детайли/действия.
             detail.querySelectorAll('.tl-bk').forEach(btn =>
