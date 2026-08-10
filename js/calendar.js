@@ -72,8 +72,9 @@ window.Calendar = (function () {
         const dateBtnD = container.querySelector('.cal-datebtn__d');
         const dateInp = container.querySelector('.cal-dateinp');
         const detail = container.querySelector('.cal-detail');
-        container.querySelector('.cal-prev').addEventListener('click', () => shiftDay(-1));
-        container.querySelector('.cal-next').addEventListener('click', () => shiftDay(1));
+        // В седмичен изглед стрелките местят по цяла седмица; в дневен — по ден.
+        container.querySelector('.cal-prev').addEventListener('click', () => shiftDay(view === 'week' ? -7 : -1));
+        container.querySelector('.cal-next').addEventListener('click', () => shiftDay(view === 'week' ? 7 : 1));
         dateInp.addEventListener('change', () => { if (dateInp.value) goToDate(dateInp.value); });
 
         // ---- Плаващ филтър по специалист (кръгче долу вдясно) ----
@@ -123,33 +124,48 @@ window.Calendar = (function () {
         }
         buildFab();
 
-        function goToDate(dateStr) {
-            const d = new Date(dateStr + 'T00:00:00');
-            selKey = dateStr; selBk = null;
-            if (d.getFullYear() !== y || d.getMonth() !== m) { y = d.getFullYear(); m = d.getMonth(); load(); }
-            else { paintNav(); renderDetail(); }
-        }
+        // Кеш по месеци — за да работи седмица, която пресича два месеца.
+        const loadedMonths = new Set();
+
+        function goToDate(dateStr) { selKey = dateStr; selBk = null; navigate(); }
         function shiftDay(delta) {
             const d = new Date(selKey + 'T00:00:00'); d.setDate(d.getDate() + delta);
             goToDate(key(d.getFullYear(), d.getMonth(), d.getDate()));
         }
 
-        async function load() {
-            detail.innerHTML = `<div class="spinner"></div>`;
-            const from = key(y, m, 1);
-            const to = `${m === 11 ? y + 1 : y}-${pad((m + 1) % 12 + 1)}-01`;
-            try {
-                const items = await cfg.fetchMonth(from, to);
-                data = {};
-                (items || []).forEach(b => {
-                    const k = b.startAt.slice(0, 10);
-                    (data[k] = data[k] || []).push(b);
-                });
-                paintNav(); renderDetail();
-            } catch (err) {
-                detail.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
-            }
+        // Месеците, които покрива текущият изглед (ден = 1; седмица = до 2).
+        function visibleMonths() {
+            const seen = new Set(), out = [];
+            const add = d => { const mk = `${d.getFullYear()}-${d.getMonth()}`; if (!seen.has(mk)) { seen.add(mk); out.push([d.getFullYear(), d.getMonth()]); } };
+            const sd = new Date(selKey + 'T00:00:00');
+            if (view === 'week') {
+                const monday = new Date(sd); monday.setDate(sd.getDate() - ((sd.getDay() + 6) % 7));
+                for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); add(d); }
+            } else add(sd);
+            return out;
         }
+
+        async function fetchMonthInto(Y, M0) {
+            const from = key(Y, M0, 1);
+            const to = `${M0 === 11 ? Y + 1 : Y}-${pad((M0 + 1) % 12 + 1)}-01`;
+            const items = await cfg.fetchMonth(from, to);
+            for (const dk of Object.keys(data)) { const dt = new Date(dk + 'T00:00:00'); if (dt.getFullYear() === Y && dt.getMonth() === M0) delete data[dk]; }
+            (items || []).forEach(b => { const k = b.startAt.slice(0, 10); (data[k] = data[k] || []).push(b); });
+            loadedMonths.add(`${Y}-${M0}`);
+        }
+
+        // Зарежда липсващите видими месеци (force = презарежда ги пак — след промяна).
+        async function ensureVisible(force) {
+            const need = visibleMonths().filter(([Y, M0]) => force || !loadedMonths.has(`${Y}-${M0}`));
+            if (need.length) {
+                if (!Object.keys(data).length) detail.innerHTML = `<div class="spinner"></div>`;
+                try { for (const [Y, M0] of need) await fetchMonthInto(Y, M0); }
+                catch (err) { detail.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; return; }
+            }
+            paintNav(); renderDetail();
+        }
+        function load() { return ensureVisible(true); }       // презареждане (след промяна)
+        function navigate() { return ensureVisible(false); }  // навигация (зарежда само липсващото)
 
         // Навигация в стил Apple: дата + седмична лента с точки за натовареност.
         function paintNav() {
@@ -197,83 +213,88 @@ window.Calendar = (function () {
                 </div>`;
         }
         function wireTools() {
-            detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; renderDetail(); }));
+            detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; navigate(); }));
             detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
-                if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; renderDetail(); return; }
+                if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; navigate(); return; }
                 zoom = clampZoom(zoom * (b.dataset.z === 'in' ? 1.28 : 0.78));
                 localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
                 renderDetail();
             }));
         }
 
-        // Единен жестов контрол върху графика (за да няма конфликти):
-        //  • 2 пръста  -> мащабиране (жив преглед, запис при пускане)
-        //  • 1 пръст хоризонтално -> смяна на деня (със слайд анимация)
-        //  • 1 пръст вертикално -> нормален скрол на страницата
+        // Единен жестов контрол чрез Pointer Events (мишка + докосване):
+        //  • 2 пръста -> мащаб;  • 1 хоризонтално (пръст/мишка) -> смяна на деня;
+        //  • 1 вертикално -> нормален скрол;  • Ctrl+колелце (десктоп) -> мащаб.
         function wireGestures(el) {
             if (!el) return;
-            const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-            let mode = null;                 // 'pinch' | 'swipe' | 'scroll'
-            let x0 = 0, y0 = 0, dx = 0;
-            let startDist = 1, startZoom = zoom, targetZoom = zoom, busy = false;
+            const pts = new Map();
+            let mode = null, decided = null, sx = 0, sy = 0, dx = 0;
+            let pinchStart = 1, pinchZoom = zoom, pinchTarget = zoom, busy = false;
+            const twoDist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+            const reset = () => { el.style.transform = ''; el.style.opacity = '1'; };
 
-            el.addEventListener('touchstart', (e) => {
-                if (busy) return;
+            el.addEventListener('pointerdown', (e) => {
+                if (busy || e.pointerType === 'mouse' && e.button !== 0) return;
+                pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
                 el.style.transition = 'none';
-                if (e.touches.length === 2) {
-                    mode = 'pinch'; startDist = dist(e.touches) || 1; startZoom = zoom; targetZoom = zoom;
-                } else if (e.touches.length === 1) {
-                    mode = null; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0;
-                }
-            }, { passive: true });
+                if (pts.size === 2) { mode = 'pinch'; pinchStart = twoDist() || 1; pinchZoom = zoom; pinchTarget = zoom; }
+                else if (pts.size === 1) { mode = null; decided = null; sx = e.clientX; sy = e.clientY; dx = 0; }
+            });
 
-            el.addEventListener('touchmove', (e) => {
-                if (busy) return;
-                if (mode === 'pinch') {
-                    if (e.touches.length < 2) return;
-                    e.preventDefault();
-                    targetZoom = clampZoom(startZoom * (dist(e.touches) / startDist));
-                    el.style.transform = `scaleY(${(targetZoom / zoom).toFixed(3)})`;
+            el.addEventListener('pointermove', (e) => {
+                if (busy || !pts.has(e.pointerId)) return;
+                pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (mode === 'pinch' && pts.size >= 2) {
+                    pinchTarget = clampZoom(pinchZoom * (twoDist() / pinchStart));
+                    el.style.transform = `scaleY(${(pinchTarget / zoom).toFixed(3)})`;
                     return;
                 }
-                if (e.touches.length !== 1) return;
-                dx = e.touches[0].clientX - x0;
-                const dy = e.touches[0].clientY - y0;
-                if (mode === null) {
-                    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
-                    mode = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'swipe' : 'scroll';
+                if (pts.size !== 1) return;
+                dx = e.clientX - sx; const dy = e.clientY - sy;
+                if (decided === null) {
+                    if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+                    decided = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+                    if (decided === 'x') { mode = 'swipe'; try { el.setPointerCapture(e.pointerId); } catch (_) {} }
                 }
                 if (mode === 'swipe') {
-                    e.preventDefault();
                     el.style.transform = `translateX(${dx.toFixed(0)}px)`;
-                    el.style.opacity = String(Math.max(.55, 1 - Math.abs(dx) / 900));
+                    el.style.opacity = String(Math.max(.5, 1 - Math.abs(dx) / 800));
                 }
-            }, { passive: false });
+            });
 
-            const finish = () => {
-                if (busy) return;
-                if (mode === 'pinch') {
-                    el.style.transform = '';
-                    if (targetZoom <= Z_MIN + 0.01 && targetZoom < startZoom - 0.01) { view = 'week'; renderDetail(); }
-                    else if (Math.abs(targetZoom - zoom) > 0.02) { zoom = targetZoom; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
-                } else if (mode === 'swipe') {
-                    if (Math.abs(dx) > 55) {
-                        const dir = dx < 0 ? 1 : -1;
-                        busy = true;
+            const up = (e) => {
+                pts.delete(e.pointerId);
+                if (mode === 'pinch' && pts.size < 2) {
+                    mode = null; reset();
+                    if (pinchTarget <= Z_MIN + 0.01 && pinchTarget < pinchZoom - 0.01) { view = 'week'; navigate(); return; }
+                    if (Math.abs(pinchTarget - zoom) > 0.02) { zoom = pinchTarget; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
+                    return;
+                }
+                if (mode === 'swipe' && pts.size === 0) {
+                    mode = null;
+                    if (Math.abs(dx) > 50) {
+                        const dir = dx < 0 ? 1 : -1; busy = true;
                         el.style.transition = 'transform .16s ease-out, opacity .16s ease-out';
                         el.style.transform = `translateX(${dx < 0 ? '-110%' : '110%'})`;
                         el.style.opacity = '0';
-                        setTimeout(() => { shiftDay(dir); }, 150); // re-render заменя елемента
+                        setTimeout(() => shiftDay(dir), 150);
                     } else {
                         el.style.transition = 'transform .2s ease-out, opacity .2s ease-out';
-                        el.style.transform = 'translateX(0)';
-                        el.style.opacity = '1';
+                        reset();
                     }
                 }
-                mode = null;
             };
-            el.addEventListener('touchend', finish);
-            el.addEventListener('touchcancel', () => { el.style.transform = ''; el.style.opacity = '1'; el.style.transition = ''; mode = null; });
+            el.addEventListener('pointerup', up);
+            el.addEventListener('pointercancel', (e) => { pts.delete(e.pointerId); mode = null; el.style.transition = ''; reset(); });
+
+            // Десктоп: Ctrl + колелце = мащаб (не пречи на нормалния скрол).
+            let wheelPending = false;
+            el.addEventListener('wheel', (e) => {
+                if (!e.ctrlKey) return;
+                e.preventDefault();
+                zoom = clampZoom(zoom * (e.deltaY < 0 ? 1.12 : 0.9));
+                if (!wheelPending) { wheelPending = true; requestAnimationFrame(() => { wheelPending = false; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }); }
+            }, { passive: false });
         }
 
         // Седмичен изглед: 7 колони с малки блокчета; клик на ден => дневен изглед.
@@ -326,11 +347,49 @@ window.Calendar = (function () {
                     <div style="position:relative;height:${H.toFixed(0)}px">${lines}${blk}</div>
                 </button>`;
             }).join('');
-            return `<div style="display:flex;margin-top:.5rem;overflow-x:auto">
-                <div style="flex:0 0 34px;position:relative;height:${(HEAD + H).toFixed(0)}px">${gut}</div>
-                <div style="flex:1;display:flex;min-width:0">${cols}</div>
+            return `<div class="wk-zoom" style="transform-origin:top center;touch-action:pan-y">
+                <div style="display:flex;margin-top:.5rem;overflow-x:auto">
+                    <div style="flex:0 0 34px;position:relative;height:${(HEAD + H).toFixed(0)}px">${gut}</div>
+                    <div style="flex:1;display:flex;min-width:0">${cols}</div>
+                </div>
             </div>
-            <p class="hint" style="margin:.8rem 0 0;text-align:center">Докосни ден, за да го отвориш · или „Ден"/(+) за детайли.</p>`;
+            <p class="hint" style="margin:.8rem 0 0;text-align:center">Докосни ден, за да го отвориш · плъзни настрани за друга седмица.</p>`;
+        }
+
+        // Хоризонтално плъзгане в седмичен изглед = предишна/следваща седмица.
+        let wkSwiped = false;
+        function wireWeekSwipe(el) {
+            if (!el) return;
+            let sx = 0, sy = 0, decided = null, active = false, dx = 0, busy = false;
+            el.addEventListener('pointerdown', (e) => {
+                if (busy || e.pointerType === 'mouse' && e.button !== 0) return;
+                active = true; decided = null; sx = e.clientX; sy = e.clientY; dx = 0; el.style.transition = 'none';
+            });
+            el.addEventListener('pointermove', (e) => {
+                if (!active) return;
+                dx = e.clientX - sx; const dy = e.clientY - sy;
+                if (decided === null) {
+                    if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+                    decided = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+                    if (decided === 'x') { try { el.setPointerCapture(e.pointerId); } catch (_) {} }
+                }
+                if (decided === 'x') { el.style.transform = `translateX(${dx.toFixed(0)}px)`; el.style.opacity = String(Math.max(.5, 1 - Math.abs(dx) / 900)); }
+            });
+            const up = () => {
+                if (!active) return; active = false;
+                if (decided === 'x' && Math.abs(dx) > 10) { wkSwiped = true; setTimeout(() => { wkSwiped = false; }, 350); }
+                if (decided === 'x' && Math.abs(dx) > 50) {
+                    const dir = dx < 0 ? 7 : -7; busy = true;
+                    el.style.transition = 'transform .16s ease-out, opacity .16s ease-out';
+                    el.style.transform = `translateX(${dx < 0 ? '-110%' : '110%'})`; el.style.opacity = '0';
+                    setTimeout(() => shiftDay(dir), 150);
+                } else {
+                    el.style.transition = 'transform .2s ease-out, opacity .2s ease-out';
+                    el.style.transform = ''; el.style.opacity = '1';
+                }
+            };
+            el.addEventListener('pointerup', up);
+            el.addEventListener('pointercancel', () => { active = false; el.style.transform = ''; el.style.opacity = '1'; });
         }
 
         function renderDetail() {
@@ -339,7 +398,9 @@ window.Calendar = (function () {
             if (view === 'week') {
                 detail.innerHTML = toolsHtml() + weekHtml();
                 wireTools();
+                wireWeekSwipe(detail.querySelector('.wk-zoom'));
                 detail.querySelectorAll('.cal-wk-col').forEach(c => c.addEventListener('click', () => {
+                    if (wkSwiped) return; // след плъзгане не отваряме ден
                     selKey = c.dataset.k; selBk = null; view = 'day'; paintNav(); renderDetail();
                 }));
                 return;
