@@ -891,6 +891,11 @@ textarea.input { resize: vertical; min-height: 110px; }
 .cal-zoom__b:hover { background: var(--blush-soft); }
 .cal-zoom__b:active { transform: scale(.92); }
 .tl-zoom { will-change: transform; touch-action: pan-x pan-y; }
+/* плавно появяване при смяна на ден/седмица */
+.tl-zoom, .wk-zoom { animation: calIn .22s var(--ease-out) both; }
+@keyframes calIn { from { opacity: 0; } to { opacity: 1; } }
+/* блоковете следват мащаба гладко (само геометрия, без деформация) */
+.tl-bk, .tl-ln, .tl-bd, .tl-gl, .tl-h { will-change: top, height; }
 
 /* ---- Седмичен изглед ---- */
 .wk-title { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; margin: .1rem .1rem .5rem; }

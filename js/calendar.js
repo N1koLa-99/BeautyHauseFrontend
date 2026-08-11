@@ -218,9 +218,7 @@ window.Calendar = (function () {
             detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
                 // Като намалиш под минимума на деня -> преминаваш към седмичен изглед.
                 if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; zoom = Z_MIN; navigate(); return; }
-                zoom = clampZoom(zoom * (b.dataset.z === 'in' ? 1.12 : 0.9)); // фини стъпки
-                localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
-                renderDetail();
+                zoomTo(clampZoom(zoom * (b.dataset.z === 'in' ? 1.25 : 0.8)));
             }));
         }
 
@@ -234,6 +232,39 @@ window.Calendar = (function () {
         //   • мишка влачене ↔ -> смяна на ден/седмица;  Ctrl+колелце -> мащаб
         // opts: { pinch: bool, step: 1|7, onPinchEnd(zoomOut) }
         // ---------------------------------------------------------------
+        // Плавно (анимирано) отиване до даден мащаб — за бутоните ±.
+        let tweenId = null;
+        function zoomTo(target) {
+            cancelAnimationFrame(tweenId);
+            const from = zoom, t0 = performance.now(), dur = 220;
+            const ease = t => 1 - Math.pow(1 - t, 3);
+            const step = (t) => {
+                const k = Math.min(1, (t - t0) / dur);
+                zoom = from + (target - from) * ease(k);
+                paintZoomFast(zoom);
+                if (k < 1) tweenId = requestAnimationFrame(step);
+                else { zoom = target; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
+            };
+            tweenId = requestAnimationFrame(step);
+        }
+
+        // Бърза пре-рисуване на геометрията (без пре-рендиране на DOM).
+        function paintZoomFast(z) {
+            const root = detail.querySelector('.tl-zoom');
+            if (!root) return;
+            const span = +root.dataset.span || 600;
+            const Hh = (span * z + 10).toFixed(0) + 'px';
+            root.querySelectorAll('.tl-h').forEach(el => el.style.height = Hh);
+            root.querySelectorAll('.tl-ln').forEach(el => el.style.top = (+el.dataset.m * z).toFixed(0) + 'px');
+            root.querySelectorAll('.tl-gl').forEach(el => el.style.top = (+el.dataset.m * z - (+el.dataset.off || 0)).toFixed(0) + 'px');
+            root.querySelectorAll('.tl-bd').forEach(el => { el.style.top = (+el.dataset.m * z).toFixed(0) + 'px'; el.style.height = (60 * z).toFixed(0) + 'px'; });
+            root.querySelectorAll('.tl-bk').forEach(el => {
+                const s = +el.dataset.s, e = +el.dataset.e;
+                el.style.top = (s * z).toFixed(0) + 'px';
+                el.style.height = Math.max(34, (e - s) * z - 3).toFixed(0) + 'px';
+            });
+        }
+
         // Закача се ВЕДНЪЖ върху постоянния контейнер `detail`, за да не се
         // губят слушателите при пре-рендиране. При щипка НЕ разтягаме с
         // transform (текстът се деформира), а пре-рендираме на живо —
@@ -258,7 +289,8 @@ window.Calendar = (function () {
                 } else if (s) { s.style.transition = 'transform .18s ease-out, opacity .18s ease-out'; resetSlide(); }
             };
 
-            // Плавно пре-рендиране на живо (макс. 1 път на кадър).
+            // Плавно мащабиране БЕЗ пре-рендиране: местим само геометрията на
+            // вече съществуващите елементи (без деформация на текста).
             let rafOn = false, wantZoom = zoom;
             const applyZoom = (z) => {
                 wantZoom = clampZoom(z);
@@ -266,12 +298,14 @@ window.Calendar = (function () {
                 rafOn = true;
                 requestAnimationFrame(() => {
                     rafOn = false;
-                    if (Math.abs(wantZoom - zoom) < 0.005) return;
+                    if (Math.abs(wantZoom - zoom) < 0.004) return;
                     zoom = wantZoom;
-                    localStorage.setItem('bh_cal_zoom', zoom.toFixed(2));
-                    renderDetail();
+                    paintZoomFast(zoom);
                 });
             };
+            // След края на жеста — един пълен рендер (за да се преизчислят
+            // етикетите вътре в блоковете спрямо новата височина) + запис.
+            const settleZoom = () => { localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); };
 
             // ---------- Докосване ----------
             let mode = null, sx = 0, sy = 0, dx = 0;
@@ -327,7 +361,8 @@ window.Calendar = (function () {
                 if (e.touches.length) return;          // изчакай последния пръст
                 const was = mode; mode = null;
                 if (busy) return;
-                if (was === 'swipe') commitSwipe(dx);
+                if (was === 'pinch') settleZoom();
+                else if (was === 'swipe') commitSwipe(dx);
             });
             el.addEventListener('touchcancel', () => { mode = null; resetSlide(); });
 
@@ -358,10 +393,12 @@ window.Calendar = (function () {
             });
 
             // ---------- Десктоп: Ctrl + колелце = мащаб ----------
+            let wheelTid = null;
             el.addEventListener('wheel', (e) => {
                 if (!e.ctrlKey || view === 'week') return;
                 e.preventDefault();
                 applyZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.91));
+                clearTimeout(wheelTid); wheelTid = setTimeout(settleZoom, 180);
             }, { passive: false });
         }
         wireGestures();
@@ -575,7 +612,7 @@ window.Calendar = (function () {
             for (let hb = tStart; hb < tEnd; hb += 60) {
                 if (Math.round(hb / 60) % 2 === 0) {
                     const top = (hb - tStart) * PX;
-                    hourBands += `<div style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;height:${(60 * PX).toFixed(0)}px;background:rgba(60,47,51,.025);pointer-events:none"></div>`;
+                    hourBands += `<div class="tl-bd" data-m="${hb - tStart}" style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;height:${(60 * PX).toFixed(0)}px;background:rgba(60,47,51,.025);pointer-events:none"></div>`;
                 }
             }
             // По-ясни линии: плътни на кръгъл час, по-меки на половин час, тънки на 15 мин.
@@ -584,9 +621,9 @@ window.Calendar = (function () {
                 const top = (mmn - tStart) * PX;
                 const isHour = mmn % 60 === 0, isHalf = mmn % 30 === 0 && mmn % 60 !== 0;
                 const lineStyle = isHour ? '1.5px solid rgba(60,47,51,.20)' : (isHalf ? '1px solid rgba(60,47,51,.11)' : '1px dashed rgba(60,47,51,.055)');
-                gridLines += `<div style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:${lineStyle}"></div>`;
-                if (isHour) gutLabels += `<span style="position:absolute;left:0;top:${(top - 9).toFixed(0)}px;font-size:.78rem;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums">${minToHHMM(mmn)}</span>`;
-                else if (isHalf) gutLabels += `<span style="position:absolute;left:0;top:${(top - 7).toFixed(0)}px;font-size:.64rem;font-weight:500;color:var(--muted);opacity:.7;font-variant-numeric:tabular-nums">${minToHHMM(mmn)}</span>`;
+                gridLines += `<div class="tl-ln" data-m="${mmn - tStart}" style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:${lineStyle}"></div>`;
+                if (isHour) gutLabels += `<span class="tl-gl" data-m="${mmn - tStart}" data-off="9" style="position:absolute;left:0;top:${(top - 9).toFixed(0)}px;font-size:.78rem;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums">${minToHHMM(mmn)}</span>`;
+                else if (isHalf) gutLabels += `<span class="tl-gl" data-m="${mmn - tStart}" data-off="7" style="position:absolute;left:0;top:${(top - 7).toFixed(0)}px;font-size:.64rem;font-weight:500;color:var(--muted);opacity:.7;font-variant-numeric:tabular-nums">${minToHHMM(mmn)}</span>`;
             }
 
             // Червена линия „сега".
@@ -596,8 +633,8 @@ window.Calendar = (function () {
                 const nm = nowD2.getHours() * 60 + nowD2.getMinutes();
                 if (nm >= tStart && nm <= tEnd) {
                     const top = (nm - tStart) * PX;
-                    nowLine = `<div style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:2px solid #EA4335;z-index:3;pointer-events:none"></div>`;
-                    nowDot = `<span style="position:absolute;right:-5px;top:${(top - 5).toFixed(0)}px;width:10px;height:10px;border-radius:50%;background:#EA4335;z-index:3"></span>`;
+                    nowLine = `<div class="tl-ln" data-m="${nm - tStart}" style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:2px solid #EA4335;z-index:3;pointer-events:none"></div>`;
+                    nowDot = `<span class="tl-gl" data-m="${nm - tStart}" data-off="5" style="position:absolute;right:-5px;top:${(top - 5).toFixed(0)}px;width:10px;height:10px;border-radius:50%;background:#EA4335;z-index:3"></span>`;
                 }
             }
 
@@ -625,14 +662,14 @@ window.Calendar = (function () {
                     : `<div style="font-size:.72rem;font-weight:800;opacity:.95;line-height:1;white-space:nowrap">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</div>
                        <div style="font-size:.82rem;font-weight:700;line-height:1.18;margin-top:.16rem;display:-webkit-box;-webkit-line-clamp:${h >= 68 ? 2 : 1};-webkit-box-orient:vertical;overflow:hidden">${esc(b.serviceName)}</div>
                        ${h >= 84 ? `<div style="font-size:.73rem;opacity:.92;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.clientName || 'Клиент')}</div>` : ''}`;
-                return `<button class="tl-bk" data-id="${b.id}" style="position:absolute;top:${top.toFixed(0)}px;height:${h.toFixed(0)}px;left:calc(${leftPct}% + 2px);width:calc(${wPct}% - 5px);background:${bgc};${b.status === 'completed' ? 'opacity:.8;' : ''}border:0;border-radius:${small ? 8 : 11}px;color:#fff;text-align:left;cursor:pointer;padding:${small ? '.15rem .5rem' : '.42rem .55rem'};overflow:hidden;${small ? 'display:flex;align-items:center;' : ''}${ring}">${small ? `<div style="min-width:0">${inner}</div>` : inner}${onlineBadge}</button>`;
+                return `<button class="tl-bk" data-id="${b.id}" data-s="${s - tStart}" data-e="${e - tStart}" style="position:absolute;top:${top.toFixed(0)}px;height:${h.toFixed(0)}px;left:calc(${leftPct}% + 2px);width:calc(${wPct}% - 5px);background:${bgc};${b.status === 'completed' ? 'opacity:.8;' : ''}border:0;border-radius:${small ? 8 : 11}px;color:#fff;text-align:left;cursor:pointer;padding:${small ? '.15rem .5rem' : '.42rem .55rem'};overflow:hidden;${small ? 'display:flex;align-items:center;' : ''}${ring}">${small ? `<div style="min-width:0">${inner}</div>` : inner}${onlineBadge}</button>`;
             }).join('');
 
             const tlHtml = `
-                <div class="tl-zoom" style="display:flex;margin-top:.4rem;transform-origin:top center;touch-action:pan-y">
-                    <div style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
+                <div class="tl-zoom" data-span="${tEnd - tStart}" style="display:flex;margin-top:.4rem;transform-origin:top center;touch-action:pan-y">
+                    <div class="tl-h" style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
                     <div class="tl-wrap" style="flex:1;min-width:0;overflow:hidden">
-                        <div style="position:relative;height:${(H + 10).toFixed(0)}px">
+                        <div class="tl-h" style="position:relative;height:${(H + 10).toFixed(0)}px">
                             ${hourBands}${gridLines}${nowLine}
                             <div class="tl-canvas" style="position:absolute;left:2px;right:2px;top:0;bottom:10px">${blocks}</div>
                         </div>
