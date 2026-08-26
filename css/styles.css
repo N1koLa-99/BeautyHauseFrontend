@@ -386,8 +386,9 @@ em, .italic { font-style: italic; }
     .cat__ic-img { width: 27px; height: 27px; }
     .cat__tab-lb { font-size: .8rem; }
     .cat__body { grid-template-columns: 1fr; }
-    .cat__groups { flex-direction: row; overflow-x: auto; -webkit-overflow-scrolling: touch; border-right: 0; border-bottom: 1px solid var(--line); gap: .4rem; padding: .5rem; }
-    .cat__group { width: auto; flex: none; white-space: nowrap; padding: .55rem .85rem; }
+    /* Категориите се пренасят на нов ред вместо да се скролват настрани — всички се виждат наведнъж */
+    .cat__groups { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); gap: .45rem; padding: .7rem .6rem; }
+    .cat__group { width: auto; flex: none; white-space: nowrap; padding: .5rem .8rem; font-size: .86rem; }
     .cat__group-arrow { display: none; }
     .cat__items { padding: .5rem .35rem; gap: .1rem; }
     .cat__item-row { padding: 1rem .85rem; gap: .8rem; align-items: flex-start; }
@@ -571,7 +572,7 @@ em, .italic { font-style: italic; }
 .hero__copy .eyebrow::before { background: var(--gold-soft); }
 .hero__title { margin: 1.4rem 0 0; font-size: clamp(2.6rem, 5.4vw, 4.6rem); font-family: var(--font-display); font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; color: #fff; }
 .hero__title .accent { font-style: italic; font-weight: 500; color: var(--gold-soft); }
-.hero__lead { margin-top: 1.2rem; font-size: 1.05rem; color: rgba(255,255,255,.82); max-width: 42ch; }
+.hero__lead { margin-top: 1.3rem; font-size: 1.12rem; line-height: 1.7; letter-spacing: .012em; color: rgba(255,255,255,.82); max-width: 42ch; }
 .hero__cta { display: flex; gap: 1rem; margin-top: 2.4rem; flex-wrap: wrap; }
 /* Основното CTA в героя стои върху видео — трябва топъл, силно контрастен акцент, не тъмно на тъмно */
 .hero__cta .btn--primary {
@@ -1258,19 +1259,50 @@ textarea.input { resize: vertical; min-height: 110px; }
     .nav.menu-open .nav__toggle span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     .nav__actions .btn--ghost { display: none; }
 
-    /* Hero на телефон — видеото пълен екран, текстът каца долу върху по-плътно затъмнение */
+    /* Hero на телефон — компактно, с максимален въздух: видеото се вижда, съдържанието е сведено до минимум */
     .hero__scrim {
         background:
-            linear-gradient(180deg, rgba(15,11,9,.2) 0%, rgba(15,11,9,.55) 45%, rgba(15,11,9,.92) 100%),
-            linear-gradient(100deg, rgba(15,11,9,.55) 0%, rgba(15,11,9,.15) 70%);
+            linear-gradient(180deg, rgba(15,11,9,.1) 0%, rgba(15,11,9,.46) 52%, rgba(15,11,9,.94) 100%),
+            linear-gradient(100deg, rgba(15,11,9,.5) 0%, rgba(15,11,9,.12) 70%);
     }
-    .hero__content { align-items: flex-end; padding-bottom: 2rem; }
+    /* Героят остава закотвен долу — както на iPhone SE. На по-високи телефони съдържанието
+       самото леко нараства (шрифт и разстояния), за да запълни въздуха с наличното, вместо да го центрира. */
+    .hero__content { align-items: flex-end; padding-bottom: clamp(24px, 5.5svh, 52px); }
     .hero__copy { max-width: none; padding: 0 1.4rem; }
-    .hero__title { font-size: clamp(2.2rem, 9vw, 2.9rem); }
-    .hero__cta { gap: .7rem; margin-top: 2rem; flex-wrap: wrap; }
-    .hero__cta .btn { flex: 1 1 220px; justify-content: center; }
-    .hero__stats { gap: 1.4rem; margin-top: 2rem; padding-top: 1.3rem; }
-    .hero__stat strong { font-size: 1.3rem; }
+    /* Надписът "Салон за красота" стои отделно, най-горе вляво — не тежи върху текстовия блок долу */
+    .hero__copy > .eyebrow {
+        position: absolute; top: calc(var(--nav-h) + 18px); left: 1.4rem;
+        font-size: .62rem; margin: 0;
+    }
+    .hero__title {
+        margin-top: 0; line-height: 1.18; letter-spacing: .002em;
+        font-size: clamp(2rem, calc(8.6vw + (100svh - 667px) * .02), 2.9rem);
+    }
+    .hero__title .accent { font-style: normal; font-weight: 600; }
+    .hero__lead { display: none; }
+    .hero__cta {
+        flex-direction: column; align-items: stretch; gap: 0;
+        margin-top: calc(2.4rem + (100svh - 667px) * .05);
+    }
+    .hero__cta .btn--primary {
+        width: 100%; padding: .8rem 1.3rem; font-size: .68rem;
+    }
+    .hero__cta .btn--primary .btn__arrow { width: 1.5em; height: 1.5em; }
+    .hero__cta .btn--outline-light {
+        margin-top: .35rem; padding: .5rem 0; justify-content: center;
+        background: none; box-shadow: none; color: rgba(255,255,255,.78);
+        font-size: .64rem; font-weight: 600; letter-spacing: .08em;
+    }
+    .hero__cta .btn--outline-light .btn__arrow { background: none; width: auto; height: auto; }
+    .hero__cta .btn--outline-light:hover { background: none; color: #fff; }
+    /* Статистиката е тих, компактен ред, не блокове — оставя героя да диша */
+    .hero__stats {
+        margin-top: calc(1rem + (100svh - 667px) * .025); padding-top: calc(.8rem + (100svh - 667px) * .02);
+        gap: .4rem 1.1rem; flex-wrap: wrap; justify-content: flex-start;
+    }
+    .hero__stat { flex-direction: row; align-items: baseline; gap: .3rem; }
+    .hero__stat strong { font-size: .82rem; }
+    .hero__stat span { font-size: .56rem; letter-spacing: .05em; white-space: nowrap; }
     .hero__scrollcue { display: none; }
 
     .footer__grid { grid-template-columns: 1fr; gap: 28px; }
@@ -1321,10 +1353,6 @@ textarea.input { resize: vertical; min-height: 110px; }
     .steps-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
     .steps-grid .step-tile { padding: 1.1rem; }
     .gallery { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .hero__stats { flex-wrap: wrap; row-gap: 1rem; }
-    /* Двата CTA бутона се редят един под друг — при uppercase текст не се събират на ред без препълване */
-    .hero__cta { flex-direction: column; align-items: stretch; gap: .6rem; }
-    .hero__cta .btn { width: 100%; flex: 0 1 auto; }
 }
 
 /* 15. ACCESSIBILITY --------------------------------------------------- */
