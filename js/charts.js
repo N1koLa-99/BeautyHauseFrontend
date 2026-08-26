@@ -4,7 +4,7 @@
    Големи и четими; при нужда се скролват настрани САМО самите диаграми.
    ===================================================================== */
 window.Charts = (function () {
-    const C = ['#E29A93', '#C7A16B', '#B98BA0', '#CE7A78', '#E7CFA6', '#8FB0A0', '#9A878C'];
+    const C = ['#A59079', '#C4A98A', '#BFAEA2', '#7D6B5F', '#DBCFBE', '#8FB0A0', '#9A8B7E'];
     const money = v => Math.round(v || 0).toLocaleString('bg-BG');
     const esc = window.esc || (s => String(s ?? ''));
 
@@ -15,7 +15,7 @@ window.Charts = (function () {
     // Вертикални стълбове: data = [{label, value}]
     function bars(data, opts) {
         const o = opts || {};
-        const color = o.color || '#E29A93';
+        const color = o.color || '#A59079';
         const h = o.height || 250;
         const n = Math.max(1, data.length);
         const w = Math.max(360, n * 58);
@@ -28,8 +28,8 @@ window.Charts = (function () {
             const y = h - 32 - bh;
             return `
                 <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${Math.max(0, bh).toFixed(1)}" rx="6" fill="${color}"/>
-                <text x="${(x + bw / 2).toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="#6A585D">${d.value ? money(d.value) : ''}</text>
-                <text x="${(x + bw / 2).toFixed(1)}" y="${h - 10}" text-anchor="middle" font-size="12" fill="#9A878C">${esc(d.label)}</text>`;
+                <text x="${(x + bw / 2).toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="#5F5A53">${d.value ? money(d.value) : ''}</text>
+                <text x="${(x + bw / 2).toFixed(1)}" y="${h - 10}" text-anchor="middle" font-size="12" fill="#9A8B7E">${esc(d.label)}</text>`;
         }).join('');
         return scrollWrap(`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;min-width:${w}px">${body}</svg>`);
     }
@@ -43,9 +43,9 @@ window.Charts = (function () {
             const y = i * rowH + 6;
             const bw = (w - lblW - 86) * (d.value / max);
             return `
-                <text x="0" y="${y + 20}" font-size="13" font-weight="500" fill="#3C2F33">${esc(d.label)}</text>
+                <text x="0" y="${y + 20}" font-size="13" font-weight="500" fill="#221F1C">${esc(d.label)}</text>
                 <rect x="${lblW}" y="${y + 7}" width="${bw.toFixed(1)}" height="20" rx="10" fill="${C[i % C.length]}"/>
-                <text x="${(lblW + bw + 8).toFixed(1)}" y="${y + 21}" font-size="12" font-weight="600" fill="#6A585D">${money(d.value)} €</text>`;
+                <text x="${(lblW + bw + 8).toFixed(1)}" y="${y + 21}" font-size="12" font-weight="600" fill="#5F5A53">${money(d.value)} €</text>`;
         }).join('');
         return scrollWrap(`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;min-width:${w}px">${body}</svg>`);
     }
@@ -75,8 +75,8 @@ window.Charts = (function () {
         }).join('');
         return `<div style="display:flex;gap:1.8rem;align-items:center;flex-wrap:wrap">
             <svg viewBox="0 0 220 220" width="220" height="220" style="flex:none">${paths}
-                <text x="110" y="104" text-anchor="middle" font-size="14" fill="#9A878C">Общо</text>
-                <text x="110" y="126" text-anchor="middle" font-size="19" font-weight="700" fill="#CE7A78">${money(total)} €</text>
+                <text x="110" y="104" text-anchor="middle" font-size="14" fill="#9A8B7E">Общо</text>
+                <text x="110" y="126" text-anchor="middle" font-size="19" font-weight="700" fill="#7D6B5F">${money(total)} €</text>
             </svg>
             <div style="flex:1;min-width:230px">${legend}</div>
         </div>`;

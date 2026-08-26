@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Цвят на специалист — същият като в календара (по id).
-    const EARN_COLORS = ['#E29A93', '#C7A16B', '#B98BA0', '#8FB0A0', '#7BA7C7', '#CE7A78'];
+    const EARN_COLORS = ['#A59079', '#C4A98A', '#BFAEA2', '#8FB0A0', '#7BA7C7', '#7D6B5F'];
     const earnColor = id => EARN_COLORS[Math.abs(+id || 0) % EARN_COLORS.length];
 
     const earnCard = (name, isBoss, rows, color) => {
@@ -318,14 +318,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <h3 style="margin:0 0 .6rem">Оборот по дни</h3>
                 <div class="panel" style="margin-bottom:1.6rem">
-                    ${dayBars.length ? Charts.bars(dayBars, { color: '#E29A93' }) : '<p class="hint">Още няма проведени часове този месец.</p>'}
+                    ${dayBars.length ? Charts.bars(dayBars, { color: '#A59079' }) : '<p class="hint">Още няма проведени часове този месец.</p>'}
                 </div>
 
                 <h3 style="margin:0 0 .6rem">Топ процедури (по оборот)</h3>
                 <div class="panel" style="margin-bottom:1.6rem">${Charts.hbars(topSvc)}</div>
 
                 <h3 style="margin:0 0 .6rem">Натовареност по дни от седмицата</h3>
-                <div class="panel">${Charts.bars(wdBars, { color: '#B98BA0' })}</div>`;
+                <div class="panel">${Charts.bars(wdBars, { color: '#BFAEA2' })}</div>`;
         } catch (err) {
             dbox.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const listc = await API.get('/reports/commissions');
             if (!listc || !listc.length) { cbox.innerHTML = `<div class="hint">Няма работнички.</div>`; return; }
-            const AV_COLORS = ['#E29A93', '#C7A16B', '#B98BA0', '#8FB0A0', '#7BA7C7', '#CE7A78'];
+            const AV_COLORS = ['#A59079', '#C4A98A', '#BFAEA2', '#8FB0A0', '#7BA7C7', '#7D6B5F'];
             const avColor = id => AV_COLORS[Math.abs(+id || 0) % AV_COLORS.length];
             const initials = n => (String(n || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('') || '?').toUpperCase();
             cbox.innerHTML = listc.map(c => `

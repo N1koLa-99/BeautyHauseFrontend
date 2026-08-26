@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `booking.html?srv=${encodeURIComponent(svc)}&label=${encodeURIComponent(label)}`;
     }
 
-    let tabKey = null;   // нищо не е избрано в началото
+    let tabKey = 'all';  // по подразбиране показваме всички процедури
     let groupIdx = 0;
 
     box.innerHTML = `

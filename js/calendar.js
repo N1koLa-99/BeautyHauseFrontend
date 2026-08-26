@@ -35,7 +35,7 @@ window.Calendar = (function () {
         return o;
     };
     // Стабилен цвят за всеки специалист (по id).
-    const EMP_COLORS = ['#E29A93', '#C7A16B', '#B98BA0', '#8FB0A0', '#7BA7C7', '#CE7A78'];
+    const EMP_COLORS = ['#A59079', '#C4A98A', '#BFAEA2', '#8FB0A0', '#7BA7C7', '#7D6B5F'];
     const empColor = id => EMP_COLORS[Math.abs(+id || 0) % EMP_COLORS.length];
 
     function mount(container, cfg) {

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 720" width="600" height="720" role="img">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#FCEBE6"/><stop offset="1" stop-color="#E29A93"/>
+      <stop offset="0" stop-color="#F1EEE8"/><stop offset="1" stop-color="#A59079"/>
     </linearGradient>
     <radialGradient id="glow" cx="50%" cy="38%" r="60%">
       <stop offset="0" stop-color="#fff" stop-opacity=".40"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
@@ -18,6 +18,6 @@
   </g>
   <circle cx="300" cy="302" r="150" fill="none" stroke="#fff" stroke-width="2" opacity=".5"/>
   <text x="300" y="354" text-anchor="middle"
-    font-family="Fraunces, Georgia, 'Times New Roman', serif" font-size="150"
+    font-family="Playfair Display, Georgia, 'Times New Roman', serif" font-size="150"
     font-weight="600" fill="#ffffff" opacity=".92">Д</text>
 </svg>

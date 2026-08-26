@@ -13,8 +13,38 @@ function phFallback(img) {
 
 (function () {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
     document.addEventListener('DOMContentLoaded', () => {
+        /* --- 3D tilt на карти при движение на мишката ([data-tilt] вече съществува в markup-а) --- */
+        if (canHover && !reduce) {
+            document.querySelectorAll('[data-tilt]').forEach((el) => {
+                const strength = parseFloat(el.dataset.tilt) || 6;
+                el.addEventListener('pointermove', (e) => {
+                    const r = el.getBoundingClientRect();
+                    const px = (e.clientX - r.left) / r.width - .5;
+                    const py = (e.clientY - r.top) / r.height - .5;
+                    el.style.setProperty('--ry', (px * strength * 2).toFixed(2) + 'deg');
+                    el.style.setProperty('--rx', (py * -strength * 2).toFixed(2) + 'deg');
+                });
+                el.addEventListener('pointerleave', () => {
+                    el.style.setProperty('--rx', '0deg');
+                    el.style.setProperty('--ry', '0deg');
+                });
+            });
+
+            /* --- Магнитни бутони — леко следват курсора ([data-magnetic]) --- */
+            document.querySelectorAll('[data-magnetic]').forEach((el) => {
+                el.addEventListener('pointermove', (e) => {
+                    const r = el.getBoundingClientRect();
+                    const mx = (e.clientX - r.left - r.width / 2) * .3;
+                    const my = (e.clientY - r.top - r.height / 2) * .35;
+                    el.style.transform = `translate(${mx.toFixed(1)}px, ${my.toFixed(1)}px)`;
+                });
+                el.addEventListener('pointerleave', () => { el.style.transform = ''; });
+            });
+        }
+
         /* --- Преброяване на числа при влизане в изгледа --- */
         const counters = document.querySelectorAll('[data-count]');
         if (counters.length) {

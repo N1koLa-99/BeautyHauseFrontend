@@ -160,7 +160,7 @@ function initReveal() {
         entries.forEach(e => {
             if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); }
         });
-    }, { rootMargin: '0px 0px 400px 0px', threshold: 0 }); // + отдолу => reveal/lazy снимките тръгват по-рано, преди елементът реално да се вижда
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0 }); // - отдолу => елементите се разкриват едва когато потребителят реално стигне до тях
     document.querySelectorAll('.reveal:not(.in)').forEach(el => _revealObserver.observe(el));
 
     // Застраховка: ако елемент остане неразкрит (напр. 0px висок под фолда),
