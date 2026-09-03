@@ -14,10 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const steps = document.querySelectorAll('.step');
     const $ = (id) => document.getElementById(id);
 
-    // Предварителен избор от каталога: ?srv=<услуга>&label=<процедура>
+    // Предварителен избор:
+    //   от каталога на началната страница: ?srv=<услуга>&label=<процедура>&auto=1
+    //     (auto=1 → ако само 1 специалист я прави, той се избира автоматично)
+    //   от страница "Услуги": ?srv=<услуга>  (без auto → потребителят винаги избира сам специалист)
+    //   от "Екип" / "Моите часове": ?emp=<employeeId>  (по избор и &srv=<услуга> за директно повторение)
     const PRE = new URLSearchParams(location.search);
     const preSrv = PRE.get('srv');
     const preLabel = PRE.get('label');
+    const preAuto = PRE.get('auto') === '1';
+    const preEmp = PRE.get('emp');
 
     // Банер „Избрана процедура" (вижда се на всички стъпки).
     function showPickedBanner(txt) {
@@ -31,6 +37,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         b.innerHTML = `<span>Избрана процедура: <strong>${esc(txt)}</strong></span>
             <a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени процедура</a>`;
+    }
+
+    // Банер за избран специалист (влизане през "Екип" / "Запази пак").
+    function showEmployeeBanner(emp) {
+        const main = document.querySelector('.booking-panel-main');
+        let b = document.getElementById('bk-picked');
+        if (!b) {
+            b = document.createElement('div');
+            b.id = 'bk-picked'; b.className = 'alert alert--info';
+            b.style.cssText = 'margin-bottom:1.4rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap';
+            main.prepend(b);
+        }
+        b.innerHTML = `<span>Резервираш при: <strong>${esc(emp.fullName)}</strong></span>
+            <a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени специалист</a>`;
     }
 
     // --- Навигация между стъпки ---
@@ -84,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }));
 
             // Предварителен избор от каталога → маркирай услугата и прескочи напред.
+            // auto=1 (само от каталога с готови процедури) прескача и избора на специалист,
+            // ако само 1 човек я прави. От страница "Услуги" (без auto) винаги се пита кой да я направи.
             if (preSrv) {
                 const s = list.find(x => (x.name || '').toLowerCase() === preSrv.toLowerCase());
                 if (s) {
@@ -92,9 +114,81 @@ document.addEventListener('DOMContentLoaded', () => {
                     showPickedBanner(state.srv.serviceName);
                     updateSummary();
                     goStep(2);
-                    loadSpecialists(s.id, true);
+                    loadSpecialists(s.id, preAuto);
                 }
             }
+        } catch (err) {
+            box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+        }
+    }
+
+    // --- Влизане през "Екип" / "Запази пак": специалистът е вече избран ---
+    // Показва само услугите, които ТОЗИ специалист предлага; изборът му отпада (стъпка 2 се пропуска).
+    async function loadServicesForEmployee(empId) {
+        const box = $('bk-services');
+        box.innerHTML = `<div class="spinner"></div>`;
+        try {
+            const [employees, empServices, allServices] = await Promise.all([
+                API.get('/employees'),
+                API.get('/employees/' + empId + '/services'),
+                API.get('/services')
+            ]);
+            const emp = (employees || []).find(e => String(e.id) === String(empId));
+            if (!emp) {
+                box.innerHTML = `<div class="alert alert--err">Специалистът не е намерен. Избери услуга по-долу.</div>`;
+                loadServices();
+                return;
+            }
+            if (!empServices || !empServices.length) {
+                box.innerHTML = `<div class="alert alert--info">${esc(emp.fullName)} все още няма зададени услуги. Избери друг специалист от <a href="team.html">екипа</a>.</div>`;
+                return;
+            }
+            showEmployeeBanner(emp);
+
+            // Ако идваме от "Запази пак" с конкретна услуга — и той все още я предлага, скачаме направо на дата/час.
+            if (preSrv) {
+                const wanted = preSrv.toLowerCase();
+                const match = empServices.find(es => {
+                    const s = (allServices || []).find(x => x.id === es.serviceId);
+                    return s && (s.name || '').toLowerCase() === wanted;
+                });
+                if (match) {
+                    const s = (allServices || []).find(x => x.id === match.serviceId);
+                    state.srv = { serviceId: match.serviceId, serviceName: preLabel || (s ? s.name : preSrv) };
+                    state.emp = emp;
+                    state.sel = { price: match.price, durationMinutes: match.durationMinutes };
+                    state.slot = null;
+                    updateSummary();
+                    goStep(3);
+                    initDate();
+                    return;
+                }
+            }
+
+            box.innerHTML = `<div class="cards" style="gap:12px">` + empServices.map(es => {
+                const s = (allServices || []).find(x => x.id === es.serviceId);
+                const name = s ? s.name : ('Услуга #' + es.serviceId);
+                const desc = s && s.description ? `<div class="hint" style="margin-top:.15rem">${esc(s.description)}</div>` : '';
+                return `
+                <button class="card bk-srv" data-id="${es.serviceId}" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;text-align:left;width:100%">
+                    <div style="flex:1;min-width:0"><strong style="font-size:1.05rem">${esc(name)}</strong>${desc}</div>
+                    <span class="price">${es.price.toFixed(0)} <small>€</small></span>
+                    <span class="btn__arrow">→</span>
+                </button>`;
+            }).join('') + `</div>`;
+            box.querySelectorAll('.bk-srv').forEach(btn =>
+                btn.addEventListener('click', () => {
+                    const id = +btn.dataset.id;
+                    const es = empServices.find(x => x.serviceId === id);
+                    const s = (allServices || []).find(x => x.id === id);
+                    state.srv = { serviceId: id, serviceName: s ? s.name : ('Услуга #' + id) };
+                    state.emp = emp;
+                    state.sel = { price: es.price, durationMinutes: es.durationMinutes };
+                    state.slot = null;
+                    updateSummary();
+                    goStep(3);
+                    initDate();
+                }));
         } catch (err) {
             box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
@@ -327,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Старт
-    loadServices();
+    if (preEmp) loadServicesForEmployee(preEmp);
+    else loadServices();
     updateSummary();
 });

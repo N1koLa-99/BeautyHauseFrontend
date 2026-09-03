@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <p>${esc(s.description || 'Професионална грижа с внимание към детайла.')}</p>
                     <div class="service-card__meta">
                         ${priceHtml}
-                        <a href="booking.html" class="nav__link">Запиши се <span class="btn__arrow">→</span></a>
+                        <a href="booking.html?srv=${encodeURIComponent(s.name)}" class="nav__link">Запиши се <span class="btn__arrow">→</span></a>
                     </div>
                 </div>
             </article>`;

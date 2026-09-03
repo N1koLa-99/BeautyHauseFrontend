@@ -42,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function bookHref(cat, group, label, name) {
         const svc = dbService(cat, group, name || label);
-        return `booking.html?srv=${encodeURIComponent(svc)}&label=${encodeURIComponent(label)}`;
+        // auto=1: щом конкретната процедура се прави само от 1 специалист, той се избира автоматично
+        // и остава само изборът на дата/час — тук потребителят вече е избрал точна процедура.
+        return `booking.html?srv=${encodeURIComponent(svc)}&label=${encodeURIComponent(label)}&auto=1`;
     }
 
     let tabKey = 'all';  // по подразбиране показваме всички процедури

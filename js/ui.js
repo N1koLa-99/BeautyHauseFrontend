@@ -113,13 +113,20 @@ function esc(s) {
         ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+/* Локални снимки за членове на екипа, докато нямат photoUrl в базата. */
+const TEAM_PHOTO_BY_NAME = {
+    'Радина Димитрова': 'img/RadinaProfileImage.jpg',
+    'Анелия Красимирова': 'img/AniProfileImage.jpg'
+};
+
 /* Споделена карта за член на екипа (ползва се в index.html и team.html). */
 function teamCardHTML(emp, delay) {
     const name = esc(emp.fullName || 'Специалист');
     const role = esc(emp.jobTitle || 'Специалист');
     const initial = name.trim().charAt(0).toUpperCase() || 'B';
-    const photo = emp.photoUrl
-        ? `<img src="${esc(emp.photoUrl)}" alt="${name}" loading="lazy">`
+    const photoUrl = emp.photoUrl || TEAM_PHOTO_BY_NAME[emp.fullName] || '';
+    const photo = photoUrl
+        ? `<img src="${esc(photoUrl)}" alt="${name}" loading="lazy">`
         : `<div class="team-card__initial">${initial}</div>`;
 
     const social = (url, label, icon) => url
@@ -143,7 +150,7 @@ function teamCardHTML(emp, delay) {
             <h3>${name}</h3>
             <div class="team-card__role">${role}</div>
             ${bio}
-            <a href="booking.html" class="btn btn--ghost" style="margin-top:1.1rem;--pad-y:.6rem;--pad-x:1.1rem;font-size:.85rem">Запиши се →</a>
+            <a href="booking.html?emp=${encodeURIComponent(emp.id)}" class="btn btn--ghost" style="margin-top:1.1rem;--pad-y:.6rem;--pad-x:1.1rem;font-size:.85rem">Запиши се →</a>
         </div>
     </article>`;
 }

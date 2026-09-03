@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelled: { label: 'Отменен',   cls: 'alert--err' },
         no_show:   { label: 'Не се яви', cls: 'alert--err' }
     };
+    // Акцентни цветове на разделите в таблото — съвпадат с css/styles.css (--acc-*).
+    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', set: '#9B7FC2' };
     const pad = n => String(n).padStart(2, '0');
     const money = v => Math.round(Number(v) || 0).toLocaleString('bg-BG') + ' €';
     const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -103,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (b) BOSS_ID = b.id;
         } catch (e) {}
         // Долна навигация тип мобилно приложение: График в средата, Настройки най-вдясно.
+        box.classList.add('dash-body');
         box.innerHTML = `
             <div class="dash-panel" data-p="stats"><div class="spinner"></div></div>
             <div class="dash-panel" data-p="calendar" hidden></div>
@@ -127,6 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
         const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, settings: renderSettings };
+        // Фонът на цялото табло се оцветява леко според отворения раздел — веднага личи къде си.
+        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-alert-soft)', settings: 'var(--acc-set-soft)' };
 
         function show(name) {
             tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
@@ -134,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!loaded[name]) { loaded[name] = true; loaders[name](panels[name]); }
             // Плаващото кръгче за филтър се вижда само в раздел „График".
             document.querySelectorAll('body > .cal-fab').forEach(f => { f.style.display = (name === 'calendar') ? '' : 'none'; });
+            box.style.background = PANEL_BG[name] || '';
         }
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
         // ?tab=calendar (от менюто „График") отваря директно съответния раздел.
@@ -142,12 +148,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Компактна KPI карта: етикетът е ОТГОРЕ (ясно кое за какво е), стойността под него.
-    const stat = (label, value, hint) => `
-        <div class="card" style="flex:1;min-width:145px;padding:1rem 1.15rem;text-align:left">
+    // color = акцентният цвят на раздела, за да си личи веднага какво измерва картата.
+    const stat = (label, value, hint, color) => `
+        <div class="card" style="flex:1;min-width:145px;padding:1.05rem 1.2rem;text-align:left;border-top:3px solid ${color || 'var(--rose)'}">
             <div class="hint" style="font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:.4rem">${label}</div>
-            <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--rose-deep);line-height:1.15;white-space:nowrap">${value}</div>
-            ${hint ? `<div class="hint" style="font-size:.7rem;margin-top:.35rem">${hint}</div>` : ''}
+            <div style="font-family:var(--font-dash);font-weight:800;font-size:1.65rem;color:${color || 'var(--rose-deep)'};line-height:1.1;white-space:nowrap">${value}</div>
+            ${hint ? `<div class="hint" style="font-size:.7rem;margin-top:.4rem">${hint}</div>` : ''}
         </div>`;
+
+    // Заглавие на раздел с цветна точка отпред — веднага личи темата му.
+    const sectionTitle = (text, color, margin) => `<h3 style="margin:${margin || '0 0 .6rem'};display:flex;align-items:center;gap:.55rem">
+        <span style="width:9px;height:9px;border-radius:3px;background:${color};flex:none"></span>${text}</h3>`;
 
     // ---- Помощно: диапазон [from, to) според избрания период ----
     function periodRange(period, cFrom, cTo) {
@@ -255,9 +266,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthName = now.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' });
 
         box.innerHTML = `
-            <h3 style="margin:0 0 .9rem">Печалба по специалист</h3>
+            ${sectionTitle('Печалба по специалист', ACC.stats, '0 0 .9rem')}
             <div class="stats-earn" style="margin-bottom:2rem"></div>
-            <h3 style="margin:0 0 .3rem">Статистики за <b>${monthName}</b></h3>
+            ${sectionTitle(`Статистики за <b>${monthName}</b>`, ACC.stats, '0 0 .3rem')}
             <div class="stats-diagrams" style="margin-top:1rem"><div class="spinner"></div></div>`;
 
         // Горе: картите по специалист с избор Ден/Седмица/Месец/Период + ключ.
@@ -312,20 +323,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             dbox.innerHTML = `
                 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.6rem">
-                    ${stat('Часове (общо)', totalBookings, completed + ' проведени')}
-                    ${stat('Най-натоварен ден', busiest.label, busiest.value + ' часа')}
+                    ${stat('Часове (общо)', totalBookings, completed + ' проведени', ACC.stats)}
+                    ${stat('Най-натоварен ден', busiest.label, busiest.value + ' часа', ACC.cal)}
                 </div>
 
-                <h3 style="margin:0 0 .6rem">Оборот по дни</h3>
+                ${sectionTitle('Оборот по дни', ACC.stats)}
                 <div class="panel" style="margin-bottom:1.6rem">
-                    ${dayBars.length ? Charts.bars(dayBars, { color: '#A59079' }) : '<p class="hint">Още няма проведени часове този месец.</p>'}
+                    ${dayBars.length ? Charts.bars(dayBars, { color: ACC.stats }) : '<p class="hint">Още няма проведени часове този месец.</p>'}
                 </div>
 
-                <h3 style="margin:0 0 .6rem">Топ процедури (по оборот)</h3>
+                ${sectionTitle('Топ процедури (по оборот)', ACC.set)}
                 <div class="panel" style="margin-bottom:1.6rem">${Charts.hbars(topSvc)}</div>
 
-                <h3 style="margin:0 0 .6rem">Натовареност по дни от седмицата</h3>
-                <div class="panel">${Charts.bars(wdBars, { color: '#BFAEA2' })}</div>`;
+                ${sectionTitle('Натовареност по дни от седмицата', ACC.cal)}
+                <div class="panel">${Charts.bars(wdBars, { color: ACC.cal })}</div>`;
         } catch (err) {
             dbox.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
@@ -341,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Раздел НЕКОРЕКТНИ КЛИЕНТИ ----
     async function renderNoShow(box) {
         box.innerHTML = `
-            <h3 style="margin:0 0 .3rem">Некоректни клиенти</h3>
+            ${sectionTitle('Некоректни клиенти', ACC.alert, '0 0 .3rem')}
             <p class="hint" style="margin:0 0 1.2rem">Клиенти, които не са се явявали на записан час — следят се по телефонен номер. Щом такъв клиент запази нов час, той светва с червен триъгълник ⚠ в графика.</p>
             <div class="ns-body"><div class="spinner"></div></div>`;
         const body = box.querySelector('.ns-body');
@@ -383,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Раздел НАСТРОЙКИ (комисионни) ----
     async function renderSettings(box) {
         box.innerHTML = `
-            <h3 style="margin:0 0 .3rem">Натовареност на графика</h3>
+            ${sectionTitle('Натовареност на графика', ACC.set, '0 0 .3rem')}
             <p class="hint" style="margin:0 0 .9rem">Прагове за цветовете в календара (брой часове за целия салон на ден).</p>
             <div class="card set-card" style="display:grid;margin-bottom:1.8rem">
                 <div class="set-thresh">
@@ -401,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="btn btn--gold ld-save set-save" style="--pad-y:.5rem;--pad-x:1.2rem;font-size:.85rem">Запази праговете</button>
             </div>
 
-            <h3 style="margin:0 0 .3rem">Комисионни</h3>
+            ${sectionTitle('Комисионни', ACC.set, '0 0 .3rem')}
             <p class="hint" style="margin:0 0 .9rem">Процент от сумата, който остава за работничката (останалото е за теб).</p>
             <div class="comm-body"><div class="spinner"></div></div>`;
 
@@ -510,8 +521,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const up = isUpcoming(b);
         const actions = up
             ? `<button class="btn btn--ghost bk-cancel" data-id="${b.id}" style="--pad-y:.55rem;--pad-x:1rem;font-size:.85rem">Отмени</button>` : '';
+        // "Запази пак" пренася същата услуга + специалист — ако все още ги предлага, стига направо до избор на дата.
+        const rebookQs = b.employeeId
+            ? `?emp=${encodeURIComponent(b.employeeId)}${b.serviceName ? '&srv=' + encodeURIComponent(b.serviceName) : ''}`
+            : (b.serviceName ? `?srv=${encodeURIComponent(b.serviceName)}` : '');
         const rebook = !up
-            ? `<a href="booking.html" class="btn btn--ghost" style="--pad-y:.55rem;--pad-x:1rem;font-size:.85rem">Запази пак</a>` : '';
+            ? `<a href="booking.html${rebookQs}" class="btn btn--ghost" style="--pad-y:.55rem;--pad-x:1rem;font-size:.85rem">Запази пак</a>` : '';
         // Отзив — само за проведени часове (по желание).
         const reviewUi = (!up && b.status === 'completed')
             ? (reviewedIds.has(b.id)
