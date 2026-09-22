@@ -35,7 +35,11 @@ window.Calendar = (function () {
         return o;
     };
     // Стабилен цвят за всеки специалист (по id).
-    const EMP_COLORS = ['#A59079', '#C4A98A', '#BFAEA2', '#8FB0A0', '#7BA7C7', '#7D6B5F'];
+    // Тоновете са нарочно РАЗЛИЧНИ един от друг (синьо · охра · слива · тюркоаз ·
+    // лилаво · маслина), за да се различава от пръв поглед чий е часът. Всички са
+    // достатъчно тъмни за четим бял текст (контраст ≥ 4.8:1).
+    // Червеното е запазено за некоректни клиенти — затова го няма в списъка.
+    const EMP_COLORS = ['#2F6BB0', '#9C6614', '#9B3E7D', '#1F7A6B', '#6B4BA8', '#5E7A1E'];
     const empColor = id => EMP_COLORS[Math.abs(+id || 0) % EMP_COLORS.length];
 
     function mount(container, cfg) {
@@ -78,52 +82,29 @@ window.Calendar = (function () {
         container.querySelector('.cal-next').addEventListener('click', () => shiftDay(view === 'week' ? 7 : 1));
         dateInp.addEventListener('change', () => { if (dateInp.value) goToDate(dateInp.value); });
 
-        // ---- Плаващ филтър по специалист (кръгче долу вдясно) ----
-        // Само в изглед „Целият салон". Кликаш кръгчето → изскачат кръгчета
-        // с инициала на всяка служителка; избираш → графикът се филтрира.
-        let fabEl = null;
-        const initial = n => (String(n || '').trim()[0] || '?').toUpperCase();
-        const FILTER_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M15.5 14.2c2.2.2 4 2 4 4.3"/></svg>';
-        const ALL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><circle cx="16" cy="8" r="2.2"/><circle cx="12" cy="15.5" r="2.2"/></svg>';
+        // ---- Ред с имената на специалистките (легенда + филтър) ----
+        // Всяка си има свой цвят; натискаш името ѝ -> графикът показва само нейните часове.
+        // Стои винаги на екрана (не е скрито в плаващо кръгче) — така се вижда
+        // веднага кой цвят чий е, без да се търси.
         function empsSorted() {
             const ORDER = ['ирина', 'радина', 'анелия'];
             const rank = n => { const s = (n || '').toLowerCase(); const i = ORDER.findIndex(o => s.includes(o)); return i < 0 ? ORDER.length : i; };
             return (cfg.employees || []).slice().sort((a, b) => rank(a.name) - rank(b.name) || String(a.name).localeCompare(String(b.name), 'bg'));
         }
-        function buildFab() {
-            if (!(cfg.showEmployee && cfg.employees && cfg.employees.length)) return;
-            // Закача се директно към <body> (както долната навигация), за да е
-            // ВИНАГИ залепено за екрана — иначе трансформиран родител го „чупи".
-            document.querySelectorAll('body > .cal-fab').forEach(x => x.remove());
-            fabEl = document.createElement('div');
-            fabEl.className = 'cal-fab';
-            document.body.appendChild(fabEl);
-        }
-        function renderFab() {
-            if (!fabEl) return;
-            const wasOpen = fabEl.classList.contains('is-open');
-            const emps = empsSorted();
-            const cur = empFilter == null ? null : emps.find(e => e.id === empFilter);
-            const opt = (id, label, av, color, on) => `
-                <button class="cal-fab__opt${on ? ' is-on' : ''}" data-emp="${id}">
-                    <span class="cal-fab__lb">${esc(label)}</span>
-                    <span class="cal-fab__av" style="${color ? `background:${color}` : ''}">${av}</span>
+        const firstName = n => String(n || '').trim().split(/\s+/)[0] || 'Специалист';
+        const hasEmps = () => !!(cfg.showEmployee && cfg.employees && cfg.employees.length);
+
+        function whoHtml() {
+            if (!hasEmps()) return '';
+            const chip = (id, label, color, on) =>
+                `<button class="cal-who__c${on ? ' is-on' : ''}" data-emp="${id}" style="--c:${color}">
+                    <i class="cal-who__dot"></i>${esc(label)}
                 </button>`;
-            fabEl.innerHTML = `
-                <div class="cal-fab__menu">
-                    ${opt('all', 'Всички', ALL_SVG, 'var(--ink)', empFilter == null)}
-                    ${emps.map(e => opt(e.id, e.name, initial(e.name), empColor(e.id), empFilter === e.id)).join('')}
-                </div>
-                <button class="cal-fab__main${cur ? ' is-emp' : ''}" aria-label="Филтър по специалист" style="${cur ? `background:${empColor(cur.id)}` : ''}">${cur ? initial(cur.name) : FILTER_SVG}</button>`;
-            if (wasOpen) fabEl.classList.add('is-open');
-            fabEl.querySelector('.cal-fab__main').addEventListener('click', () => fabEl.classList.toggle('is-open'));
-            fabEl.querySelectorAll('.cal-fab__opt').forEach(b => b.addEventListener('click', () => {
-                empFilter = b.dataset.emp === 'all' ? null : +b.dataset.emp;
-                fabEl.classList.remove('is-open');
-                renderDetail();
-            }));
+            return `<div class="cal-who" role="group" aria-label="Чий график да се показва">
+                ${chip('all', 'Всички', 'var(--ink)', empFilter == null)}
+                ${empsSorted().map(e => chip(e.id, firstName(e.name), empColor(e.id), empFilter === e.id)).join('')}
+            </div>`;
         }
-        buildFab();
 
         // Кеш по месеци — за да работи седмица, която пресича два месеца.
         const loadedMonths = new Set();
@@ -202,6 +183,7 @@ window.Calendar = (function () {
         // Лента: превключване Ден/Седмица + мащаб (±). Ползва се в двата изгледа.
         function toolsHtml() {
             return `
+                ${whoHtml()}
                 <div class="cal-tools">
                     <div class="cal-seg">
                         <button class="cal-seg__b${view === 'day' ? ' is-on' : ''}" data-view="day">Ден</button>
@@ -214,6 +196,10 @@ window.Calendar = (function () {
                 </div>`;
         }
         function wireTools() {
+            detail.querySelectorAll('.cal-who__c').forEach(b => b.addEventListener('click', () => {
+                empFilter = b.dataset.emp === 'all' ? null : +b.dataset.emp;
+                renderDetail();
+            }));
             detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; navigate(); }));
             detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
                 // Като намалиш под минимума на деня -> преминаваш към седмичен изглед.
@@ -417,6 +403,10 @@ window.Calendar = (function () {
             days.forEach(d => listFor(d).forEach(b => { ws = Math.min(ws, toMin(b.startAt)); we = Math.max(we, b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30); }));
             ws = Math.floor(ws / 60) * 60; we = Math.ceil(we / 60) * 60;
             const WPX = 1.15, HEAD = 56, H = (we - ws) * WPX;
+            // Колко пиксела остават на една колонка? Ако са малко (телефон +
+            // няколко специалистки в един ден), показваме само цветната лента
+            // без текст — иначе буквите се смачкват по една на ред.
+            const availW = Math.max(210, (detail.clientWidth || 340) - 41);
 
             // Часова колона + линии/ленти (по-четимо).
             let gut = '', lines = '', bands = '';
@@ -449,7 +439,8 @@ window.Calendar = (function () {
                     const w = 100 / lanes, left = laneOf[i] * w;
                     const t0 = b.startAt.slice(11, 16), nm = esc(b.serviceName);
                     const title = `${t0} · ${nm}${b.clientName ? ' · ' + esc(b.clientName) : ''}${flg ? ' · ⚠ некоректен' : ''}`;
-                    const lab = hh >= 22
+                    const laneW = availW / 7 / lanes;
+                    const lab = (hh >= 22 && laneW >= 34)
                         ? `<span class="wk-bk__t">${t0}</span><span class="wk-bk__n" style="-webkit-line-clamp:${hh >= 50 ? 3 : 1}">${nm}</span>`
                         : '';
                     return `<div class="wk-bk${flg ? ' is-flag' : ''}" title="${title}" style="top:${top.toFixed(0)}px;height:${hh.toFixed(0)}px;left:calc(${left}% + 1.5px);width:calc(${w}% - 3px);background:${bg};${b.status === 'completed' ? 'opacity:.68;' : ''}">${lab}</div>`;
@@ -474,25 +465,16 @@ window.Calendar = (function () {
                 ? `${monday.getDate()}–${last.getDate()} ${MON[last.getMonth()]} ${last.getFullYear()}`
                 : `${monday.getDate()} ${MON[monday.getMonth()].slice(0, 3)} – ${last.getDate()} ${MON[last.getMonth()].slice(0, 3)} ${last.getFullYear()}`;
 
-            // Легенда по специалисти (само в „Целият салон").
-            const legend = (cfg.showEmployee && cfg.employees && cfg.employees.length)
-                ? `<div class="wk-legend">${empsSorted().map(e =>
-                    `<span class="wk-leg"><i style="background:${empColor(e.id)}"></i>${esc(e.name)}</span>`).join('')}</div>`
-                : '';
-
             return `<div class="wk-zoom" style="transform-origin:top center;touch-action:pan-y">
                 <div class="wk-title"><strong>${rangeTxt}</strong><span class="hint">${totalCount} ${totalCount === 1 ? 'час' : 'часа'}</span></div>
                 <div class="wk-grid">
                     <div class="wk-gutcol" style="height:${(HEAD + H).toFixed(0)}px">${gut}</div>
                     <div class="wk-cols">${cols}</div>
                 </div>
-                ${legend}
             </div>`;
         }
 
-
         function renderDetail() {
-            renderFab();
             // ---- Седмичен изглед (out-zoom): виждат се всички дни ----
             if (view === 'week') {
                 detail.innerHTML = toolsHtml() + weekHtml();
@@ -586,7 +568,7 @@ window.Calendar = (function () {
             const H = (tEnd - tStart) * PX;
 
             // Колони: в „Целият салон" всяка специалистка има своя колона; иначе по застъпване.
-            let laneOf = [], lanes = 1;
+            let laneOf = [], lanes = 1, laneEmps = [];   // laneEmps = кой стои над всяка колона
             if (cfg.showEmployee && list.length) {
                 const ORDER = ['ирина', 'радина', 'анелия'];
                 const rank = name => { const n = (name || '').toLowerCase(); const i = ORDER.findIndex(o => n.includes(o)); return i === -1 ? ORDER.length : i; };
@@ -596,6 +578,7 @@ window.Calendar = (function () {
                 const empLane = {}; emps.forEach((e, i) => empLane[e.id] = i);
                 laneOf = list.map(b => empLane[b.employeeId]);
                 lanes = Math.max(1, emps.length);
+                laneEmps = emps;
             } else if (list.length) {
                 const laneEnd = [];
                 list.forEach((b, i) => {
@@ -665,13 +648,26 @@ window.Calendar = (function () {
                 return `<button class="tl-bk" data-id="${b.id}" data-s="${s - tStart}" data-e="${e - tStart}" style="position:absolute;top:${top.toFixed(0)}px;height:${h.toFixed(0)}px;left:calc(${leftPct}% + 2px);width:calc(${wPct}% - 5px);background:${bgc};${b.status === 'completed' ? 'opacity:.8;' : ''}border:0;border-radius:${small ? 8 : 11}px;color:#fff;text-align:left;cursor:pointer;padding:${small ? '.15rem .5rem' : '.42rem .55rem'};overflow:hidden;${small ? 'display:flex;align-items:center;' : ''}${ring}">${small ? `<div style="min-width:0">${inner}</div>` : inner}${onlineBadge}</button>`;
             }).join('');
 
+            // Над всяка колона стои името на специалистката в нейния цвят —
+            // няма нужда да помниш кой цвят чий е.
+            const laneHead = laneEmps.length > 1
+                ? `<div class="tl-heads">
+                        <div style="flex:0 0 ${GUT}px"></div>
+                        <div class="tl-heads__row">${laneEmps.map(e =>
+                            `<span class="tl-head" style="width:${(100 / lanes).toFixed(4)}%;--c:${empColor(e.id)};--c-soft:${empColor(e.id)}1F">${esc(firstName(e.name))}</span>`).join('')}</div>
+                   </div>`
+                : '';
+
             const tlHtml = `
-                <div class="tl-zoom" data-span="${tEnd - tStart}" style="display:flex;margin-top:.4rem;transform-origin:top center;touch-action:pan-y">
-                    <div class="tl-h" style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
-                    <div class="tl-wrap" style="flex:1;min-width:0;overflow:hidden">
-                        <div class="tl-h" style="position:relative;height:${(H + 10).toFixed(0)}px">
-                            ${hourBands}${gridLines}${nowLine}
-                            <div class="tl-canvas" style="position:absolute;left:2px;right:2px;top:0;bottom:10px">${blocks}</div>
+                <div class="tl-zoom" data-span="${tEnd - tStart}" style="margin-top:.4rem;transform-origin:top center;touch-action:pan-y">
+                    ${laneHead}
+                    <div style="display:flex">
+                        <div class="tl-h" style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
+                        <div class="tl-wrap" style="flex:1;min-width:0;overflow:hidden">
+                            <div class="tl-h" style="position:relative;height:${(H + 10).toFixed(0)}px">
+                                ${hourBands}${gridLines}${nowLine}
+                                <div class="tl-canvas" style="position:absolute;left:2px;right:2px;top:0;bottom:10px">${blocks}</div>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -1094,5 +1090,5 @@ window.Calendar = (function () {
         load();
     }
 
-    return { mount };
+    return { mount, empColor, EMP_COLORS };
 })();

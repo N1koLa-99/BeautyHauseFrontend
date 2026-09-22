@@ -104,28 +104,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const b = (emps || []).find(e => e.role === 'boss');
             if (b) BOSS_ID = b.id;
         } catch (e) {}
-        // Долна навигация тип мобилно приложение: График в средата, Настройки най-вдясно.
+        // Навигация на таблото: на телефон — долна лента (като мобилно приложение);
+        // на компютър същите бутони стават страничен стълб вляво (виж css/styles.css).
         box.classList.add('dash-body');
         box.innerHTML = `
             <div class="dash-panel" data-p="stats"><div class="spinner"></div></div>
             <div class="dash-panel" data-p="calendar" hidden></div>
             <div class="dash-panel" data-p="noshow" hidden></div>
             <div class="dash-panel" data-p="settings" hidden></div>
-            <nav class="dash-bottomnav" aria-label="Навигация на таблото">
+            <nav class="dash-nav" aria-label="Навигация на таблото">
                 <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
                 <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('alert', { size: 20 })}</span><span class="dash-tab__lb">Некоректни</span></button>
                 <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
             </nav>`;
-        box.style.paddingBottom = '240px'; // въздух отдолу — удобно скролване под лентата
 
         // Лентата се закача директно към <body>, за да е ВИНАГИ залепена за
         // екрана (никой родителски елемент не може да я повлече при скрол).
-        document.querySelectorAll('body > .dash-bottomnav').forEach(n => n.remove());
-        const bottomNav = box.querySelector('.dash-bottomnav');
-        document.body.appendChild(bottomNav);
+        // Класът на <body> отмества съдържанието, когато навигацията е отстрани.
+        document.querySelectorAll('body > .dash-nav').forEach(n => n.remove());
+        const dashNav = box.querySelector('.dash-nav');
+        document.body.appendChild(dashNav);
+        document.body.classList.add('has-dashnav');
 
-        const tabs = [...bottomNav.querySelectorAll('.dash-tab')];
+        const tabs = [...dashNav.querySelectorAll('.dash-tab')];
         const panels = {};
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
@@ -137,8 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
             tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
             Object.entries(panels).forEach(([k, el]) => el.hidden = k !== name);
             if (!loaded[name]) { loaded[name] = true; loaders[name](panels[name]); }
-            // Плаващото кръгче за филтър се вижда само в раздел „График".
-            document.querySelectorAll('body > .cal-fab').forEach(f => { f.style.display = (name === 'calendar') ? '' : 'none'; });
             box.style.background = PANEL_BG[name] || '';
         }
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
@@ -157,8 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
 
     // Заглавие на раздел с цветна точка отпред — веднага личи темата му.
-    const sectionTitle = (text, color, margin) => `<h3 style="margin:${margin || '0 0 .6rem'};display:flex;align-items:center;gap:.55rem">
-        <span style="width:9px;height:9px;border-radius:3px;background:${color};flex:none"></span>${text}</h3>`;
+    const sectionTitle = (text, color, margin) => `<h3 style="margin:${margin || '0 0 .6rem'};display:flex;align-items:flex-start;gap:.55rem">
+        <span style="width:9px;height:9px;border-radius:3px;background:${color};flex:none;margin-top:.42em"></span><span style="min-width:0">${text}</span></h3>`;
 
     // ---- Помощно: диапазон [from, to) според избрания период ----
     function periodRange(period, cFrom, cTo) {
@@ -213,9 +213,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setActive(); fire();
     }
 
-    // Цвят на специалист — същият като в календара (по id).
-    const EARN_COLORS = ['#A59079', '#C4A98A', '#BFAEA2', '#8FB0A0', '#7BA7C7', '#7D6B5F'];
-    const earnColor = id => EARN_COLORS[Math.abs(+id || 0) % EARN_COLORS.length];
+    // Цвят на специалист — взима се от календара, за да е СЪЩИЯТ навсякъде.
+    const earnColor = id => (window.Calendar && Calendar.empColor)
+        ? Calendar.empColor(id) : 'var(--rose)';
 
     const earnCard = (name, isBoss, rows, color) => {
         const initials = (name || '?').split(' ').map(w => w.charAt(0)).slice(0, 2).join('').toUpperCase();
@@ -251,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 { label: 'Ще вземе', value: w.take, total: true }
             ], earnColor(w.employeeId))));
 
-            body.innerHTML = `<div class="cards cards--3" style="gap:14px">${cards.join('')}</div>
+            body.innerHTML = `<div class="earn-grid">${cards.join('')}</div>
                 <p class="hint" style="margin-top:1rem">${all ? 'Включени са и записаните (предстоящи) часове — приблизително.' : 'Само проведените (затворени) часове.'}</p>`;
         } catch (err) {
             body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Раздел ГРАФИК ----
     async function renderCalendarTab(box) {
-        // Целият салон + плаващ филтър по специалист (кръгчето долу вдясно).
+        // Целият салон; горе в графика има лента с имената за филтриране.
         box.innerHTML = `<div id="boss-cal"><div class="spinner"></div></div>`;
         mountAllCalendar(box.querySelector('#boss-cal'));
     }
@@ -433,8 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const listc = await API.get('/reports/commissions');
             if (!listc || !listc.length) { cbox.innerHTML = `<div class="hint">Няма работнички.</div>`; return; }
-            const AV_COLORS = ['#A59079', '#C4A98A', '#BFAEA2', '#8FB0A0', '#7BA7C7', '#7D6B5F'];
-            const avColor = id => AV_COLORS[Math.abs(+id || 0) % AV_COLORS.length];
+            const avColor = earnColor;   // същият цвят като в графика и статистиките
             const initials = n => (String(n || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('') || '?').toUpperCase();
             cbox.innerHTML = listc.map(c => `
                 <div class="card comm-card">
