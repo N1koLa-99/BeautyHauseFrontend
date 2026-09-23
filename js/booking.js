@@ -370,28 +370,41 @@ document.addEventListener('DOMContentLoaded', () => {
     $('bk-back-2').addEventListener('click', () => goStep(2));
 
     // --- Потвърждение ---
-    $('bk-confirm').addEventListener('click', async () => {
-        if (!(state.emp && state.srv && state.slot)) return;
+    // Ключ за пазене на избора, докато потребителят влиза/се регистрира.
+    const PENDING_KEY = 'bh_pending_booking';
 
-        // Изисква вписан клиент.
-        if (!Session.isIn()) {
-            location.href = 'auth.html?next=' + encodeURIComponent('booking.html');
-            return;
-        }
-        if (Session.role() !== 'client') {
-            $('bk-note-msg').innerHTML = `<div class="alert alert--info">Само клиентски профил може да запазва часове.</div>`;
-            return;
-        }
+    function savePending() {
+        try {
+            sessionStorage.setItem(PENDING_KEY, JSON.stringify({
+                srv: state.srv, emp: state.emp, sel: state.sel,
+                date: state.date, slot: state.slot,
+                note: $('bk-note') ? $('bk-note').value : ''
+            }));
+        } catch (e) {}
+    }
+    function loadPending() {
+        try {
+            const raw = sessionStorage.getItem(PENDING_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) { return null; }
+    }
+    function clearPending() {
+        try { sessionStorage.removeItem(PENDING_KEY); } catch (e) {}
+    }
 
+    // Реално изпращане на резервацията към API-то (ползва се и от бутона,
+    // и автоматично след връщане от вход/регистрация).
+    async function doConfirm(noteOverride) {
         const btn = $('bk-confirm');
-        btn.disabled = true; btn.style.opacity = .7;
+        if (btn) { btn.disabled = true; btn.style.opacity = .7; }
         try {
             await API.post('/bookings', {
                 employeeId: state.emp.id,
                 serviceId: state.srv.serviceId,
                 startAt: state.slot,
-                note: $('bk-note').value || null
+                note: (noteOverride ?? ($('bk-note') ? $('bk-note').value : '')) || null
             });
+            clearPending();
             // Успех → стъпка 4
             $('bk-result').innerHTML = `
                 <div class="center">
@@ -410,18 +423,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
             steps.forEach(s => s.classList.add('done'));
             goStep(4);
+            return true;
         } catch (err) {
-            btn.disabled = false; btn.style.opacity = 1;
-            const msg = err.status === 409
-                ? 'Този час току-що беше зает. Избери друг свободен час.'
-                : err.message;
-            $('bk-note-msg').innerHTML = `<div class="alert alert--err">${esc(msg)}</div>`;
-            if (err.status === 409) loadSlots(); // опресни часовете
+            if (btn) { btn.disabled = false; btn.style.opacity = 1; }
+            // Бекендът вече връща разбираемо съобщение и за двата 409 случая
+            // (слотът е зает / вече имаш активен час) — показваме го directно.
+            const msgBox = $('bk-note-msg');
+            if (msgBox) msgBox.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            if (err.status === 409) loadSlots(); // опресни часовете (ако слотът е зает)
+            return false;
         }
+    }
+
+    $('bk-confirm').addEventListener('click', async () => {
+        if (!(state.emp && state.srv && state.slot)) return;
+
+        // Не е вписан -> пазим избора и го връщаме след вход/регистрация.
+        if (!Session.isIn()) {
+            savePending();
+            location.href = 'auth.html?next=' + encodeURIComponent('booking.html');
+            return;
+        }
+        if (Session.role() !== 'client') {
+            $('bk-note-msg').innerHTML = `<div class="alert alert--info">Само клиентски профил може да запазва часове.</div>`;
+            return;
+        }
+
+        await doConfirm();
     });
 
+    // Ако се връщаме логнати с чакаща резервация (след вход/регистрация от
+    // тази страница) — възстановяваме избора, показваме резюме и пращаме
+    // автоматично, без потребителят да избира отново всичко.
+    async function resumePendingIfAny() {
+        if (!Session.isIn() || Session.role() !== 'client') return false;
+        const pending = loadPending();
+        if (!pending || !pending.emp || !pending.srv || !pending.slot) return false;
+
+        state.srv = pending.srv;
+        state.emp = pending.emp;
+        state.sel = pending.sel;
+        state.date = pending.date;
+        state.slot = pending.slot;
+
+        showEmployeeBanner(state.emp);
+        goStep(3);
+        updateSummary();
+        if ($('bk-note') && pending.note) $('bk-note').value = pending.note;
+
+        await doConfirm(pending.note);
+        return true;
+    }
+
     // Старт
-    if (preEmp) loadServicesForEmployee(preEmp);
-    else loadServices();
-    updateSummary();
+    resumePendingIfAny().then(resumed => {
+        if (resumed) return;
+        if (preEmp) loadServicesForEmployee(preEmp);
+        else loadServices();
+        updateSummary();
+    });
 });

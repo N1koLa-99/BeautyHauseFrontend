@@ -51,6 +51,24 @@
                     <div class="field"><label>Имейл</label><input class="input" type="email" name="email" required placeholder="ти@example.com"></div>
                     <div class="field"><label>Парола</label><input class="input" type="password" name="password" required placeholder="••••••••"></div>
                     <button class="btn btn--primary btn--block btn--lg" type="submit">Влез</button>
+                    <p class="hint center" style="margin-top:1rem"><a href="#" id="forgot-link">Забравена парола?</a></p>
+                </form>
+
+                <!-- Забравена парола — стъпка 1: имейл -->
+                <form id="forgot-form" hidden>
+                    <p class="hint" style="margin-bottom:1rem">Въведи имейла си — ще ти изпратим код за нова парола.</p>
+                    <div class="field"><label>Имейл</label><input class="input" type="email" id="forgot-email" required placeholder="ти@example.com"></div>
+                    <button class="btn btn--primary btn--block btn--lg" type="submit">Изпрати код</button>
+                    <p class="hint center" style="margin-top:1rem"><a href="#" id="forgot-back-link">Обратно към вход</a></p>
+                </form>
+
+                <!-- Забравена парола — стъпка 2: код + нова парола -->
+                <form id="reset-form" hidden>
+                    <p class="hint" style="margin-bottom:1rem">Изпратихме код на имейла ти. Въведи го заедно с новата парола.</p>
+                    <div class="field"><label>Код от имейла</label><input class="input" id="reset-code" required inputmode="numeric" autocomplete="one-time-code" placeholder="6-цифрен код"></div>
+                    <div class="field"><label>Нова парола</label><input class="input" type="password" id="reset-password" required minlength="6" placeholder="мин. 6 символа"></div>
+                    <button class="btn btn--primary btn--block btn--lg" type="submit">Смени паролата</button>
+                    <p class="hint center" style="margin-top:1rem"><a href="#" id="resend-reset-link">Изпрати кода отново</a></p>
                 </form>
 
                 <!-- Регистрация -->
@@ -62,13 +80,8 @@
                     <button class="btn btn--primary btn--block btn--lg" type="submit">Създай профил</button>
                 </form>
 
-                <!-- Потвърждение — първо имейл, после телефон -->
+                <!-- Потвърждение на имейла -->
                 <form id="verify-form" hidden>
-                    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
-                        <span class="pill" id="vstep-1">1 · Имейл</span>
-                        <span style="color:var(--muted)">→</span>
-                        <span class="pill" id="vstep-2" style="opacity:.5">2 · Телефон</span>
-                    </div>
                     <p class="hint" id="verify-info" style="margin-bottom:1rem"></p>
                     <div class="field"><label id="verify-label">Код от имейла</label><input class="input" id="verify-code" required inputmode="numeric" autocomplete="one-time-code" placeholder="6-цифрен код"></div>
                     <button class="btn btn--primary btn--block btn--lg" type="submit" id="verify-btn">Потвърди имейла</button>

@@ -848,11 +848,13 @@ window.Calendar = (function () {
                 : `<div class="cal-modal__price" style="display:flex;justify-content:space-between;align-items:baseline;font-size:1.05rem">
                        <span class="hint">Цена</span><b style="color:var(--rose-deep);font-family:var(--font-display);font-size:1.4rem">${Number(finalPrice).toFixed(0)} €</b></div>`;
 
+            const canCancelWithReason = cfg.editable && cfg.cancelBooking && b.status === 'booked';
             let actions = '';
             if (cfg.editable) {
                 actions = `<div class="cal-modal__actions">
                     <button class="btn btn--gold md-present">Присъства (проведен)</button>
                     <button class="btn btn--ghost md-absent">Не присъства</button>
+                    ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">Отмени часа на клиента</button>` : ''}
                     ${canManage ? `
                     <label class="hint" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.4rem">Времетраене
                         <select class="select md-dur" style="width:auto">${durOptions(dur)}</select></label>
@@ -911,6 +913,13 @@ window.Calendar = (function () {
             if (present) present.addEventListener('click', () => run(async () => { await saveDiscount(); await cfg.setStatus(b.id, 'completed'); }));
             const absent = backdrop.querySelector('.md-absent');
             if (absent) absent.addEventListener('click', () => run(() => cfg.setStatus(b.id, 'no_show')));
+            const cancelWithReason = backdrop.querySelector('.md-cancel');
+            if (cancelWithReason) cancelWithReason.addEventListener('click', () => {
+                const reason = window.prompt('Причина за отмяната — клиентът ще я види в имейла/SMS-а:');
+                if (reason === null) return; // отказ
+                if (!reason.trim()) { msg.innerHTML = `<div class="alert alert--err">Трябва да въведеш причина.</div>`; return; }
+                run(() => cfg.cancelBooking(b.id, reason.trim()));
+            });
             const del = backdrop.querySelector('.md-del');
             if (del) del.addEventListener('click', () => { if (confirm('Да изтрия ли този час?')) run(() => cfg.deleteBk(b.id)); });
             const durSel = backdrop.querySelector('.md-dur');

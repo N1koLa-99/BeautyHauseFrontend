@@ -40,7 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
             services: (services || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes })),
             fetchMonth: (f, t) => API.get(`/me/calendar?from=${f}&to=${t}`),
             createBooking: (dto) => API.post('/me/bookings', dto),
-            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st })
+            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason })
         });
     }
     async function mountReadonlyCalendar(container, staffId) {
@@ -52,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchMonth: (f, t) => API.get(`/reports/employee-calendar?employeeId=${staffId}&from=${f}&to=${t}`),
             createBooking: (dto) => API.post(`/reports/bookings?employeeId=${staffId}`, dto),
             setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
             setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
             setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
             deleteBk: (id) => API.del(`/reports/bookings/${id}`)
@@ -67,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchMonth: (f, t) => API.get(`/reports/calendar?from=${f}&to=${t}`),
             createBooking: (dto) => API.post(`/reports/bookings?employeeId=${dto.employeeId}`, dto),
             setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
             setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
             setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
             deleteBk: (id) => API.del(`/reports/bookings/${id}`)
@@ -518,8 +521,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function bookingCard(b) {
         const st = STATUS[b.status] || { label: b.status, cls: 'alert--info' };
         const up = isUpcoming(b);
-        const actions = up
-            ? `<button class="btn btn--ghost bk-cancel" data-id="${b.id}" style="--pad-y:.55rem;--pad-x:1rem;font-size:.85rem">Отмени</button>` : '';
+        // Отмяна е позволена само до 3 часа преди началото (правило на салона).
+        const canCancel = up && new Date(b.startAt).getTime() > Date.now() + 3 * 60 * 60 * 1000;
+        const actions = canCancel
+            ? `<button class="btn btn--ghost bk-cancel" data-id="${b.id}" style="--pad-y:.55rem;--pad-x:1rem;font-size:.85rem">Отмени</button>`
+            : (up ? `<span class="hint" style="font-size:.8rem">Наближава — обади се в салона за отмяна</span>` : '');
         // "Запази пак" пренася същата услуга + специалист — ако все още ги предлага, стига направо до избор на дата.
         const rebookQs = b.employeeId
             ? `?emp=${encodeURIComponent(b.employeeId)}${b.serviceName ? '&srv=' + encodeURIComponent(b.serviceName) : ''}`
