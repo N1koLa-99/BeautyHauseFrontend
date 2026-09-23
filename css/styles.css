@@ -616,6 +616,36 @@ em, .italic { font-style: italic; }
 .nav__link:hover::after, .nav__link.active::after { transform: scaleX(1); }
 
 .nav__actions { display: flex; align-items: center; gap: .8rem; }
+
+/* Профилен „чип" в навигацията — аватар + име + роля, всичко в едно,
+   води директно към профила. До него — компактен бутон само с икона за изход. */
+.nav__profile {
+    display: inline-flex; align-items: center; gap: .75rem;
+    padding: .42rem 1.2rem .42rem .42rem;
+    border-radius: var(--r-pill);
+    background: var(--blush-soft);
+    transition: background .25s var(--ease-out), box-shadow .25s var(--ease-out);
+    white-space: nowrap;
+}
+.nav__profile:hover { background: var(--blush); box-shadow: 0 2px 10px rgba(34,31,28,.08); }
+.nav__profile__av {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 50%; flex: none;
+    background: linear-gradient(135deg, var(--rose), var(--rose-deep));
+    color: var(--ivory); font-weight: 700; font-size: 1rem;
+}
+.nav__profile__text { display: flex; flex-direction: column; line-height: 1.25; }
+.nav__profile__name { font-weight: 700; font-size: .98rem; color: var(--ink); }
+.nav__profile__label { font-size: .74rem; font-weight: 600; color: var(--rose-deep); text-transform: uppercase; letter-spacing: .05em; }
+.nav__logout {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; border-radius: 50%; flex: none;
+    color: var(--muted);
+    transition: background .25s var(--ease-out), color .2s;
+}
+.nav__logout:hover { background: var(--acc-alert-soft); color: var(--acc-alert-deep); }
+.nav__logout svg { width: 19px; height: 19px; }
+
 .nav__toggle { display: none; width: 44px; height: 44px; border-radius: var(--r-sm); }
 .nav__toggle span { display: block; width: 22px; height: 2px; background: var(--ink); margin: 5px auto; border-radius: 2px; transition: transform .35s var(--ease-out), opacity .2s; }
 
@@ -1264,6 +1294,9 @@ textarea.input { resize: vertical; min-height: 110px; }
     .nav__link { font-size: .68rem; }
     #nav-auth .nav__link { display: none; }
     .nav__actions { gap: .5rem; }
+    /* По-тесен таблет — показваме само аватара, без име/роля до него. */
+    .nav__profile__text { display: none; }
+    .nav__profile { padding: .32rem; }
 
     /* Таблети — по-тясно копие, стъклото стои по-широко над видеото */
     .hero__copy { max-width: 460px; }
@@ -1478,3 +1511,28 @@ textarea.input { resize: vertical; min-height: 110px; }
 
 /* Focus видимост */
 :focus-visible { outline: 2px solid var(--rose); outline-offset: 3px; border-radius: 4px; }
+
+/* 16. COOKIE BANNER ----------------------------------------------------- */
+.cookie-banner {
+    position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 9999;
+    max-width: 720px; margin-inline: auto;
+    background: var(--ink); color: var(--ivory);
+    border-radius: var(--r-lg, 16px);
+    box-shadow: 0 16px 40px rgba(0,0,0,.28);
+    padding: 1.1rem 1.3rem;
+    opacity: 0; transform: translateY(16px);
+    transition: opacity .35s var(--ease-out), transform .35s var(--ease-out);
+}
+.cookie-banner--show { opacity: 1; transform: translateY(0); }
+.cookie-banner__inner { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
+.cookie-banner__text { margin: 0; font-size: .84rem; line-height: 1.55; color: rgba(255,255,255,.88); flex: 1 1 320px; }
+.cookie-banner__text a { color: var(--gold-soft); text-decoration: underline; text-underline-offset: 2px; }
+.cookie-banner__actions { flex: none; }
+.cookie-banner .btn--primary { background: var(--gold); color: var(--ink); }
+.cookie-banner .btn--primary:hover { background: var(--gold-soft); }
+@media (max-width: 560px) {
+    .cookie-banner { left: 10px; right: 10px; bottom: 10px; padding: 1rem; }
+    .cookie-banner__inner { gap: .8rem; }
+    .cookie-banner__actions { width: 100%; }
+    .cookie-banner__actions .btn { width: 100%; }
+}

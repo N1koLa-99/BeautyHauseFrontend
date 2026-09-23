@@ -116,11 +116,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const fd = new FormData(regF);
             const email = fd.get('email');
+            if (!fd.get('termsAccepted')) {
+                showErr('Трябва да приемеш Общите условия и Политиката за поверителност.');
+                busy(regF, false);
+                return;
+            }
             await API.post('/auth/register', {
                 fullName: fd.get('fullName'),
                 email,
                 phone: fd.get('phone'),
-                password: fd.get('password')
+                password: fd.get('password'),
+                termsAccepted: true
             });
             showVerify(email);
             note.innerHTML = `<div class="alert alert--ok">Профилът е създаден! Потвърди имейла си с изпратения код, за да влезеш.</div>`;

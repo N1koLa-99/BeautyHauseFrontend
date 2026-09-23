@@ -77,6 +77,10 @@
                     <div class="field"><label>Имейл</label><input class="input" type="email" name="email" required placeholder="ти@example.com"></div>
                     <div class="field"><label>Телефон</label><input class="input" type="tel" name="phone" required placeholder="+359..."></div>
                     <div class="field"><label>Парола</label><input class="input" type="password" name="password" required minlength="6" placeholder="мин. 6 символа"></div>
+                    <label class="field" style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer">
+                        <input type="checkbox" name="termsAccepted" required style="margin-top:.2rem;width:16px;height:16px;flex:none;accent-color:var(--rose-deep)">
+                        <span class="hint" style="line-height:1.5">Съгласявам се с <a href="terms.html" target="_blank" rel="noopener">Общите условия</a> и <a href="privacy.html" target="_blank" rel="noopener">Политиката за поверителност</a>.</span>
+                    </label>
                     <button class="btn btn--primary btn--block btn--lg" type="submit">Създай профил</button>
                 </form>
 
@@ -99,6 +103,7 @@
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/cookie-consent.js"></script>
     <script src="js/interactions.js"></script>
     <script src="js/auth-page.js"></script>
 </body>

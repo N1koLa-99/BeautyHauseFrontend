@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = document.getElementById('acc-title');
     const sub = document.getElementById('acc-sub');
 
+    mountAccountSettings();
+
     const STATUS = {
         booked:    { label: 'Запазен',   cls: 'alert--info' },
         completed: { label: 'Проведен',  cls: 'alert--ok' },
@@ -469,6 +471,71 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             cbox.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
+    }
+
+    // ---- Редакция на собствения акаунт (име/имейл/парола) — за всички роли ----
+    async function mountAccountSettings() {
+        const toggle = document.getElementById('acc-settings-toggle');
+        const body = document.getElementById('acc-settings-body');
+        const caret = document.getElementById('acc-settings-caret');
+        const accForm = document.getElementById('acc-form');
+        const pwdForm = document.getElementById('pwd-form');
+        if (!toggle || !body || !accForm || !pwdForm) return;
+
+        let loaded = false;
+        toggle.addEventListener('click', async () => {
+            const open = body.hidden;
+            body.hidden = !open;
+            caret.style.transform = open ? 'rotate(180deg)' : 'none';
+            if (open && !loaded) {
+                loaded = true;
+                try {
+                    const me = await API.get('/me/account');
+                    accForm.querySelector('#acc-name').value = me.fullName || '';
+                    accForm.querySelector('#acc-email').value = me.email || '';
+                } catch (e) {}
+            }
+        });
+
+        accForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = accForm.querySelector('.acc-msg');
+            const btn = accForm.querySelector('button[type="submit"]');
+            msg.innerHTML = '';
+            btn.disabled = true; btn.style.opacity = .7;
+            try {
+                const auth = await API.put('/me/account', {
+                    fullName: accForm.querySelector('#acc-name').value.trim(),
+                    email: accForm.querySelector('#acc-email').value.trim()
+                });
+                Session.save(auth); // нов токен + обновено име в localStorage
+                renderAuthNav();    // обнови чипа в навигацията веднага
+                msg.innerHTML = `<div class="alert alert--ok">Записано ✓</div>`;
+            } catch (err) {
+                msg.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            } finally {
+                btn.disabled = false; btn.style.opacity = 1;
+            }
+        });
+
+        pwdForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = pwdForm.querySelector('.pwd-msg');
+            const btn = pwdForm.querySelector('button[type="submit"]');
+            const cur = pwdForm.querySelector('#pwd-current');
+            const nw = pwdForm.querySelector('#pwd-new');
+            msg.innerHTML = '';
+            btn.disabled = true; btn.style.opacity = .7;
+            try {
+                await API.put('/me/password', { currentPassword: cur.value, newPassword: nw.value });
+                msg.innerHTML = `<div class="alert alert--ok">Паролата е сменена ✓</div>`;
+                cur.value = ''; nw.value = '';
+            } catch (err) {
+                msg.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            } finally {
+                btn.disabled = false; btn.style.opacity = 1;
+            }
+        });
     }
 
     // ===============================================================

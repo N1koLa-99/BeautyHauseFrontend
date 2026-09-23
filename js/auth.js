@@ -34,10 +34,22 @@ function renderAuthNav() {
         const role = Session.role();
         const profileLabel = role === 'boss' ? 'Табло'
             : (role === 'employee' ? 'Моят график' : 'Моите часове');
+        const initial = safe(first.charAt(0).toUpperCase());
         box.innerHTML = `
-            <span class="nav__auth-hi" style="color:var(--muted);font-weight:500;white-space:nowrap">Здравей, ${first}</span>
-            <a class="btn btn--primary" href="account.html" style="--pad-y:.5rem;--pad-x:1.1rem;font-size:.9rem;white-space:nowrap">${profileLabel}</a>
-            <a href="#" class="nav__link" id="logout-btn" style="white-space:nowrap">Изход</a>`;
+            <a class="nav__profile" href="account.html" title="${profileLabel}">
+                <span class="nav__profile__av">${initial}</span>
+                <span class="nav__profile__text">
+                    <span class="nav__profile__name">${first}</span>
+                    <span class="nav__profile__label">${profileLabel}</span>
+                </span>
+            </a>
+            <button type="button" class="nav__logout" id="logout-btn" title="Изход" aria-label="Изход">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="M16 17l5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+            </button>`;
         const lb = document.getElementById('logout-btn');
         if (lb) lb.addEventListener('click', (e) => { e.preventDefault(); Session.logout(); });
 

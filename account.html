@@ -36,6 +36,27 @@
                 <h1 style="margin:1rem 0 .4rem" id="acc-title">Моите часове</h1>
                 <p class="lead" id="acc-sub">Преглед на предстоящите ти резервации.</p>
             </div>
+            <div class="card" id="acc-settings" style="margin-bottom:1.6rem;padding:1.1rem 1.3rem">
+                <button type="button" id="acc-settings-toggle" style="display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;font-weight:700;font-size:.95rem;color:var(--ink)">
+                    <span>Моят акаунт</span>
+                    <span id="acc-settings-caret" style="color:var(--muted);transition:transform .25s var(--ease-out)">▾</span>
+                </button>
+                <div id="acc-settings-body" hidden style="margin-top:1.1rem;display:grid;gap:1.4rem">
+                    <form id="acc-form" style="display:grid;gap:.8rem">
+                        <div class="field"><label>Име и фамилия</label><input class="input" id="acc-name" required placeholder="Име Фамилия"></div>
+                        <div class="field"><label>Имейл</label><input class="input" type="email" id="acc-email" required placeholder="ти@example.com"></div>
+                        <div class="acc-msg"></div>
+                        <button class="btn btn--primary" type="submit" style="justify-self:start;--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Запази промените</button>
+                    </form>
+                    <form id="pwd-form" style="display:grid;gap:.8rem;padding-top:1.1rem;border-top:1px solid var(--line)">
+                        <span style="font-weight:700;font-size:.88rem;color:var(--ink)">Смяна на парола</span>
+                        <div class="field"><label>Текуща парола</label><input class="input" type="password" id="pwd-current" required placeholder="••••••••"></div>
+                        <div class="field"><label>Нова парола</label><input class="input" type="password" id="pwd-new" required minlength="6" placeholder="мин. 6 символа"></div>
+                        <div class="pwd-msg"></div>
+                        <button class="btn btn--ghost" type="submit" style="justify-self:start;--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Смени паролата</button>
+                    </form>
+                </div>
+            </div>
             <div id="acc-list"><div class="spinner"></div></div>
         </div>
     </section>
@@ -45,6 +66,7 @@
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/cookie-consent.js"></script>
     <script src="js/interactions.js"></script>
     <script src="js/calendar.js"></script>
     <script src="js/charts.js"></script>
