@@ -1,6 +1,9 @@
 /* =====================================================================
    Каталог с услуги (Studio24 стил, темата на Beauty House).
-   Показва 4 категории с икони; съдържанието се зарежда ЕДВА след избор.
+   Подредбата (категории/групи/имена) е в js/catalog-data.js, а ЦЕНИТЕ и
+   ВРЕМЕТРАЕНЕТО се взимат от базата: GET /employees/{id}/services.
+   Процедура, която я няма в базата, не се показва; услуга от базата, която
+   я няма в подредбата, отива в „Други процедури" — нищо не се губи.
    Глобален достъп: window.BHCatalog.open(catKey, groupName) — за бутоните
    с плочките долу (пренасочва + отваря правилната категория).
    ===================================================================== */
@@ -18,35 +21,71 @@ document.addEventListener('DOMContentLoaded', () => {
         all: IMG('AllIcon.png', 'Всички')
     };
 
-    const tabs = BH_CATALOG.map(c => ({ key: c.key, label: c.label, groups: c.groups.map(g => ({ ...g, _cat: c.key })) }));
-    tabs.push({ key: 'all', label: 'Всички', groups: BH_CATALOG.flatMap(c => c.groups.map(g => ({ ...g, _cat: c.key }))) });
+    // ---- Цени от базата ----
+    const norm = s => String(s || '').trim().toLowerCase();
+    const firstName = n => String(n || '').trim().split(/\s+/)[0];
+    const fmtMin = m => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h} ч.${r ? ` ${r} мин.` : ''}` : `${r} мин.`; };
+    const fmtDur = (a, b) => a === b ? fmtMin(a) : `${fmtMin(a)} – ${fmtMin(b)}`;
+    const fmtPrice = p => `${Number(p) % 1 ? Number(p).toFixed(2) : Number(p)} €`;
 
-    // Свързва процедура от каталога с реалната услуга в системата (за резервация).
-    function dbService(cat, group, name) {
-        const n = (name || '').toLowerCase(), g = (group || '').toLowerCase();
-        if (cat === 'wax') return 'Кола маска';
-        if (cat === 'nails') {
-            if (n.includes('педикюр') && (n.includes('терапевт') || n.includes('класически'))) return 'Терапевтичен педикюр';
-            if (n.includes('педикюр')) return 'Педикюр';
-            return 'Маникюр';
-        }
-        if (cat === 'face') {
-            if (g.includes('вежди')) return 'Ламиниране на вежди';
-            if (g.includes('мигли')) {
-                if (n.includes('ламинир') || n.includes('ботокс') || n.includes('lash lift') || n.includes('боядисв')) return 'Ламиниране на мигли';
-                return 'Миглопластика';
-            }
-            return 'Терапии за лице';
-        }
-        return '';
-    }
-    function bookHref(cat, group, label, name) {
-        const svc = dbService(cat, group, name || label);
-        // auto=1: щом конкретната процедура се прави само от 1 специалист, той се избира автоматично
-        // и остава само изборът на дата/час — тук потребителят вече е избрал точна процедура.
-        return `booking.html?srv=${encodeURIComponent(svc)}&label=${encodeURIComponent(label)}&auto=1`;
+    // Име на услуга -> [{ serviceId, emp, price, dur }] (по реда на специалистите).
+    async function loadPrices() {
+        const [services, employees] = await Promise.all([API.get('/services'), API.get('/employees')]);
+        const emps = (employees || []).filter(e => e.isActive !== false).sort((a, b) => a.id - b.id);
+        const lists = await Promise.all(emps.map(e => API.get('/employees/' + e.id + '/services').catch(() => [])));
+        const active = new Map((services || []).filter(s => s.isActive !== false).map(s => [s.id, s.name]));
+        const map = new Map();
+        emps.forEach((e, i) => (lists[i] || []).forEach(es => {
+            const name = active.get(es.serviceId);
+            if (!name) return;
+            const k = norm(name);
+            if (!map.has(k)) map.set(k, { name, rows: [] });
+            map.get(k).rows.push({ serviceId: es.serviceId, emp: e, price: es.price, dur: es.durationMinutes });
+        }));
+        return map;
     }
 
+    // Подредбата + цените от базата -> това, което се показва.
+    // Ред = { label, db, price, dur, emp?, multi } ; multi = услугата се прави от >1 специалист.
+    function buildTabs(prices) {
+        const used = new Set();
+        const rowsFor = (db, label) => {
+            const hit = prices.get(norm(db));
+            if (!hit) return [];
+            used.add(norm(db));
+            const multi = hit.rows.length > 1;
+            return hit.rows.map(r => ({ label: multi ? `${label ? label + ' ' : ''}при ${firstName(r.emp.fullName)}` : label, db: hit.name, price: r.price, dur: r.dur, emp: r.emp, multi }));
+        };
+        const empOrder = r => (r.emp ? r.emp.id : 0);
+        const cats = BH_CATALOG.map(c => ({ key: c.key, label: c.label, groups: c.groups.map(g => ({
+            name: g.name, _cat: c.key,
+            items: g.items.map(it => {
+                let rows;
+                if (it.options) {
+                    rows = it.options.flatMap((o, oi) => rowsFor(o.db, o.name).map(r => ({ ...r, oi })));
+                    // Варианти на няколко специалисти: първо всички на единия, после на другия (като в Studio 24).
+                    if (rows.some(r => r.multi)) rows.sort((a, b) => empOrder(a) - empOrder(b) || a.oi - b.oi);
+                } else rows = rowsFor(it.db || it.name, '');
+                return rows.length ? { name: it.name, rows } : null;
+            }).filter(Boolean)
+        })).filter(g => g.items.length) })).filter(c => c.groups.length);
+
+        // Услуги от базата, които ги няма в подредбата.
+        const extra = [...prices.entries()].filter(([k]) => !used.has(k)).map(([, v]) => ({ name: v.name, rows: rowsFor(v.name, '') }));
+        const all = cats.flatMap(c => c.groups);
+        if (extra.length) all.push({ name: 'Други процедури', _cat: '', items: extra });
+        return [...cats, { key: 'all', label: 'Всички', groups: all }];
+    }
+
+    // Резервация на точния ред (услуга + специалист).
+    function bookHref(row, label) {
+        const q = `srv=${encodeURIComponent(row.db)}&label=${encodeURIComponent(label)}`;
+        // При няколко специалисти редът вече е конкретен („при Радина") -> директно при нея.
+        // auto=1: ако услугата се прави само от 1 специалист, той се избира автоматично.
+        return row.multi ? `booking.html?emp=${row.emp.id}&${q}` : `booking.html?${q}&auto=1`;
+    }
+
+    let tabs = [];
     let tabKey = 'all';  // по подразбиране показваме всички процедури
     let groupIdx = 0;
 
@@ -58,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabsEl = box.querySelector('.cat__tabs');
     const panelEl = box.querySelector('.cat__panel');
 
-    const count = g => g.items.reduce((n, it) => n + 1 + (it.options ? it.options.length : 0), 0);
+    const count = g => g.items.length;   // брой процедури (като в Studio 24), не варианти
     const curTab = () => tabs.find(t => t.key === tabKey);
 
     // Форматира цена: „от 20 €" -> малкото „от" над числото за по-чист вид.
@@ -117,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderItems() {
         const g0 = curTab().groups[groupIdx];
         const itemsEl = panelEl.querySelector('.cat__items');
-        itemsEl.innerHTML = g0.items.map(it => itemHtml(it, g0._cat || tabKey, g0.name)).join('');
+        itemsEl.innerHTML = g0.items.map(it => itemHtml(it)).join('');
         itemsEl.querySelectorAll('.cat__opts-toggle').forEach(b => b.addEventListener('click', () => {
             const wrap = b.closest('.cat__item').querySelector('.cat__opts');
             if (wrap.hasAttribute('hidden')) { wrap.removeAttribute('hidden'); b.classList.add('is-open'); }
@@ -167,32 +206,47 @@ document.addEventListener('DOMContentLoaded', () => {
         wrap.addEventListener('pointerdown', () => { nudged = true; io.disconnect(); }, { once: true });
     }
 
-    function itemHtml(it, cat, gname) {
-        const has = it.options && it.options.length;
-        const action = has
-            ? `<button class="cat__opts-toggle">опции <span class="cat__chev">⌄</span></button>`
-            : `<a href="${bookHref(cat, gname, it.name)}" class="cat__pick">Запиши</a>`;
-        const opts = has ? `
-            <div class="cat__opts" hidden>${it.options.map(o => `
-                <div class="cat__opt">
-                    <div><div class="cat__opt-name">${E(o.name)}</div><div class="cat__opt-dur">${E(o.dur || '')}</div></div>
-                    <div class="cat__opt-right"><span class="cat__price">${price(o.price)}</span><a href="${bookHref(cat, gname, it.name + ' — ' + o.name, it.name)}" class="cat__pick cat__pick--sm">Запиши</a></div>
-                </div>`).join('')}</div>` : '';
+    function itemHtml(it) {
+        const rows = it.rows;
+        const one = rows.length === 1 && !rows[0].label;
+        const mins = rows.map(r => r.dur), prs = rows.map(r => r.price);
+        const minP = Math.min(...prs), maxP = Math.max(...prs);
+        const dur = fmtDur(Math.min(...mins), Math.max(...mins));
+        if (one) {
+            const r = rows[0];
+            return `
+            <div class="cat__item">
+                <div class="cat__item-row">
+                    <div class="cat__item-info">
+                        <div class="cat__item-name">${E(it.name)}</div>
+                        <div class="cat__item-dur">${E(dur)}</div>
+                    </div>
+                    <div class="cat__item-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name)}" class="cat__pick">Запиши</a></div>
+                </div>
+            </div>`;
+        }
+        const head = minP === maxP ? fmtPrice(minP) : `от ${fmtPrice(minP)}`;
         return `
         <div class="cat__item">
             <div class="cat__item-row">
                 <div class="cat__item-info">
                     <div class="cat__item-name">${E(it.name)}</div>
-                    <div class="cat__item-dur">${E(it.dur || '')}</div>
+                    <div class="cat__item-dur">${E(dur)}</div>
                 </div>
-                <div class="cat__item-right"><span class="cat__price">${price(it.price)}</span>${action}</div>
+                <div class="cat__item-right"><span class="cat__price">${price(head)}</span><button class="cat__opts-toggle">опции <span class="cat__chev">⌄</span></button></div>
             </div>
-            ${opts}
+            <div class="cat__opts" hidden>${rows.map(r => `
+                <div class="cat__opt">
+                    <div><div class="cat__opt-name">${E(r.label)}</div><div class="cat__opt-dur">${E(fmtMin(r.dur))}</div></div>
+                    <div class="cat__opt-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name + ' — ' + r.label)}" class="cat__pick cat__pick--sm">Запиши</a></div>
+                </div>`).join('')}</div>
         </div>`;
     }
 
+    let pendingOpen = null;   // клик по плочка преди цените да са заредени
     function open(catKey, groupName) {
-        tabKey = catKey;
+        if (!tabs.length) { pendingOpen = [catKey, groupName]; return; }
+        tabKey = tabs.find(x => x.key === catKey) ? catKey : 'all';
         const t = curTab();
         groupIdx = 0;
         if (t && groupName) {
@@ -212,7 +266,16 @@ document.addEventListener('DOMContentLoaded', () => {
         el.addEventListener('click', (e) => { e.preventDefault(); open(el.dataset.openCat, el.dataset.openGroup || ''); }));
 
     // Отваряне през URL хеш: #cat=face&g=Мигли (за линкове от други страници).
+    // Първо се зареждат цените от базата, после се рисува.
     const params = new URLSearchParams((location.hash || '').slice(1));
-    if (params.get('cat')) open(params.get('cat'), params.get('g'));
-    else { renderTabs(); renderPanel(); }
+    panelEl.innerHTML = `<div class="cat__empty"><div class="spinner"></div></div>`;
+    loadPrices().then(prices => {
+        tabs = buildTabs(prices);
+        if (!tabs.find(t => t.key === tabKey)) tabKey = 'all';
+        if (pendingOpen) open(...pendingOpen);
+        else if (params.get('cat')) open(params.get('cat'), params.get('g'));
+        else { renderTabs(); renderPanel(); }
+    }).catch(() => {
+        panelEl.innerHTML = `<div class="cat__empty">${ICONS.all}<p>Цените не могат да се заредят в момента. Опитай отново след малко.</p></div>`;
+    });
 });

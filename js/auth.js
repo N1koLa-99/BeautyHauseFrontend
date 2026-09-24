@@ -65,6 +65,16 @@ function renderAuthNav() {
                 links.appendChild(a);
             }
         }
+        // „Моят акаунт" (име/имейл/парола) — отделна страница, в менюто за всички роли.
+        const links = document.getElementById('nav-links');
+        if (links && !links.querySelector('.nav__link--profile')) {
+            const a = document.createElement('a');
+            a.className = 'nav__link nav__link--profile';
+            a.href = 'profile.html';
+            a.textContent = 'Моят акаунт';
+            if (location.pathname.endsWith('/profile.html')) a.classList.add('active');
+            links.appendChild(a);
+        }
     } else {
         box.innerHTML = `
             <a class="nav__link" href="auth.html">Вход</a>

@@ -1,17 +1,29 @@
 /* =====================================================================
-   Месечен календар за график на служител/шеф.
+   График (стил Studio 24) за служител/шеф.
    Calendar.mount(container, cfg):
      cfg.editable     – true => може ръчно добавяне на час + маркиране
      cfg.staffId      – id-то на служителя (за свободни часове)
      cfg.services     – [{serviceId, serviceName, durationMinutes}] (за формата)
+     cfg.showEmployee – графикът на целия салон (колона за всяка специалистка)
+     cfg.employees    – [{id, name, photo}] (за избора „чий график")
+     cfg.workHours    – {0..6: [startMin, endMin] | null} (по избор; иначе часовете на салона)
      cfg.fetchMonth(fromStr, toStr) -> Promise<bookings[]>
      cfg.createBooking(dto) -> Promise            (ако editable)
      cfg.setStatus(id, status) -> Promise         (ако editable)
+
+   Жестове (като в приложението на Studio 24):
+     • 2 пръста (или Ctrl + колелце) -> мащаб по часове и по дни
+     • иконката горе вляво           -> свий всичко в екрана / разгъни
+     • докосване на празно място     -> нов час в този момент
+     • задръж + плъзни надолу        -> маркира период (напр. 09:00–12:00) -> нов час с тази продължителност
+     • плъзгане настрани (в Ден)     -> предишен/следващ ден
    ===================================================================== */
 window.Calendar = (function () {
-    const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
     const MON = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
         'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември'];
+    const MON_S = ['яну', 'фев', 'мар', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
+    const WD_S = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];            // по getDay()
+    const WD_MON = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'];          // седмица от понеделник
     const STATUS = {
         booked:    { label: 'Запазен',   cls: 'alert--info' },
         completed: { label: 'Проведен',  cls: 'alert--ok' },
@@ -42,50 +54,80 @@ window.Calendar = (function () {
     const EMP_COLORS = ['#2F6BB0', '#9C6614', '#9B3E7D', '#1F7A6B', '#6B4BA8', '#5E7A1E'];
     const empColor = id => EMP_COLORS[Math.abs(+id || 0) % EMP_COLORS.length];
 
+    // Работно време на салона (0 = неделя). Извън него решетката е сива.
+    const SALON_HOURS = { 0: null, 1: [540, 1110], 2: [540, 1110], 3: [540, 1110], 4: [540, 1110], 5: [540, 1110], 6: [600, 870] };
+
+    // Геометрия на решетката. --hh = пиксели за 1 час, --cw = ширина на колона.
+    const HH0 = 60, CW0 = 105, GUT = 50, HEAD = 46, SNAP = 15;
+    const Z_MIN = 0.3, Z_MAX = 4, Z_DEF = 1.2;
+    const VIEWS = [['day', 'Ден'], ['3day', '3 дни'], ['week', 'Седмица'], ['month', 'Месец']];
+
+    const ICO = {
+        prev: '<svg viewBox="0 0 24 24" width="24" height="24"><path d="M15.5 5 7.5 12l8 7z" fill="currentColor"/></svg>',
+        next: '<svg viewBox="0 0 24 24" width="24" height="24"><path d="M8.5 5l8 7-8 7z" fill="currentColor"/></svg>',
+        today: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none"><rect x="3" y="4.5" width="18" height="16.5" rx="2.4" fill="currentColor" opacity=".38"/><path d="M3 9h18" stroke="currentColor" stroke-width="1.6" opacity=".55"/><path d="M7.5 2.8v3.4M16.5 2.8v3.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".6"/><rect x="6.5" y="11.5" width="5" height="5" rx=".8" fill="currentColor" opacity=".75"/></svg>',
+        menu: '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3.5 6h17M3.5 12h17M3.5 18h17"/></svg>',
+        chev: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+        // Стрелки навътре = „свий"; навън = „разгъни".
+        compress: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4l-6.5 6.5M13.5 5.5v5h5M4 20l6.5-6.5M10.5 18.5v-5h-5"/></svg>',
+        expand: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 10.5 20 4M15 4h5v5M10.5 13.5 4 20M9 20H4v-5"/></svg>',
+        people: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19c.9-3.3 3.2-5 6-5s5.1 1.7 6 5"/><circle cx="16.5" cy="9" r="2.6"/><path d="M16 14.1c2.4 0 4.3 1.5 5 4.4"/></svg>',
+        check: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'
+    };
+    const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
     function mount(container, cfg) {
-        const now = new Date();
-        let y = now.getFullYear(), m = now.getMonth();
-        let selKey = key(y, m, now.getDate());
+        const todayKey = () => { const d = new Date(); return key(d.getFullYear(), d.getMonth(), d.getDate()); };
+        const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+        let selKey = todayKey();
         let data = {};            // 'YYYY-MM-DD' -> [bookings]
-        let selBk = null;         // избран час в дневната времева решетка
-        let empFilter = null;     // филтър по специалист (в „Целият салон")
-        // Мащаб (zoom) на дневната решетка + изглед (ден/седмица). Пазят се локално.
-        // Много широк, плавен диапазон на мащаба (клетките се смаляват/уголемяват през всяко ниво).
-        const Z_MIN = 0.6, Z_MAX = 9.0;
-        let zoom = Math.min(Z_MAX, Math.max(Z_MIN, parseFloat(localStorage.getItem('bh_cal_zoom')) || 2.2));
-        let view = 'day';         // 'day' | 'week'
+        let empFilter = null;     // избрана специалистка (null = всички)
+        let view = VIEWS.some(v => v[0] === lsGet('bh_sc_view')) ? lsGet('bh_sc_view') : 'week';
         const clampZoom = z => Math.min(Z_MAX, Math.max(Z_MIN, z));
+        let zoom = clampZoom(parseFloat(lsGet('bh_sc_zoom')) || Z_DEF);
         // Прагове за натовареност (Радина ги задава от Настройки; пазят се локално).
-        const loadY = parseInt(localStorage.getItem('bh_load_yellow'), 10) || 10;
-        const loadR = parseInt(localStorage.getItem('bh_load_red'), 10) || 15;
+        const loadY = parseInt(lsGet('bh_load_yellow'), 10) || 10;
+        const loadR = parseInt(lsGet('bh_load_red'), 10) || 15;
+        const workHours = cfg.workHours || SALON_HOURS;
 
         container.innerHTML = `
-            <div class="cal">
-                <div class="cal-nav" style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.85rem">
-                    <button class="btn btn--ghost cal-prev" style="--pad-y:.4rem;--pad-x:.95rem;font-size:1.1rem" aria-label="Предишен ден">‹</button>
-                    <button class="cal-datebtn" style="position:relative;flex:1;max-width:290px;border:1px solid var(--line);background:var(--ivory);border-radius:13px;padding:.55rem .9rem;font-family:var(--font-display);font-size:1.15rem;color:var(--ink);cursor:pointer">
-                        <span class="cal-datebtn__d"></span>
-                        <input type="date" class="cal-dateinp" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer" aria-label="Избери дата">
-                    </button>
-                    <button class="btn btn--ghost cal-next" style="--pad-y:.4rem;--pad-x:.95rem;font-size:1.1rem" aria-label="Следващ ден">›</button>
+            <div class="sc">
+                <div class="sc-bar">
+                    <button type="button" class="sc-date" aria-label="Избери дата"><span class="sc-date__d"></span><span class="sc-date__w"></span></button>
+                    <div class="sc-bar__mid">
+                        <button type="button" class="sc-ic sc-prev" aria-label="Назад">${ICO.prev}</button>
+                        <button type="button" class="sc-ic sc-today" aria-label="Днес">${ICO.today}</button>
+                        <button type="button" class="sc-ic sc-next" aria-label="Напред">${ICO.next}</button>
+                    </div>
+                    <button type="button" class="sc-ic sc-menu" aria-label="Изглед">${ICO.menu}</button>
                 </div>
-                <div class="cal-week" style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:.4rem"></div>
-                <div class="cal-detail" style="margin-top:.8rem;padding-top:.7rem;border-top:1px solid var(--line)"></div>
-            </div>`;
+                <div class="sc-pop sc-pop--date" hidden></div>
+                <div class="sc-pop sc-pop--menu" hidden></div>
+                <div class="sc-scroll"></div>
+                <div class="sc-fabs">
+                    <button type="button" class="sc-fab sc-fab--who" aria-label="Чий график" hidden></button>
+                    <button type="button" class="sc-fab sc-fab--add" aria-label="Нов час" hidden>
+                        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                </div>
+                <div class="sc-sheet" hidden></div>
+                <div class="sc-loading" hidden><div class="spinner"></div></div>
+            </div>
+            <div class="sc-below"></div>`;
 
-        const weekEl = container.querySelector('.cal-week');
-        const dateBtnD = container.querySelector('.cal-datebtn__d');
-        const dateInp = container.querySelector('.cal-dateinp');
-        const detail = container.querySelector('.cal-detail');
-        // В седмичен изглед стрелките местят по цяла седмица; в дневен — по ден.
-        container.querySelector('.cal-prev').addEventListener('click', () => shiftDay(view === 'week' ? -7 : -1));
-        container.querySelector('.cal-next').addEventListener('click', () => shiftDay(view === 'week' ? 7 : 1));
-        dateInp.addEventListener('change', () => { if (dateInp.value) goToDate(dateInp.value); });
+        const root = container.querySelector('.sc');
+        const scroll = root.querySelector('.sc-scroll');
+        const dateBtn = root.querySelector('.sc-date');
+        const popDate = root.querySelector('.sc-pop--date');
+        const popMenu = root.querySelector('.sc-pop--menu');
+        const sheet = root.querySelector('.sc-sheet');
+        const fabWho = root.querySelector('.sc-fab--who');
+        const fabAdd = root.querySelector('.sc-fab--add');
+        const loadingEl = root.querySelector('.sc-loading');
+        const below = container.querySelector('.sc-below');
 
-        // ---- Ред с имената на специалистките (легенда + филтър) ----
-        // Всяка си има свой цвят; натискаш името ѝ -> графикът показва само нейните часове.
-        // Стои винаги на екрана (не е скрито в плаващо кръгче) — така се вижда
-        // веднага кой цвят чий е, без да се търси.
+        // ---- Специалистки ----
         function empsSorted() {
             const ORDER = ['ирина', 'радина', 'анелия'];
             const rank = n => { const s = (n || '').toLowerCase(); const i = ORDER.findIndex(o => s.includes(o)); return i < 0 ? ORDER.length : i; };
@@ -93,627 +135,627 @@ window.Calendar = (function () {
         }
         const firstName = n => String(n || '').trim().split(/\s+/)[0] || 'Специалист';
         const hasEmps = () => !!(cfg.showEmployee && cfg.employees && cfg.employees.length);
+        const photoOf = e => e.photo || ((typeof TEAM_PHOTO_BY_NAME !== 'undefined' && TEAM_PHOTO_BY_NAME[e.name]) || '');
+        const avatarHtml = (e, size) => {
+            const p = photoOf(e);
+            return p
+                ? `<img class="sc-av" src="${esc(p)}" alt="" style="width:${size}px;height:${size}px;--c:${empColor(e.id)}">`
+                : `<span class="sc-av sc-av--i" style="width:${size}px;height:${size}px;background:${empColor(e.id)};font-size:${Math.round(size * .42)}px">${esc(firstName(e.name).charAt(0))}</span>`;
+        };
+        const canAdd = () => !!(cfg.editable && cfg.createBooking &&
+            (cfg.staffId || (hasEmps() && cfg.servicesFor)));
 
-        function whoHtml() {
-            if (!hasEmps()) return '';
-            const chip = (id, label, color, on) =>
-                `<button class="cal-who__c${on ? ' is-on' : ''}" data-emp="${id}" style="--c:${color}">
-                    <i class="cal-who__dot"></i>${esc(label)}
-                </button>`;
-            return `<div class="cal-who" role="group" aria-label="Чий график да се показва">
-                ${chip('all', 'Всички', 'var(--ink)', empFilter == null)}
-                ${empsSorted().map(e => chip(e.id, firstName(e.name), empColor(e.id), empFilter === e.id)).join('')}
-            </div>`;
+        // ---- Дати ----
+        const parseK = k => new Date(k + 'T00:00:00');
+        const kOf = d => key(d.getFullYear(), d.getMonth(), d.getDate());
+        const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+        const mondayOf = d => addDays(d, -((d.getDay() + 6) % 7));
+        const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
+        const endMin = b => b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30;
+        const listFor = k => { const a = data[k] || []; return empFilter != null ? a.filter(b => b.employeeId === empFilter) : a; };
+
+        function visibleDays() {
+            const sd = parseK(selKey);
+            if (view === 'day') return [sd];
+            if (view === '3day') return [0, 1, 2].map(i => addDays(sd, i));
+            if (view === 'week') { const m = mondayOf(sd); return [0, 1, 2, 3, 4, 5, 6].map(i => addDays(m, i)); }
+            const first = new Date(sd.getFullYear(), sd.getMonth(), 1), m = mondayOf(first);
+            const last = new Date(sd.getFullYear(), sd.getMonth() + 1, 0);
+            const cells = Math.ceil((Math.round((last - m) / 864e5) + 1) / 7) * 7;
+            return Array.from({ length: cells }, (_, i) => addDays(m, i));
         }
-
-        // Кеш по месеци — за да работи седмица, която пресича два месеца.
-        const loadedMonths = new Set();
-
-        function goToDate(dateStr) { selKey = dateStr; selBk = null; navigate(); }
-        function shiftDay(delta) {
-            const d = new Date(selKey + 'T00:00:00'); d.setDate(d.getDate() + delta);
-            goToDate(key(d.getFullYear(), d.getMonth(), d.getDate()));
-        }
-
-        // Месеците, които покрива текущият изглед (ден = 1; седмица = до 2).
         function visibleMonths() {
             const seen = new Set(), out = [];
-            const add = d => { const mk = `${d.getFullYear()}-${d.getMonth()}`; if (!seen.has(mk)) { seen.add(mk); out.push([d.getFullYear(), d.getMonth()]); } };
-            const sd = new Date(selKey + 'T00:00:00');
-            if (view === 'week') {
-                const monday = new Date(sd); monday.setDate(sd.getDate() - ((sd.getDay() + 6) % 7));
-                for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); add(d); }
-            } else add(sd);
+            visibleDays().forEach(d => { const mk = `${d.getFullYear()}-${d.getMonth()}`; if (!seen.has(mk)) { seen.add(mk); out.push([d.getFullYear(), d.getMonth()]); } });
             return out;
         }
 
+        // ---- Данни (кеш по месеци) ----
+        const loadedMonths = new Set();
         async function fetchMonthInto(Y, M0) {
             const from = key(Y, M0, 1);
             const to = `${M0 === 11 ? Y + 1 : Y}-${pad((M0 + 1) % 12 + 1)}-01`;
             const items = await cfg.fetchMonth(from, to);
-            for (const dk of Object.keys(data)) { const dt = new Date(dk + 'T00:00:00'); if (dt.getFullYear() === Y && dt.getMonth() === M0) delete data[dk]; }
+            for (const dk of Object.keys(data)) { const dt = parseK(dk); if (dt.getFullYear() === Y && dt.getMonth() === M0) delete data[dk]; }
             (items || []).forEach(b => { const k = b.startAt.slice(0, 10); (data[k] = data[k] || []).push(b); });
             loadedMonths.add(`${Y}-${M0}`);
         }
-
         // Зарежда липсващите видими месеци (force = презарежда ги пак — след промяна).
         async function ensureVisible(force) {
             const need = visibleMonths().filter(([Y, M0]) => force || !loadedMonths.has(`${Y}-${M0}`));
             if (need.length) {
-                if (!Object.keys(data).length) detail.innerHTML = `<div class="spinner"></div>`;
+                loadingEl.hidden = false;
                 try { for (const [Y, M0] of need) await fetchMonthInto(Y, M0); }
-                catch (err) { detail.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; return; }
+                catch (err) { loadingEl.hidden = true; scroll.innerHTML = `<div class="alert alert--err" style="margin:1rem">${esc(err.message)}</div>`; return; }
+                loadingEl.hidden = true;
             }
-            paintNav(); renderDetail();
+            render();
         }
-        function load() { return ensureVisible(true); }       // презареждане (след промяна)
+        function load() { belowKey = ''; return ensureVisible(true); }   // презареждане (след промяна)
         function navigate() { return ensureVisible(false); }  // навигация (зарежда само липсващото)
 
-        // Навигация в стил Apple: дата + седмична лента с точки за натовареност.
-        function paintNav() {
-            const [yy, mm, dd] = selKey.split('-');
-            dateBtnD.textContent = `${+dd} ${MON[+mm - 1]} ${yy}`;
-            dateInp.value = selKey;
+        function goToDate(k) { selKey = k; navigate(); }
+        function setView(v) { view = v; lsSet('bh_sc_view', v); navigate(); }
+        function shift(dir) {
+            const sd = parseK(selKey);
+            if (view === 'month') {
+                const t = new Date(sd.getFullYear(), sd.getMonth() + dir, 1);
+                const dim = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+                t.setDate(Math.min(sd.getDate(), dim));
+                goToDate(kOf(t));
+            } else goToDate(kOf(addDays(sd, dir * (view === 'week' ? 7 : view === '3day' ? 3 : 1))));
+        }
 
-            const sd = new Date(selKey + 'T00:00:00');
-            const monday = new Date(sd); monday.setDate(sd.getDate() - ((sd.getDay() + 6) % 7));
-            const todayK = key(now.getFullYear(), now.getMonth(), now.getDate());
+        root.querySelector('.sc-prev').addEventListener('click', () => shift(-1));
+        root.querySelector('.sc-next').addEventListener('click', () => shift(1));
+        root.querySelector('.sc-today').addEventListener('click', () => { closePops(); pendingScroll = 'now'; goToDate(todayKey()); });
 
-            let html = '';
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(monday); d.setDate(monday.getDate() + i);
-                const k = key(d.getFullYear(), d.getMonth(), d.getDate());
-                const cnt = (data[k] || []).length;
-                const isSel = k === selKey, isToday = k === todayK;
-                const loadColor = cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76');
-                const numStyle = isSel
-                    ? 'background:var(--rose-deep);color:#fff'
-                    : (isToday ? 'color:var(--rose-deep);font-weight:800' : 'color:var(--ink)');
-                html += `
-                    <button class="cal-wday" data-k="${k}" style="border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;padding:.35rem 0">
-                        <span style="font-size:.66rem;font-weight:600;color:var(--muted)">${WD[i]}</span>
-                        <span style="width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.92rem;font-weight:600;${numStyle}">${d.getDate()}</span>
-                        <span style="width:6px;height:6px;border-radius:50%;background:${cnt ? loadColor : 'transparent'}"></span>
-                    </button>`;
+        // ================= Рисуване =================
+        let lastLayout = '', pendingScroll = 'start';
+        function render() {
+            paintBar();
+            paintFabs();
+            if (view === 'month') renderMonth(); else renderGrid();
+            renderBelow();
+        }
+
+        function paintBar() {
+            const sd = parseK(selKey);
+            const d = root.querySelector('.sc-date__d'), w = root.querySelector('.sc-date__w');
+            if (view === 'month') { d.innerHTML = `${MON[sd.getMonth()].toUpperCase()} ${ICO.chev}`; w.textContent = sd.getFullYear(); }
+            else { d.innerHTML = `${sd.getDate()} ${MON_S[sd.getMonth()].toUpperCase()} ${ICO.chev}`; w.textContent = WDNAMES[sd.getDay()]; }
+        }
+
+        function paintFabs() {
+            fabAdd.hidden = !canAdd();
+            fabWho.hidden = !hasEmps();
+            if (!hasEmps()) return;
+            const e = empFilter != null && cfg.employees.find(x => x.id === empFilter);
+            fabWho.innerHTML = e ? avatarHtml(e, 56) : `<span class="sc-fab__all">${ICO.people}</span>`;
+            fabWho.style.setProperty('--c', e ? empColor(e.id) : 'var(--sc-accent)');
+        }
+
+        // Колони на времевата решетка: дни, или (Ден + „Всички") — по една за всяка специалистка.
+        function columns() {
+            const days = visibleDays();
+            if (view === 'day' && hasEmps() && empFilter == null)
+                return empsSorted().map(e => ({ k: selKey, d: days[0], emp: e }));
+            return days.map(d => ({ k: kOf(d), d, emp: null }));
+        }
+
+        function blocksHtml(items) {
+            const arr = items.slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
+            const laneEnd = [], laneOf = [];
+            arr.forEach((b, i) => {
+                const s = toMin(b.startAt), e = endMin(b);
+                let l = laneEnd.findIndex(x => x <= s);
+                if (l === -1) { l = laneEnd.length; laneEnd.push(e); } else laneEnd[l] = e;
+                laneOf[i] = l;
+            });
+            const lanes = Math.max(1, laneEnd.length);
+            return arr.map((b, i) => {
+                const s = toMin(b.startAt), e = endMin(b);
+                const flagged = b.noShowCount > 0, noShow = b.status === 'no_show';
+                const c = (flagged || noShow) ? '#D9534F' : empColor(b.employeeId);
+                const w = 100 / lanes, left = laneOf[i] * w;
+                const mark = flagged ? ' ⚠' : (b.status === 'completed' ? ' ✓' : '');
+                const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}`;
+                const online = b.isOnline
+                    ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
+                return `<button type="button" class="${cls}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="top:calc(var(--hh) * ${(s / 60).toFixed(4)});height:calc(var(--hh) * ${((e - s) / 60).toFixed(4)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px);--bc:${c}">
+                    <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
+                    <span class="sc-bk__s">${esc(b.serviceName)}</span>
+                    <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
+                    ${online}
+                </button>`;
+            }).join('');
+        }
+
+        function renderGrid() {
+            const cols = columns(), n = cols.length, tk = todayKey(), nm = nowMin();
+            let heads = '', bodies = '';
+            cols.forEach(c => {
+                const wh = workHours[c.d.getDay()];
+                if (c.emp) {
+                    heads += `<div class="sc-hd sc-hd--emp" style="--c:${empColor(c.emp.id)}">${avatarHtml(c.emp, 26)}<span>${esc(firstName(c.emp.name))}</span></div>`;
+                } else {
+                    const isToday = c.k === tk, isSel = c.k === selKey && view !== 'day';
+                    heads += `<button type="button" class="sc-hd${isToday ? ' is-today' : ''}${isSel ? ' is-sel' : ''}" data-k="${c.k}"><span>${WD_S[c.d.getDay()]}</span> <b>${c.d.getDate()}</b><span class="sc-hd__m"> ${MON_S[c.d.getMonth()]}</span></button>`;
+                }
+                const items = listFor(c.k).filter(b => !c.emp || b.employeeId === c.emp.id);
+                const work = wh ? `<div class="sc-work" style="top:calc(var(--hh) * ${wh[0] / 60});height:calc(var(--hh) * ${(wh[1] - wh[0]) / 60})"></div>` : '';
+                const nowL = c.k === tk ? `<div class="sc-now" style="top:calc(var(--hh) * ${(nm / 60).toFixed(4)})"></div>` : '';
+                bodies += `<div class="sc-col" data-k="${c.k}"${c.emp ? ` data-emp="${c.emp.id}"` : ''}>${work}<div class="sc-lines"></div>${blocksHtml(items)}${nowL}</div>`;
+            });
+            let gut = '';
+            // Надпис на всеки 15 мин: кръгъл час (плътно), :30 и :15/:45 (по-дребно).
+            for (let m = 15; m < 24 * 60; m += 15) {
+                const q = m % 60, cls = q === 0 ? (Math.floor(m / 60) % 2 ? ' is-odd' : '') : (q === 30 ? ' sc-gl--h' : ' sc-gl--q');
+                gut += `<span class="sc-gl${cls}" style="top:calc(var(--hh) * ${m / 60})">${minToHHMM(m)}</span>`;
             }
-            weekEl.innerHTML = html;
-            weekEl.querySelectorAll('.cal-wday').forEach(el => el.addEventListener('click', () => goToDate(el.dataset.k)));
-        }
 
-        // Лента: превключване Ден/Седмица + мащаб (±). Ползва се в двата изгледа.
-        function toolsHtml() {
-            return `
-                ${whoHtml()}
-                <div class="cal-tools">
-                    <div class="cal-seg">
-                        <button class="cal-seg__b${view === 'day' ? ' is-on' : ''}" data-view="day">Ден</button>
-                        <button class="cal-seg__b${view === 'week' ? ' is-on' : ''}" data-view="week">Седмица</button>
-                    </div>
-                    ${view === 'day' ? `<div class="cal-zoom">
-                        <button class="cal-zoom__b" data-z="out" aria-label="Намали">−</button>
-                        <button class="cal-zoom__b" data-z="in" aria-label="Увеличи">+</button>
-                    </div>` : ''}
+            const prevTop = scroll.scrollTop, prevLeft = scroll.scrollLeft;
+            root.dataset.n = n;
+            scroll.innerHTML = `
+                <div class="sc-grid" style="grid-template-columns:${GUT}px repeat(${n}, var(--cw));grid-template-rows:${HEAD}px calc(var(--hh) * 24)">
+                    <button type="button" class="sc-corner" aria-label="Свий / разгъни графика"></button>
+                    ${heads}
+                    <div class="sc-gut">${gut}</div>
+                    ${bodies}
                 </div>`;
+            applyZoom(zoom);
+
+            // Скрол: при нов изглед -> към началото на работния ден; иначе остава, където е бил.
+            const layout = `${view}|${n}`;
+            if (layout !== lastLayout || pendingScroll) {
+                const hh = HH0 * zoom;
+                if (pendingScroll === 'now' && selKey === tk) scroll.scrollTop = Math.max(0, (nm - 90) / 60 * hh);
+                else scroll.scrollTop = Math.max(0, firstMinute(cols) / 60 * hh - 12);
+                // Седмица, която не се побира -> избраният ден да е в началото.
+                const idx = cols.findIndex(c => c.k === selKey && !c.emp);
+                scroll.scrollLeft = idx > 0 ? idx * curCw() : 0;
+            } else { scroll.scrollTop = prevTop; scroll.scrollLeft = prevLeft; }
+            lastLayout = layout; pendingScroll = null;
         }
-        function wireTools() {
-            detail.querySelectorAll('.cal-who__c').forEach(b => b.addEventListener('click', () => {
-                empFilter = b.dataset.emp === 'all' ? null : +b.dataset.emp;
-                renderDetail();
-            }));
-            detail.querySelectorAll('.cal-seg__b').forEach(b => b.addEventListener('click', () => { view = b.dataset.view; navigate(); }));
-            detail.querySelectorAll('.cal-zoom__b').forEach(b => b.addEventListener('click', () => {
-                // Като намалиш под минимума на деня -> преминаваш към седмичен изглед.
-                if (b.dataset.z === 'out' && zoom <= Z_MIN + 0.01) { view = 'week'; zoom = Z_MIN; navigate(); return; }
-                zoomTo(clampZoom(zoom * (b.dataset.z === 'in' ? 1.25 : 0.8)));
-            }));
+        // Най-ранната минута, която си струва да се вижда: началото на работното време или първият час.
+        function firstMinute(cols) {
+            let m = 24 * 60;
+            cols.forEach(c => {
+                const wh = workHours[c.d.getDay()];
+                if (wh) m = Math.min(m, wh[0]);
+                listFor(c.k).forEach(b => { if (!c.emp || b.employeeId === c.emp.id) m = Math.min(m, toMin(b.startAt)); });
+            });
+            return m === 24 * 60 ? 9 * 60 : Math.floor(m / 60) * 60;
+        }
+        function workSpan() {
+            const cols = columns();
+            let s = 24 * 60, e = 0;
+            cols.forEach(c => {
+                const wh = workHours[c.d.getDay()];
+                if (wh) { s = Math.min(s, wh[0]); e = Math.max(e, wh[1]); }
+                listFor(c.k).forEach(b => { s = Math.min(s, toMin(b.startAt)); e = Math.max(e, endMin(b)); });
+            });
+            if (e <= s) { s = 9 * 60; e = 19 * 60; }
+            return [Math.floor(s / 60) * 60, Math.ceil(e / 60) * 60];
         }
 
-        // ---------------------------------------------------------------
-        // Жестове върху графика — на НАТИВНИ touch събития (работят еднакво
-        // в Chrome и Safari). Pointer Events не се ползват, защото при
-        // preventDefault iOS хвърля pointercancel и жестът се къса.
-        //   • 2 пръста        -> мащаб (жив преглед; при пускане се записва)
-        //   • 1 пръст ↔       -> смяна на ден/седмица (със слайд)
-        //   • 1 пръст ↕       -> нормален скрол на страницата
-        //   • мишка влачене ↔ -> смяна на ден/седмица;  Ctrl+колелце -> мащаб
-        // opts: { pinch: bool, step: 1|7, onPinchEnd(zoomOut) }
-        // ---------------------------------------------------------------
-        // Плавно (анимирано) отиване до даден мащаб — за бутоните ±.
+        // ---- Мащаб: само CSS променливи -> гладко, без пре-рендиране ----
+        const curCw = () => parseFloat(root.style.getPropertyValue('--cw')) || 100;
+        function cwFor(z) {
+            const n = +root.dataset.n || 1;
+            const W = Math.max(120, scroll.clientWidth - GUT);
+            const fit = Math.floor(W / n * 100) / 100;
+            return n <= 3 ? fit : Math.max(fit, CW0 * z);
+        }
+        function applyZoom(z) {
+            zoom = clampZoom(z);
+            const hh = HH0 * zoom;
+            root.style.setProperty('--hh', hh.toFixed(2) + 'px');
+            root.style.setProperty('--cw', cwFor(zoom).toFixed(2) + 'px');
+            root.classList.toggle('is-small', hh < 50);
+            root.classList.toggle('is-tiny', hh < 30);
+            root.classList.toggle('is-narrow', cwFor(zoom) < 92);
+            // Колко подробни да са часовете вляво, за да не се застъпват надписите.
+            root.classList.toggle('no-q', hh < 64);    // без :15 и :45
+            root.classList.toggle('no-h', hh < 36);    // без :30
+            const corner = scroll.querySelector('.sc-corner');
+            if (corner) corner.innerHTML = isCompressed() ? ICO.expand : ICO.compress;
+        }
+        // Мащаб около точка (пръстите / мишката) — тя остава на същото място.
+        function zoomAt(z, fx, fy) {
+            const r = scroll.getBoundingClientRect();
+            const px = fx - r.left - GUT, py = fy - r.top - HEAD;
+            const hours = (scroll.scrollTop + py) / (HH0 * zoom);
+            const colsX = (scroll.scrollLeft + px) / curCw();
+            applyZoom(z);
+            scroll.scrollTop = hours * HH0 * zoom - py;
+            scroll.scrollLeft = colsX * curCw() - px;
+        }
+        const saveZoom = () => lsSet('bh_sc_zoom', zoom.toFixed(2));
+        const compressTarget = () => {
+            const [s, e] = workSpan();
+            const n = +root.dataset.n || 1;
+            const zv = (scroll.clientHeight - HEAD - 4) / ((e - s) / 60) / HH0;
+            const zh = n > 3 ? (scroll.clientWidth - GUT) / n / CW0 : zv;
+            return clampZoom(Math.min(zv, zh));
+        };
+        const isCompressed = () => zoom <= compressTarget() + 0.02;
+
         let tweenId = null;
-        function zoomTo(target) {
+        function tweenZoom(target, after) {
             cancelAnimationFrame(tweenId);
-            const from = zoom, t0 = performance.now(), dur = 220;
+            const from = zoom, t0 = performance.now(), dur = 240;
+            const r = scroll.getBoundingClientRect();
             const ease = t => 1 - Math.pow(1 - t, 3);
             const step = (t) => {
                 const k = Math.min(1, (t - t0) / dur);
-                zoom = from + (target - from) * ease(k);
-                paintZoomFast(zoom);
+                zoomAt(from + (target - from) * ease(k), r.left + GUT, r.top + HEAD);
                 if (k < 1) tweenId = requestAnimationFrame(step);
-                else { zoom = target; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); }
+                else { saveZoom(); if (after) after(); }
             };
             tweenId = requestAnimationFrame(step);
         }
-
-        // Бърза пре-рисуване на геометрията (без пре-рендиране на DOM).
-        function paintZoomFast(z) {
-            const root = detail.querySelector('.tl-zoom');
-            if (!root) return;
-            const span = +root.dataset.span || 600;
-            const Hh = (span * z + 10).toFixed(0) + 'px';
-            root.querySelectorAll('.tl-h').forEach(el => el.style.height = Hh);
-            root.querySelectorAll('.tl-ln').forEach(el => el.style.top = (+el.dataset.m * z).toFixed(0) + 'px');
-            root.querySelectorAll('.tl-gl').forEach(el => el.style.top = (+el.dataset.m * z - (+el.dataset.off || 0)).toFixed(0) + 'px');
-            root.querySelectorAll('.tl-bd').forEach(el => { el.style.top = (+el.dataset.m * z).toFixed(0) + 'px'; el.style.height = (60 * z).toFixed(0) + 'px'; });
-            root.querySelectorAll('.tl-bk').forEach(el => {
-                const s = +el.dataset.s, e = +el.dataset.e;
-                el.style.top = (s * z).toFixed(0) + 'px';
-                el.style.height = Math.max(34, (e - s) * z - 3).toFixed(0) + 'px';
-            });
-        }
-
-        // Закача се ВЕДНЪЖ върху постоянния контейнер `detail`, за да не се
-        // губят слушателите при пре-рендиране. При щипка НЕ разтягаме с
-        // transform (текстът се деформира), а пре-рендираме на живо —
-        // клетките се преоразмеряват, шрифтът остава нормален.
-        function wireGestures() {
-            const el = detail;
-            let busy = false;
-            const slider = () => detail.querySelector('.tl-zoom, .wk-zoom');
-            const resetSlide = () => { const s = slider(); if (s) { s.style.transform = ''; s.style.opacity = '1'; } };
-
-            // Safari: спираме собствената му щипка САМО тук.
-            ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
-                el.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
-
-            const commitSwipe = (dx) => {
-                const step = (view === 'week') ? 7 : 1;
-                const s = slider();
-                if (Math.abs(dx) > 45) {
-                    busy = true;
-                    if (s) { s.style.transition = 'transform .15s ease-out, opacity .15s ease-out'; s.style.transform = `translateX(${dx < 0 ? '-110%' : '110%'})`; s.style.opacity = '0'; }
-                    setTimeout(() => { busy = false; shiftDay(dx < 0 ? step : -step); }, 145);
-                } else if (s) { s.style.transition = 'transform .18s ease-out, opacity .18s ease-out'; resetSlide(); }
-            };
-
-            // Плавно мащабиране БЕЗ пре-рендиране: местим само геометрията на
-            // вече съществуващите елементи (без деформация на текста).
-            let rafOn = false, wantZoom = zoom;
-            const applyZoom = (z) => {
-                wantZoom = clampZoom(z);
-                if (rafOn) return;
-                rafOn = true;
-                requestAnimationFrame(() => {
-                    rafOn = false;
-                    if (Math.abs(wantZoom - zoom) < 0.004) return;
-                    zoom = wantZoom;
-                    paintZoomFast(zoom);
-                });
-            };
-            // След края на жеста — един пълен рендер (за да се преизчислят
-            // етикетите вътре в блоковете спрямо новата височина) + запис.
-            const settleZoom = () => { localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); renderDetail(); };
-
-            // ---------- Докосване ----------
-            let mode = null, sx = 0, sy = 0, dx = 0;
-            let pStart = 1, pFrom = zoom, pRatio = 1;
-            const d2 = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-
-            el.addEventListener('touchstart', (e) => {
-                if (busy) return;
-                if (e.touches.length >= 2) {
-                    mode = 'pinch'; pStart = d2(e.touches) || 1; pFrom = zoom; pRatio = 1;
-                } else if (e.touches.length === 1) {
-                    mode = null; sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0;
-                    const s = slider(); if (s) s.style.transition = 'none';
-                }
-            }, { passive: true });
-
-            el.addEventListener('touchmove', (e) => {
-                if (busy) return;
-                // Всеки 2-пръстов жест е наш -> браузърът да не зумва.
-                if (e.touches.length >= 2) {
-                    e.preventDefault();
-                    if (mode !== 'pinch') { mode = 'pinch'; pStart = d2(e.touches) || 1; pFrom = zoom; }
-                    pRatio = d2(e.touches) / pStart;
-                    if (view === 'week') {
-                        // Разтваряне на пръстите в седмица -> обратно към ден.
-                        if (pRatio > 1.15) { busy = true; view = 'day'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate(); setTimeout(() => busy = false, 300); }
-                        return;
-                    }
-                    const target = clampZoom(pFrom * pRatio);
-                    // Смаляване под минимума -> седмичен изглед.
-                    if (target <= Z_MIN + 0.01 && pRatio < 0.9) {
-                        busy = true; view = 'week'; zoom = Z_MIN; localStorage.setItem('bh_cal_zoom', zoom.toFixed(2)); navigate();
-                        setTimeout(() => busy = false, 300); mode = null; return;
-                    }
-                    applyZoom(target);   // жив, неразтегнат резултат
-                    return;
-                }
-                if (e.touches.length !== 1 || mode === 'pinch') return;
-                dx = e.touches[0].clientX - sx;
-                const dy = e.touches[0].clientY - sy;
-                if (mode === null) {
-                    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
-                    mode = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'scroll';
-                }
-                if (mode === 'swipe') {
-                    e.preventDefault();   // не скролвай страницата настрани
-                    const s = slider();
-                    if (s) { s.style.transform = `translateX(${dx.toFixed(0)}px)`; s.style.opacity = String(Math.max(.5, 1 - Math.abs(dx) / 800)); }
-                }
-            }, { passive: false });
-
-            el.addEventListener('touchend', (e) => {
-                if (e.touches.length) return;          // изчакай последния пръст
-                const was = mode; mode = null;
-                if (busy) return;
-                if (was === 'pinch') settleZoom();
-                else if (was === 'swipe') commitSwipe(dx);
-            });
-            el.addEventListener('touchcancel', () => { mode = null; resetSlide(); });
-
-            // ---------- Мишка (десктоп): влачене настрани = смяна ----------
-            let mDown = false, mx = 0, my = 0, mdx = 0, mAxis = null;
-            el.addEventListener('mousedown', (e) => {
-                if (busy || e.button !== 0) return;
-                mDown = true; mAxis = null; mx = e.clientX; my = e.clientY; mdx = 0;
-                const s = slider(); if (s) s.style.transition = 'none';
-            });
-            window.addEventListener('mousemove', (e) => {
-                if (!mDown || busy) return;
-                mdx = e.clientX - mx; const mdy = e.clientY - my;
-                if (mAxis === null) {
-                    if (Math.abs(mdx) < 12 && Math.abs(mdy) < 12) return;
-                    mAxis = Math.abs(mdx) > Math.abs(mdy) ? 'x' : 'y';
-                }
-                if (mAxis === 'x') {
-                    e.preventDefault();
-                    const s = slider();
-                    if (s) { s.style.transform = `translateX(${mdx.toFixed(0)}px)`; s.style.opacity = String(Math.max(.5, 1 - Math.abs(mdx) / 800)); }
-                }
-            });
-            window.addEventListener('mouseup', () => {
-                if (!mDown) return; mDown = false;
-                if (mAxis === 'x') commitSwipe(mdx);
-                mAxis = null;
-            });
-
-            // ---------- Десктоп: Ctrl + колелце = мащаб ----------
-            let wheelTid = null;
-            el.addEventListener('wheel', (e) => {
-                if (!e.ctrlKey || view === 'week') return;
-                e.preventDefault();
-                applyZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.91));
-                clearTimeout(wheelTid); wheelTid = setTimeout(settleZoom, 180);
-            }, { passive: false });
-        }
-        wireGestures();
-
-        // Седмичен изглед: 7 колони с малки блокчета; клик на ден => дневен изглед.
-        function weekHtml() {
-            const sd = new Date(selKey + 'T00:00:00');
-            const monday = new Date(sd); monday.setDate(sd.getDate() - ((sd.getDay() + 6) % 7));
-            const todayK = key(now.getFullYear(), now.getMonth(), now.getDate());
-            const kk = d => key(d.getFullYear(), d.getMonth(), d.getDate());
-            const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
-            const days = [];
-            for (let i = 0; i < 7; i++) { const d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d); }
-            const listFor = d => { const a = data[kk(d)] || []; return empFilter != null ? a.filter(b => b.employeeId === empFilter) : a; };
-            let ws = 9 * 60, we = 19 * 60;
-            days.forEach(d => listFor(d).forEach(b => { ws = Math.min(ws, toMin(b.startAt)); we = Math.max(we, b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30); }));
-            ws = Math.floor(ws / 60) * 60; we = Math.ceil(we / 60) * 60;
-            const WPX = 1.15, HEAD = 56, H = (we - ws) * WPX;
-            // Колко пиксела остават на една колонка? Ако са малко (телефон +
-            // няколко специалистки в един ден), показваме само цветната лента
-            // без текст — иначе буквите се смачкват по една на ред.
-            const availW = Math.max(210, (detail.clientWidth || 340) - 41);
-
-            // Часова колона + линии/ленти (по-четимо).
-            let gut = '', lines = '', bands = '';
-            for (let mm = ws; mm <= we; mm += 60) {
-                const top = (mm - ws) * WPX;
-                gut += `<span class="wk-gut">${minToHHMM(mm)}</span>`.replace('<span', `<span style="top:${(HEAD + top - 7).toFixed(0)}px"`);
-                lines += `<div class="wk-line" style="top:${top.toFixed(0)}px"></div>`;
-                if (mm < we && Math.round(mm / 60) % 2 === 0)
-                    bands += `<div class="wk-band" style="top:${top.toFixed(0)}px;height:${(60 * WPX).toFixed(0)}px"></div>`;
+        function toggleCompress() {
+            if (isCompressed()) tweenZoom(Z_DEF);
+            else {
+                const s = workSpan()[0];
+                tweenZoom(compressTarget(), () => { scroll.scrollTop = s / 60 * HH0 * zoom; scroll.scrollLeft = 0; });
             }
+        }
 
-            // Линия „сега" (само ако днешният ден е в тази седмица).
-            const nm2 = now.getHours() * 60 + now.getMinutes();
-            const showNow = days.some(d => kk(d) === todayK) && nm2 >= ws && nm2 <= we;
-            const nowTop = (nm2 - ws) * WPX;
+        // Промяна на ширината (завъртане, показване на раздела) -> колоните се
+        // преизчисляват, а хоризонталният скрол остава на същия ден.
+        if (window.ResizeObserver) new ResizeObserver(() => {
+            if (view === 'month') return;
+            const colsX = scroll.scrollLeft / curCw();
+            applyZoom(zoom);
+            scroll.scrollLeft = Math.round(colsX) * curCw();
+        }).observe(scroll);
 
-            const totalCount = days.reduce((n, d) => n + listFor(d).length, 0);
-
-            const cols = days.map((d, di) => {
-                const k = kk(d);
-                const arr = listFor(d).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
-                const laneEnd = [], laneOf = [];
-                arr.forEach((b, i) => { const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30; let l = laneEnd.findIndex(x => x <= s); if (l === -1) { l = laneEnd.length; laneEnd.push(e); } else laneEnd[l] = e; laneOf[i] = l; });
-                const lanes = Math.max(1, laneEnd.length);
-                const blk = arr.map((b, i) => {
-                    const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30;
-                    const top = (s - ws) * WPX, hh = Math.max(7, (e - s) * WPX - 2);
-                    const flg = b.noShowCount > 0 || b.status === 'no_show';
-                    const bg = flg ? '#D9534F' : empColor(b.employeeId);
-                    const w = 100 / lanes, left = laneOf[i] * w;
-                    const t0 = b.startAt.slice(11, 16), nm = esc(b.serviceName);
-                    const title = `${t0} · ${nm}${b.clientName ? ' · ' + esc(b.clientName) : ''}${flg ? ' · ⚠ некоректен' : ''}`;
-                    const laneW = availW / 7 / lanes;
-                    const lab = (hh >= 22 && laneW >= 34)
-                        ? `<span class="wk-bk__t">${t0}</span><span class="wk-bk__n" style="-webkit-line-clamp:${hh >= 50 ? 3 : 1}">${nm}</span>`
-                        : '';
-                    return `<div class="wk-bk${flg ? ' is-flag' : ''}" title="${title}" style="top:${top.toFixed(0)}px;height:${hh.toFixed(0)}px;left:calc(${left}% + 1.5px);width:calc(${w}% - 3px);background:${bg};${b.status === 'completed' ? 'opacity:.68;' : ''}">${lab}</div>`;
-                }).join('');
-                const isSel = k === selKey, isToday = k === todayK, isWknd = di >= 5;
+        // ---- Месечен изглед ----
+        function renderMonth() {
+            const days = visibleDays(), sd = parseK(selKey), tk = todayKey();
+            const rows = days.length / 7;
+            const cells = days.map(d => {
+                const k = kOf(d), arr = listFor(k).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
+                const other = d.getMonth() !== sd.getMonth();
                 const cnt = arr.length;
-                const loadColor = cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76');
-                return `<button class="cal-wk-col${isSel ? ' is-sel' : ''}${isWknd ? ' is-wknd' : ''}" data-k="${k}">
-                    <div class="wk-head" style="height:${HEAD}px">
-                        <span class="wk-head__wd">${WD[di]}</span>
-                        <span class="wk-head__n${isSel ? ' is-sel' : (isToday ? ' is-today' : '')}">${d.getDate()}</span>
-                        <span class="wk-head__dot" style="background:${cnt ? loadColor : 'transparent'}"></span>
-                    </div>
-                    <div class="wk-body" style="height:${H.toFixed(0)}px">${bands}${lines}${blk}${
-                        showNow && isToday ? `<div class="wk-now" style="top:${nowTop.toFixed(0)}px"></div>` : ''}</div>
+                const dot = cnt ? (cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76')) : '';
+                const items = arr.slice(0, 3).map(b => {
+                    const c = (b.noShowCount > 0 || b.status === 'no_show') ? '#D9534F' : empColor(b.employeeId);
+                    return `<span class="sc-mi${b.status === 'cancelled' ? ' is-cancel' : ''}" style="--bc:${c}"><b>${b.startAt.slice(11, 16)}</b> ${esc(b.serviceName)}</span>`;
+                }).join('');
+                return `<button type="button" class="sc-mc${other ? ' is-other' : ''}${workHours[d.getDay()] ? '' : ' is-off'}${k === tk ? ' is-today' : ''}${k === selKey ? ' is-sel' : ''}" data-k="${k}">
+                    <span class="sc-mc__n">${d.getDate()}${dot ? `<i style="background:${dot}"></i>` : ''}</span>
+                    ${items}${cnt > 3 ? `<span class="sc-mc__more">+${cnt - 3} още</span>` : ''}
                 </button>`;
             }).join('');
-
-            // Заглавие на седмицата (диапазон) + общ брой часове.
-            const last = days[6];
-            const rangeTxt = (monday.getMonth() === last.getMonth())
-                ? `${monday.getDate()}–${last.getDate()} ${MON[last.getMonth()]} ${last.getFullYear()}`
-                : `${monday.getDate()} ${MON[monday.getMonth()].slice(0, 3)} – ${last.getDate()} ${MON[last.getMonth()].slice(0, 3)} ${last.getFullYear()}`;
-
-            return `<div class="wk-zoom" style="transform-origin:top center;touch-action:pan-y">
-                <div class="wk-title"><strong>${rangeTxt}</strong><span class="hint">${totalCount} ${totalCount === 1 ? 'час' : 'часа'}</span></div>
-                <div class="wk-grid">
-                    <div class="wk-gutcol" style="height:${(HEAD + H).toFixed(0)}px">${gut}</div>
-                    <div class="wk-cols">${cols}</div>
-                </div>
-            </div>`;
+            root.dataset.n = 7;
+            scroll.innerHTML = `
+                <div class="sc-month" style="grid-template-rows:${HEAD - 12}px repeat(${rows}, minmax(92px, 1fr))">
+                    ${WD_MON.map(w => `<span class="sc-mh">${w}</span>`).join('')}
+                    ${cells}
+                </div>`;
+            scroll.scrollTop = 0; scroll.scrollLeft = 0;
+            lastLayout = 'month';
         }
 
-        function renderDetail() {
-            // ---- Седмичен изглед (out-zoom): виждат се всички дни ----
-            if (view === 'week') {
-                detail.innerHTML = toolsHtml() + weekHtml();
-                wireTools();
-                detail.querySelectorAll('.cal-wk-col').forEach(c => c.addEventListener('click', () => {
-                    selKey = c.dataset.k; selBk = null; view = 'day'; paintNav(); renderDetail();
-                }));
+        // Панел „Работно време" под графика (само собствен график, изглед Ден).
+        let belowKey = '';
+        function renderBelow() {
+            const want = (cfg.editable && cfg.staffId && view === 'day') ? selKey : '';
+            if (want === belowKey) return;
+            belowKey = want;
+            if (!want) { below.innerHTML = ''; return; }
+            below.innerHTML = `<div class="panel sched-panel" style="margin-top:1.2rem"><div class="spinner"></div></div>`;
+            loadSchedule(below.querySelector('.sched-panel'), want);
+        }
+
+        // ================= Горна лента: дата + меню =================
+        let popM = null; // [Y, M] на мини-календара
+        function closePops() { popDate.hidden = true; popMenu.hidden = true; }
+        function paintDatePop() {
+            const [Y, M] = popM;
+            const first = new Date(Y, M, 1), m = mondayOf(first);
+            const last = new Date(Y, M + 1, 0);
+            const cells = Math.ceil((Math.round((last - m) / 864e5) + 1) / 7) * 7;
+            const tk = todayKey();
+            let html = '';
+            for (let i = 0; i < cells; i++) {
+                const d = addDays(m, i), k = kOf(d);
+                const cnt = listFor(k).length;
+                html += `<button type="button" class="sc-mini__d${d.getMonth() !== M ? ' is-other' : ''}${k === tk ? ' is-today' : ''}${k === selKey ? ' is-sel' : ''}" data-k="${k}">${d.getDate()}${cnt ? '<i></i>' : ''}</button>`;
+            }
+            popDate.innerHTML = `
+                <div class="sc-mini">
+                    <div class="sc-mini__nav">
+                        <button type="button" class="sc-mini__arr" data-d="-1" aria-label="Предишен месец">${ICO.prev}</button>
+                        <strong>${MON[M]} ${Y}</strong>
+                        <button type="button" class="sc-mini__arr" data-d="1" aria-label="Следващ месец">${ICO.next}</button>
+                    </div>
+                    <div class="sc-mini__grid">${WD_MON.map(w => `<span>${w}</span>`).join('')}${html}</div>
+                </div>`;
+        }
+        dateBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = popDate.hidden;
+            closePops();
+            if (!open) return;
+            const sd = parseK(selKey); popM = [sd.getFullYear(), sd.getMonth()];
+            paintDatePop(); popDate.hidden = false;
+        });
+        popDate.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const arr = e.target.closest('.sc-mini__arr');
+            if (arr) { const t = new Date(popM[0], popM[1] + (+arr.dataset.d), 1); popM = [t.getFullYear(), t.getMonth()]; paintDatePop(); return; }
+            const d = e.target.closest('.sc-mini__d');
+            if (d) { closePops(); goToDate(d.dataset.k); }
+        });
+
+        root.querySelector('.sc-menu').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = popMenu.hidden;
+            closePops();
+            if (!open) return;
+            popMenu.innerHTML = `
+                ${VIEWS.map(([v, lb]) => `<button type="button" class="sc-mn${v === view ? ' is-on' : ''}" data-view="${v}"><span>${lb}</span>${v === view ? ICO.check : ''}</button>`).join('')}
+                <div class="sc-mn__sep"></div>
+                <div class="sc-mn__zoom"><span>Мащаб</span>
+                    <button type="button" class="sc-mn__z" data-z="0.8" aria-label="Намали">−</button>
+                    <button type="button" class="sc-mn__z" data-z="1.25" aria-label="Увеличи">+</button>
+                </div>`;
+            popMenu.hidden = false;
+        });
+        popMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const v = e.target.closest('[data-view]');
+            if (v) { closePops(); setView(v.dataset.view); return; }
+            const z = e.target.closest('[data-z]');
+            if (z) { if (view === 'month') setView('week'); tweenZoom(clampZoom(zoom * +z.dataset.z)); }
+        });
+        document.addEventListener('click', (e) => { if (!root.contains(e.target) || !e.target.closest('.sc-pop')) closePops(); });
+
+        // ================= Плаващи кръгчета =================
+        fabWho.addEventListener('click', () => {
+            const row = (id, label, av, on) => `<button type="button" class="sc-sh__row${on ? ' is-on' : ''}" data-emp="${id}">${av}<span>${esc(label)}</span>${on ? ICO.check : ''}</button>`;
+            sheet.innerHTML = `
+                <div class="sc-sh__back"></div>
+                <div class="sc-sh__panel">
+                    <div class="sc-sh__grab"></div>
+                    <div class="sc-sh__title">Чий график да се показва</div>
+                    ${row('all', 'Всички', `<span class="sc-av sc-av--all">${ICO.people}</span>`, empFilter == null)}
+                    ${empsSorted().map(e => row(e.id, e.name, avatarHtml(e, 44), empFilter === e.id)).join('')}
+                </div>`;
+            sheet.hidden = false;
+        });
+        sheet.addEventListener('click', (e) => {
+            const r = e.target.closest('.sc-sh__row');
+            if (r) { empFilter = r.dataset.emp === 'all' ? null : +r.dataset.emp; sheet.hidden = true; lastLayout = ''; render(); return; }
+            if (e.target.closest('.sc-sh__back')) sheet.hidden = true;
+        });
+        fabAdd.addEventListener('click', () => {
+            const wh = workHours[parseK(selKey).getDay()];
+            let m = wh ? wh[0] : 9 * 60;
+            if (selKey === todayKey()) m = Math.max(m, Math.ceil(nowMin() / SNAP) * SNAP);
+            openAddModal(minToHHMM(Math.min(m, 23 * 60 + 45)), { dayKey: selKey });
+        });
+
+        // ================= Докосване / мишка върху решетката =================
+        // Кликове: блок -> детайли; заглавие на ден -> изглед Ден; иконата в ъгъла -> свий/разгъни;
+        // клетка в месеца -> този ден.
+        let suppressClickUntil = 0;
+        scroll.addEventListener('click', (e) => {
+            if (Date.now() < suppressClickUntil) return;
+            const bk = e.target.closest('.sc-bk');
+            if (bk) { const b = (data[bk.dataset.k] || []).find(x => x.id === +bk.dataset.id); openBookingModal(b); return; }
+            if (e.target.closest('.sc-corner')) { toggleCompress(); return; }
+            const hd = e.target.closest('.sc-hd[data-k]');
+            if (hd) { selKey = hd.dataset.k; setView('day'); return; }
+            const mc = e.target.closest('.sc-mc');
+            if (mc) { selKey = mc.dataset.k; setView('day'); }
+        });
+
+        const minAt = (col, clientY) => (clientY - col.getBoundingClientRect().top) / (HH0 * zoom) * 60;
+        const durLabel = d => { const h = Math.floor(d / 60), m = d % 60; return h ? `${h} ч${m ? ` ${m} мин` : ''}` : `${m} мин`; };
+
+        // Маркиране на период: задържане + плъзгане (телефон) / влачене (мишка).
+        let sel = null;
+        function beginSelect(col, clientY) {
+            const a = Math.max(0, Math.min(24 * 60 - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
+            const el = document.createElement('div');
+            el.className = 'sc-sel';
+            col.appendChild(el);
+            sel = { col, a, s: a, e: Math.min(24 * 60, a + 2 * SNAP), el };
+            paintSel();
+            root.classList.add('is-selecting');
+            if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {}
+        }
+        function updateSelect(clientY) {
+            if (!sel) return;
+            const m = Math.max(0, Math.min(24 * 60, minAt(sel.col, clientY)));
+            if (m >= sel.a) { sel.s = sel.a; sel.e = Math.max(sel.a + SNAP, Math.ceil(m / SNAP) * SNAP); }
+            else { sel.s = Math.floor(m / SNAP) * SNAP; sel.e = sel.a + SNAP; }
+            sel.e = Math.min(24 * 60, sel.e);
+            paintSel();
+        }
+        function paintSel() {
+            const { s, e, el } = sel;
+            el.style.top = `calc(var(--hh) * ${s / 60})`;
+            el.style.height = `calc(var(--hh) * ${(e - s) / 60})`;
+            el.innerHTML = `<span>${minToHHMM(s)} – ${minToHHMM(e)}</span><small>${durLabel(e - s)}</small>`;
+        }
+        function clearSel() { if (sel) sel.el.remove(); sel = null; root.classList.remove('is-selecting'); cancelAnimationFrame(asRaf); asRaf = null; }
+        function finishSelect() {
+            if (!sel) return;
+            const { col, s, e } = sel;
+            root.classList.remove('is-selecting');
+            cancelAnimationFrame(asRaf); asRaf = null;
+            suppressClickUntil = Date.now() + 450;
+            const el = sel.el; sel = null;
+            openAddModal(minToHHMM(s), { dayKey: col.dataset.k, dur: e - s, empId: col.dataset.emp ? +col.dataset.emp : undefined, onClose: () => el.remove() });
+        }
+        // Автоматичен скрол, докато пръстът е до ръба (за да се маркира и отвъд екрана).
+        let asRaf = null, lastY = 0;
+        function autoScroll() {
+            asRaf = null;
+            if (!sel) return;
+            const r = scroll.getBoundingClientRect();
+            let dy = 0;
+            if (lastY > r.bottom - 56) dy = Math.min(16, (lastY - (r.bottom - 56)) / 3 + 2);
+            else if (lastY < r.top + HEAD + 40) dy = -Math.min(16, (r.top + HEAD + 40 - lastY) / 3 + 2);
+            if (!dy) return;
+            scroll.scrollTop += dy;
+            updateSelect(lastY);
+            asRaf = requestAnimationFrame(autoScroll);
+        }
+        function tapAdd(col, clientY) {
+            const m = Math.max(0, Math.min(24 * 60 - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
+            openAddModal(minToHHMM(m), { dayKey: col.dataset.k, empId: col.dataset.emp ? +col.dataset.emp : undefined });
+        }
+
+        // Swipe настрани (само когато нищо не се скролва хоризонтално) -> смяна на период.
+        const canSwipe = () => scroll.scrollWidth <= scroll.clientWidth + 2;
+        const slideEl = () => scroll.firstElementChild;
+        function commitSwipe(dx) {
+            const s = slideEl();
+            if (Math.abs(dx) > 60) {
+                if (s) { s.style.transition = 'transform .15s ease-out, opacity .15s ease-out'; s.style.transform = `translateX(${dx < 0 ? -40 : 40}%)`; s.style.opacity = '0'; }
+                setTimeout(() => shift(dx < 0 ? 1 : -1), 140);
+            } else if (s) { s.style.transition = 'transform .18s ease-out'; s.style.transform = ''; s.style.opacity = ''; }
+        }
+
+        let lastScrollAt = 0;
+        scroll.addEventListener('scroll', () => { lastScrollAt = Date.now(); }, { passive: true });
+
+        // Safari: собствената щипка на браузъра се спира само тук.
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => root.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+
+        let t = null, lpTimer = null, lastTouchAt = 0;
+        const d2 = ts => Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY) || 1;
+        scroll.addEventListener('touchstart', (e) => {
+            lastTouchAt = Date.now();
+            clearTimeout(lpTimer);
+            if (e.touches.length >= 2) {
+                clearSel();
+                if (view === 'month') { t = null; return; }
+                t = { mode: 'pinch', d0: d2(e.touches), z0: zoom };
                 return;
             }
+            const p = e.touches[0];
+            const col = e.target.closest('.sc-col');
+            const slide = slideEl(); if (slide) slide.style.transition = 'none';
+            t = { mode: 'pending', x0: p.clientX, y0: p.clientY, dx: 0, col, t0: Date.now(), fling: Date.now() - lastScrollAt < 120 };
+            if (col && canAdd() && !e.target.closest('.sc-bk'))
+                lpTimer = setTimeout(() => { if (t && t.mode === 'pending') { t.mode = 'select'; beginSelect(col, t.y0); } }, 380);
+        }, { passive: true });
 
-            const fullList = (data[selKey] || []).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
-            // Филтър по специалист (избран от плаващото кръгче). Пази се между дните.
-            const list = (empFilter != null) ? fullList.filter(b => b.employeeId === empFilter) : fullList;
-            const [yy, mm, dd] = selKey.split('-');
-            const heading = `${+dd} ${MON[+mm - 1]} ${yy}`;
-            const isPastDay = selKey < key(now.getFullYear(), now.getMonth(), now.getDate());
-
-            // Часови обхват на деня.
-            let span = '';
-            if (list.length) {
-                const first = list[0].startAt.slice(11, 16);
-                const last = list.map(b => (b.endAt || b.startAt).slice(11, 16)).sort().slice(-1)[0];
-                span = `<span class="hint">${list.length} ${list.length === 1 ? 'час' : 'часа'} · ${first}–${last}</span>`;
+        scroll.addEventListener('touchmove', (e) => {
+            if (!t) return;
+            if (t.mode === 'pinch') {
+                if (e.touches.length < 2) return;
+                e.preventDefault();
+                const [a, b] = e.touches;
+                zoomAt(t.z0 * d2(e.touches) / t.d0, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
+                return;
             }
-
-            // Карта с детайли/действия за ЕДИН час (отваря се при докосване на блок).
-            const bookingCardHtml = (b) => {
-                const st = STATUS[b.status] || { label: b.status, cls: 'alert--info' };
-                const phone = b.clientPhone ? ` · <a href="tel:${esc(b.clientPhone)}">${esc(b.clientPhone)}</a>` : '';
-                const flagged = b.noShowCount > 0;           // повторен нарушител (по тел./профил)
-                const noShow = b.status === 'no_show';       // този час е пропуснат
-                const red = flagged || noShow;               // червен акцент
-                const col = empColor(b.employeeId);
-                const edge = red ? '#D9534F' : col;
-                const bg = red ? '#D9534F1F' : `${col}26`;
-
-                // Ясна червена лента отгоре — веднага личи и в общия график.
-                const bannerStyle = 'display:flex;align-items:center;gap:.45rem;background:#D9534F;color:#fff;font-weight:800;font-size:.74rem;letter-spacing:.02em;padding:.34rem .7rem';
-                const banner = flagged
-                    ? `<div style="${bannerStyle}"><span style="font-size:1.05rem;line-height:1">⚠</span> СЪМНИТЕЛЕН КЛИЕНТ · ${b.noShowCount}× не се е явявал(а)</div>`
-                    : (noShow
-                        ? `<div style="${bannerStyle}"><span style="font-size:1.05rem;line-height:1">⚠</span> НЕ СЕ ЯВИ</div>`
-                        : '');
-                const nameHtml = red
-                    ? `<b style="color:#B02A26">${esc(b.clientName || 'Клиент')}</b>`
-                    : esc(b.clientName || 'Клиент');
-                // Статусът „Не се яви" — плътно червено, за да се забелязва лесно.
-                const statusPill = noShow
-                    ? `<span style="background:#D9534F;color:#fff;border-radius:99px;padding:.25rem .6rem;font-size:.72rem;font-weight:700;white-space:nowrap">Не се яви</span>`
-                    : `<span class="alert ${st.cls}" style="padding:.25rem .55rem;font-size:.72rem;white-space:nowrap">${st.label}</span>`;
-
-                // Действия според статуса (вкл. поправка при грешка).
-                let actions = '';
-                if (cfg.editable) {
-                    if (b.status === 'booked')
-                        actions = `
-                        <button class="btn btn--gold cal-set" data-id="${b.id}" data-st="completed" style="--pad-y:.35rem;--pad-x:.7rem;font-size:.76rem">Проведен</button>
-                        <button class="btn btn--ghost cal-set" data-id="${b.id}" data-st="no_show" style="--pad-y:.35rem;--pad-x:.7rem;font-size:.76rem">Не се яви</button>`;
-                    else if (b.status === 'no_show')
-                        actions = `<button class="btn btn--ghost cal-set" data-id="${b.id}" data-st="completed" title="Поправи: клиентът всъщност дойде" style="--pad-y:.35rem;--pad-x:.7rem;font-size:.76rem">↩ Явил се</button>`;
-                    else if (b.status === 'completed')
-                        actions = `<button class="btn btn--ghost cal-set" data-id="${b.id}" data-st="no_show" title="Отбележи като неявил се" style="--pad-y:.35rem;--pad-x:.7rem;font-size:.76rem">Не се яви</button>`;
-                }
-                return `
-                <div style="border-radius:12px;overflow:hidden;${red ? 'box-shadow:0 0 0 2px #D9534F' : ''}">
-                    ${banner}
-                    <div class="card" style="display:flex;flex-wrap:wrap;align-items:center;gap:.45rem .7rem;padding:.65rem .85rem;border-left:7px solid ${edge};background:${bg};border-radius:0">
-                        <div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:42px">${b.startAt.slice(11, 16)}</div>
-                        <div style="flex:1 1 55%;min-width:130px">
-                            <strong style="line-height:1.25">${esc(b.serviceName)}</strong>${cfg.showEmployee ? ` <span style="background:${col};color:#fff;border-radius:99px;padding:.08rem .55rem;font-size:.72rem;font-weight:600;white-space:nowrap">${esc(b.employeeName)}</span>` : ''}
-                            <div class="hint" style="margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nameHtml}${phone} · ${(b.priceSnapshot || 0).toFixed(0)} €</div>
-                        </div>
-                        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:auto">
-                            ${statusPill}
-                            ${actions}
-                        </div>
-                    </div>
-                </div>`;
-            };
-
-            // ---- Дневна времева решетка (Google/Apple стил) ----
-            const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
-            const PX = zoom, GUT = 46, LANE_MIN = 185;
-            let tStart = 9 * 60, tEnd = 19 * 60; // работни часове; разширяват се спрямо реалните
-            if (list.length) {
-                tStart = Math.min(tStart, Math.min(...list.map(b => toMin(b.startAt))));
-                tEnd = Math.max(tEnd, Math.max(...list.map(b => b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30)));
+            const p = e.touches[0];
+            if (t.mode === 'select') {
+                e.preventDefault();
+                lastY = p.clientY;
+                updateSelect(p.clientY);
+                if (!asRaf) asRaf = requestAnimationFrame(autoScroll);
+                return;
             }
-            tStart = Math.floor(tStart / 60) * 60;
-            tEnd = Math.ceil(tEnd / 60) * 60;
-            const H = (tEnd - tStart) * PX;
-
-            // Колони: в „Целият салон" всяка специалистка има своя колона; иначе по застъпване.
-            let laneOf = [], lanes = 1, laneEmps = [];   // laneEmps = кой стои над всяка колона
-            if (cfg.showEmployee && list.length) {
-                const ORDER = ['ирина', 'радина', 'анелия'];
-                const rank = name => { const n = (name || '').toLowerCase(); const i = ORDER.findIndex(o => n.includes(o)); return i === -1 ? ORDER.length : i; };
-                const emps = [];
-                list.forEach(b => { if (!emps.some(e => e.id === b.employeeId)) emps.push({ id: b.employeeId, name: b.employeeName }); });
-                emps.sort((a, b) => rank(a.name) - rank(b.name) || String(a.name).localeCompare(String(b.name), 'bg'));
-                const empLane = {}; emps.forEach((e, i) => empLane[e.id] = i);
-                laneOf = list.map(b => empLane[b.employeeId]);
-                lanes = Math.max(1, emps.length);
-                laneEmps = emps;
-            } else if (list.length) {
-                const laneEnd = [];
-                list.forEach((b, i) => {
-                    const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30;
-                    let l = laneEnd.findIndex(x => x <= s);
-                    if (l === -1) { l = laneEnd.length; laneEnd.push(e); } else laneEnd[l] = e;
-                    laneOf[i] = l;
-                });
-                lanes = Math.max(1, laneEnd.length);
+            const dx = p.clientX - t.x0, dy = p.clientY - t.y0;
+            if (t.mode === 'pending') {
+                if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+                clearTimeout(lpTimer);
+                t.mode = (view !== 'month' && Math.abs(dx) > Math.abs(dy) * 1.3 && canSwipe()) ? 'swipe' : 'scroll';
             }
-
-            // Редуващи се фонови ленти на всеки час — по-лесно се чете кой час е кой.
-            let hourBands = '';
-            for (let hb = tStart; hb < tEnd; hb += 60) {
-                if (Math.round(hb / 60) % 2 === 0) {
-                    const top = (hb - tStart) * PX;
-                    hourBands += `<div class="tl-bd" data-m="${hb - tStart}" style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;height:${(60 * PX).toFixed(0)}px;background:rgba(60,47,51,.025);pointer-events:none"></div>`;
-                }
+            if (t.mode === 'swipe') {
+                e.preventDefault();
+                t.dx = dx;
+                const s = slideEl();
+                if (s) { s.style.transform = `translateX(${dx.toFixed(0)}px)`; s.style.opacity = String(Math.max(.4, 1 - Math.abs(dx) / 700)); }
             }
-            // По-ясни линии: плътни на кръгъл час, по-меки на половин час, тънки на 15 мин.
-            let gridLines = '', gutLabels = '';
-            for (let mmn = tStart; mmn <= tEnd; mmn += 15) {
-                const top = (mmn - tStart) * PX;
-                const isHour = mmn % 60 === 0, isHalf = mmn % 30 === 0 && mmn % 60 !== 0;
-                const lineStyle = isHour ? '1.5px solid rgba(60,47,51,.20)' : (isHalf ? '1px solid rgba(60,47,51,.11)' : '1px dashed rgba(60,47,51,.055)');
-                gridLines += `<div class="tl-ln" data-m="${mmn - tStart}" style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:${lineStyle}"></div>`;
-                if (isHour) gutLabels += `<span class="tl-gl" data-m="${mmn - tStart}" data-off="9" style="position:absolute;left:0;top:${(top - 9).toFixed(0)}px;font-size:.78rem;font-weight:700;color:var(--ink-soft);font-variant-numeric:tabular-nums">${minToHHMM(mmn)}</span>`;
-                else if (isHalf) gutLabels += `<span class="tl-gl" data-m="${mmn - tStart}" data-off="7" style="position:absolute;left:0;top:${(top - 7).toFixed(0)}px;font-size:.64rem;font-weight:500;color:var(--muted);opacity:.7;font-variant-numeric:tabular-nums">${minToHHMM(mmn)}</span>`;
+        }, { passive: false });
+
+        scroll.addEventListener('touchend', (e) => {
+            lastTouchAt = Date.now();
+            clearTimeout(lpTimer);
+            if (!t) return;
+            if (t.mode === 'pinch') { if (!e.touches.length) { saveZoom(); t = null; } return; }
+            if (e.touches.length) return;
+            const was = t; t = null;
+            if (was.mode === 'select') finishSelect();
+            else if (was.mode === 'swipe') commitSwipe(was.dx);
+            else if (was.mode === 'pending' && was.col && !was.fling && canAdd() && !e.target.closest('.sc-bk')) {
+                // Кратко докосване на празно място -> нов час в този момент.
+                suppressClickUntil = Date.now() + 450;
+                tapAdd(was.col, was.y0);
             }
+        });
+        scroll.addEventListener('touchcancel', () => {
+            clearTimeout(lpTimer);
+            if (t && t.mode === 'swipe') commitSwipe(0);
+            clearSel(); t = null;
+        });
 
-            // Червена линия „сега".
-            let nowLine = '', nowDot = '';
-            const nowD2 = new Date();
-            if (selKey === key(nowD2.getFullYear(), nowD2.getMonth(), nowD2.getDate())) {
-                const nm = nowD2.getHours() * 60 + nowD2.getMinutes();
-                if (nm >= tStart && nm <= tEnd) {
-                    const top = (nm - tStart) * PX;
-                    nowLine = `<div class="tl-ln" data-m="${nm - tStart}" style="position:absolute;left:0;right:0;top:${top.toFixed(0)}px;border-top:2px solid #EA4335;z-index:3;pointer-events:none"></div>`;
-                    nowDot = `<span class="tl-gl" data-m="${nm - tStart}" data-off="5" style="position:absolute;right:-5px;top:${(top - 5).toFixed(0)}px;width:10px;height:10px;border-radius:50%;background:#EA4335;z-index:3"></span>`;
-                }
+        // Мишка: влачене надолу по празно място = маркиране; клик = нов час.
+        let mSel = null;
+        scroll.addEventListener('mousedown', (e) => {
+            if (e.button !== 0 || Date.now() - lastTouchAt < 800) return;
+            const col = e.target.closest('.sc-col');
+            if (!col || e.target.closest('.sc-bk') || !canAdd()) return;
+            e.preventDefault();
+            mSel = { col, y0: e.clientY, moved: false };
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!mSel) return;
+            if (!mSel.moved) {
+                if (Math.abs(e.clientY - mSel.y0) < 5) return;
+                mSel.moved = true; beginSelect(mSel.col, mSel.y0);
             }
+            lastY = e.clientY;
+            updateSelect(e.clientY);
+            if (!asRaf) asRaf = requestAnimationFrame(autoScroll);
+        });
+        window.addEventListener('mouseup', () => {
+            if (!mSel) return;
+            const m = mSel; mSel = null;
+            if (m.moved) finishSelect();
+            else { suppressClickUntil = Date.now() + 300; tapAdd(m.col, m.y0); }
+        });
 
-            const blocks = list.map((b, i) => {
-                const s = toMin(b.startAt), e = b.endAt ? toMin(b.endAt) : s + 30;
-                const top = (s - tStart) * PX;
-                const h = Math.max(34, (e - s) * PX - 3);
-                const col = empColor(b.employeeId);
-                const isNoShow = b.status === 'no_show';
-                const flagged = b.noShowCount > 0;              // некоректен клиент (има минали неявявания)
-                const bgc = (isNoShow || flagged) ? '#D9534F' : col;
-                const wPct = 100 / lanes, leftPct = laneOf[i] * wPct;
-                const mark = flagged ? ' ⚠' : (b.status === 'completed' ? ' ✓' : '');
-                // Изявено обрамчване + светеща сянка за некоректните — за да се забелязват веднага.
-                const ring = flagged
-                    ? 'outline:2.5px solid #fff;outline-offset:-1px;box-shadow:0 0 0 3px #D9534F,0 4px 14px rgba(217,83,79,.6);'
-                    : 'box-shadow:0 2px 8px rgba(0,0,0,.16);';
-                // Значка „записан онлайн през сайта" (глобус) — горен десен ъгъл.
-                const onlineBadge = b.isOnline
-                    ? `<span title="Записан онлайн през сайта" style="position:absolute;top:3px;right:3px;width:17px;height:17px;border-radius:50%;background:rgba(255,255,255,.95);color:${bgc};display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3)"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>`
-                    : '';
-                const small = h < 50;
-                const inner = small
-                    ? `<div style="font-size:.72rem;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:800">${b.startAt.slice(11, 16)}</span>${mark} · ${esc(b.serviceName)}</div>`
-                    : `<div style="font-size:.72rem;font-weight:800;opacity:.95;line-height:1;white-space:nowrap">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</div>
-                       <div style="font-size:.82rem;font-weight:700;line-height:1.18;margin-top:.16rem;display:-webkit-box;-webkit-line-clamp:${h >= 68 ? 2 : 1};-webkit-box-orient:vertical;overflow:hidden">${esc(b.serviceName)}</div>
-                       ${h >= 84 ? `<div style="font-size:.73rem;opacity:.92;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.clientName || 'Клиент')}</div>` : ''}`;
-                return `<button class="tl-bk" data-id="${b.id}" data-s="${s - tStart}" data-e="${e - tStart}" style="position:absolute;top:${top.toFixed(0)}px;height:${h.toFixed(0)}px;left:calc(${leftPct}% + 2px);width:calc(${wPct}% - 5px);background:${bgc};${b.status === 'completed' ? 'opacity:.8;' : ''}border:0;border-radius:${small ? 8 : 11}px;color:#fff;text-align:left;cursor:pointer;padding:${small ? '.15rem .5rem' : '.42rem .55rem'};overflow:hidden;${small ? 'display:flex;align-items:center;' : ''}${ring}">${small ? `<div style="min-width:0">${inner}</div>` : inner}${onlineBadge}</button>`;
-            }).join('');
+        // Десктоп: Ctrl + колелце (и щипка на тъчпада) = мащаб.
+        scroll.addEventListener('wheel', (e) => {
+            if (!e.ctrlKey || view === 'month') return;
+            e.preventDefault();
+            zoomAt(zoom * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
+            clearTimeout(scroll._wz); scroll._wz = setTimeout(saveZoom, 200);
+        }, { passive: false });
 
-            // Над всяка колона стои името на специалистката в нейния цвят —
-            // няма нужда да помниш кой цвят чий е.
-            const laneHead = laneEmps.length > 1
-                ? `<div class="tl-heads">
-                        <div style="flex:0 0 ${GUT}px"></div>
-                        <div class="tl-heads__row">${laneEmps.map(e =>
-                            `<span class="tl-head" style="width:${(100 / lanes).toFixed(4)}%;--c:${empColor(e.id)};--c-soft:${empColor(e.id)}1F">${esc(firstName(e.name))}</span>`).join('')}</div>
-                   </div>`
-                : '';
+        // Червената линия „сега" се мести сама всяка минута.
+        let dayAtMount = todayKey();
+        const nowTimer = setInterval(() => {
+            if (!document.body.contains(root)) { clearInterval(nowTimer); return; }
+            if (todayKey() !== dayAtMount) { dayAtMount = todayKey(); render(); return; }
+            root.querySelectorAll('.sc-now').forEach(el => el.style.top = `calc(var(--hh) * ${(nowMin() / 60).toFixed(4)})`);
+        }, 60000);
 
-            const tlHtml = `
-                <div class="tl-zoom" data-span="${tEnd - tStart}" style="margin-top:.4rem;transform-origin:top center;touch-action:pan-y">
-                    ${laneHead}
-                    <div style="display:flex">
-                        <div class="tl-h" style="flex:0 0 ${GUT}px;position:relative;height:${(H + 10).toFixed(0)}px">${gutLabels}${nowDot}</div>
-                        <div class="tl-wrap" style="flex:1;min-width:0;overflow:hidden">
-                            <div class="tl-h" style="position:relative;height:${(H + 10).toFixed(0)}px">
-                                ${hourBands}${gridLines}${nowLine}
-                                <div class="tl-canvas" style="position:absolute;left:2px;right:2px;top:0;bottom:10px">${blocks}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-
-            const canAdd = cfg.editable && cfg.createBooking &&
-                (cfg.staffId || (cfg.showEmployee && cfg.employees && cfg.employees.length));
-            const addHint = '';
-            const schedHtml = (cfg.editable && cfg.staffId) ? `<div class="panel sched-panel" style="margin-top:1.4rem"><div class="spinner"></div></div>` : '';
-
-            detail.innerHTML = `
-                ${toolsHtml()}
-                ${addHint}
-                ${tlHtml}
-                ${schedHtml}`;
-            wireTools();
-
-            // Клик на час -> попъп с детайли/действия.
-            detail.querySelectorAll('.tl-bk').forEach(btn =>
-                btn.addEventListener('click', (e) => { e.stopPropagation(); openBookingModal(list.find(x => x.id === +btn.dataset.id)); }));
-
-            // Клик на празно място -> добавяне на час в този времеви момент.
-            const canvas = detail.querySelector('.tl-canvas');
-            if (canvas && canAdd) {
-                canvas.style.cursor = 'copy';
-                canvas.addEventListener('click', (e) => {
-                    if (e.target.closest('.tl-bk')) return;
-                    const rect = canvas.getBoundingClientRect();
-                    let mins = tStart + (e.clientY - rect.top) / PX;
-                    mins = Math.max(tStart, Math.min(tEnd - 15, Math.round(mins / 15) * 15));
-                    openAddModal(minToHHMM(mins));
-                });
-            }
-
-            const sched = detail.querySelector('.sched-panel');
-            if (sched) loadSchedule(sched, selKey);
-        }
-
-        // Попъп за добавяне на час (клик на празно място в графика).
+        // Попъп за добавяне на час (клик на празно място / маркиран период в графика).
         // В „Целият салон" има и избор на специалист (за кого е часът).
-        function openAddModal(hhmm) {
+        // opts: { dayKey, dur (маркирани минути), empId (от колоната), onClose }
+        function openAddModal(hhmm, opts = {}) {
             document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
             const pickEmp = !!(cfg.showEmployee && cfg.employees && cfg.employees.length && cfg.servicesFor);
+            const dayKey = opts.dayKey || selKey;
+            const dd = parseK(dayKey);
+            const presetEmp = opts.empId != null ? opts.empId : empFilter;
 
             let timeOpts = '';
-            for (let mm = 8 * 60; mm <= 20 * 60; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
-            const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${empFilter === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
+            for (let mm = 0; mm < 24 * 60; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
+            const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${presetEmp === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
             const staticSvc = pickEmp ? '' : (cfg.services || []).map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('');
             const lbl = 'display:block;font-size:.82rem;font-weight:600;color:var(--ink-soft);margin-bottom:.35rem';
 
@@ -722,7 +764,8 @@ window.Calendar = (function () {
             backdrop.innerHTML = `
                 <div class="cal-modal">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
-                    <div style="font-weight:800;font-size:1.15rem;margin-bottom:1rem">Нов час</div>
+                    <div style="font-weight:800;font-size:1.15rem">Нов час</div>
+                    <div class="hint" style="margin:.2rem 0 1rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
                     <div style="display:grid;gap:.85rem">
                         ${pickEmp ? `<label class="field" style="margin:0"><span style="${lbl}">Специалист</span>
                             <select class="select ad-emp">${empOpts}</select></label>` : ''}
@@ -741,7 +784,7 @@ window.Calendar = (function () {
                     </div>
                 </div>`;
             document.body.appendChild(backdrop);
-            const close = () => backdrop.remove();
+            const close = () => { backdrop.remove(); if (opts.onClose) opts.onClose(); };
             backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
 
@@ -756,9 +799,11 @@ window.Calendar = (function () {
             function fillDur(procMin) {
                 const p = procMin || 30;
                 const set = new Set([p, p + REST, p + 20, p + 30, p + 45, p + 60, p + 90]);
-                const def = p + REST;
+                // Маркиран период в графика -> той е продължителността по подразбиране.
+                if (opts.dur) set.add(opts.dur);
+                const def = opts.dur || p + REST;
                 durSel.innerHTML = [...set].sort((a, b) => a - b).map(m => {
-                    const tag = m === p ? ' (само процедура)' : (m === def ? ' · препоръчано' : '');
+                    const tag = m === opts.dur ? ' · маркирано в графика' : (m === p ? ' (само процедура)' : (m === p + REST ? ' · препоръчано' : ''));
                     return `<option value="${m}"${m === def ? ' selected' : ''}>${m} мин${tag}</option>`;
                 }).join('');
             }
@@ -789,7 +834,7 @@ window.Calendar = (function () {
                 const dto = {
                     employeeId,
                     serviceId: +svcSel.value,
-                    startAt: `${selKey}T${backdrop.querySelector('.ad-time').value}:00`,
+                    startAt: `${dayKey}T${backdrop.querySelector('.ad-time').value}:00`,
                     durationMinutes: +durSel.value || null,
                     guestName: backdrop.querySelector('.ad-name').value.trim(),
                     guestPhone: backdrop.querySelector('.ad-phone').value.trim() || null,
