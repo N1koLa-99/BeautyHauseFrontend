@@ -1247,9 +1247,16 @@ textarea.input { resize: vertical; min-height: 110px; }
     box-shadow: 0 1px 2px rgba(0,0,0,.12);
 }
 .sc-bk:active { filter: brightness(.95); }
-/* Много тясно блокче -> само цветът, без смачкан текст. */
-.sc-bk { container-type: inline-size; }
-@container (max-width: 34px) { .sc-bk > span { display: none !important; } }
+/* Много тясно блокче -> само цветът, без смачкан текст. Класовете hl1..hl8 ги слага JS
+   според ширината на колоната (по-евтино от container query на всяко блокче при мащаб). */
+.sc.hl1 .sc-bk[data-l="1"] > span,
+.sc.hl2 .sc-bk[data-l="2"] > span,
+.sc.hl3 .sc-bk[data-l="3"] > span,
+.sc.hl4 .sc-bk[data-l="4"] > span,
+.sc.hl5 .sc-bk[data-l="5"] > span,
+.sc.hl6 .sc-bk[data-l="6"] > span,
+.sc.hl7 .sc-bk[data-l="7"] > span,
+.sc.hl8 .sc-bk[data-l="8"] > span { display: none !important; }
 .sc-bk > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
 .sc-bk__t { font-size: .74rem; font-weight: 700; color: color-mix(in srgb, var(--bc) 75%, #000); font-variant-numeric: tabular-nums; }
 .sc-bk__s { font-size: .82rem; font-weight: 600; }

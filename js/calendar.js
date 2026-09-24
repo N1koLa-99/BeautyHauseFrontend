@@ -252,7 +252,7 @@ window.Calendar = (function () {
                 if (l === -1) { l = laneEnd.length; laneEnd.push(e); } else laneEnd[l] = e;
                 laneOf[i] = l;
             });
-            const lanes = Math.max(1, laneEnd.length);
+            const lanes = Math.max(1, laneEnd.length), dl = Math.min(lanes, 8);
             return arr.map((b, i) => {
                 const s = toMin(b.startAt), e = endMin(b);
                 const flagged = b.noShowCount > 0, noShow = b.status === 'no_show';
@@ -262,7 +262,7 @@ window.Calendar = (function () {
                 const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}`;
                 const online = b.isOnline
                     ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
-                return `<button type="button" class="${cls}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="top:calc(var(--hh) * ${(s / 60).toFixed(4)});height:calc(var(--hh) * ${((e - s) / 60).toFixed(4)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px);--bc:${c}">
+                return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="top:calc(var(--hh) * ${(s / 60).toFixed(4)});height:calc(var(--hh) * ${((e - s) / 60).toFixed(4)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px);--bc:${c}">
                     <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
                     <span class="sc-bk__s">${esc(b.serviceName)}</span>
                     <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
@@ -303,6 +303,7 @@ window.Calendar = (function () {
                     <div class="sc-gut">${gut}</div>
                     ${bodies}
                 </div>`;
+            measure();
             applyZoom(zoom);
 
             // Скрол: при нов изглед -> към началото на работния ден; иначе остава, където е бил.
@@ -340,29 +341,48 @@ window.Calendar = (function () {
         }
 
         // ---- Мащаб: само CSS променливи -> гладко, без пре-рендиране ----
-        const curCw = () => parseFloat(root.style.getPropertyValue('--cw')) || 100;
+        // Размерът на полето се чете рядко (рендер / resize), не на всеки кадър от
+        // щипката — иначе браузърът пресмята цялата решетка по няколко пъти на кадър.
+        let cw = 100, viewW = 0, viewH = 0, ctCache = null;
+        const measure = () => { viewW = scroll.clientWidth; viewH = scroll.clientHeight; ctCache = null; };
+        const curCw = () => cw;
         function cwFor(z) {
             const n = +root.dataset.n || 1;
-            const W = Math.max(120, scroll.clientWidth - GUT);
+            const W = Math.max(120, viewW - GUT);
             const fit = Math.floor(W / n * 100) / 100;
             return n <= 3 ? fit : Math.max(fit, CW0 * z);
         }
         function applyZoom(z) {
             zoom = clampZoom(z);
             const hh = HH0 * zoom;
+            cw = cwFor(zoom);
             root.style.setProperty('--hh', hh.toFixed(2) + 'px');
-            root.style.setProperty('--cw', cwFor(zoom).toFixed(2) + 'px');
+            root.style.setProperty('--cw', cw.toFixed(2) + 'px');
             root.classList.toggle('is-small', hh < 50);
             root.classList.toggle('is-tiny', hh < 30);
-            root.classList.toggle('is-narrow', cwFor(zoom) < 92);
+            root.classList.toggle('is-narrow', cw < 92);
             // Колко подробни да са часовете вляво, за да не се застъпват надписите.
             root.classList.toggle('no-q', hh < 64);    // без :15 и :45
             root.classList.toggle('no-h', hh < 36);    // без :30
+            // Много тесни блокчета (по брой застъпени = data-l) -> само цветът, без смачкан текст.
+            for (let L = 1; L <= 8; L++) root.classList.toggle('hl' + L, (cw - 1) / L - 18 <= 34);
             const corner = scroll.querySelector('.sc-corner');
-            if (corner) corner.innerHTML = isCompressed() ? ICO.expand : ICO.compress;
+            if (corner) { const c = isCompressed(); if (corner._c !== c) { corner._c = c; corner.innerHTML = c ? ICO.expand : ICO.compress; } }
+        }
+        // Щипка / колелце идват по много пъти на кадър -> прилагаме само последното, веднъж на кадър.
+        let zReq = null, zRaf = 0;
+        const pendingZoom = () => zReq ? zReq.z : zoom;
+        function zoomAt(z, fx, fy) {
+            zReq = { z, fx, fy };
+            if (!zRaf) zRaf = requestAnimationFrame(flushZoom);
+        }
+        function flushZoom() {
+            cancelAnimationFrame(zRaf); zRaf = 0;
+            const q = zReq; zReq = null;
+            if (q) zoomAtNow(q.z, q.fx, q.fy);
         }
         // Мащаб около точка (пръстите / мишката) — тя остава на същото място.
-        function zoomAt(z, fx, fy) {
+        function zoomAtNow(z, fx, fy) {
             const r = scroll.getBoundingClientRect();
             const px = fx - r.left - GUT, py = fy - r.top - HEAD;
             const hours = (scroll.scrollTop + py) / (HH0 * zoom);
@@ -373,23 +393,25 @@ window.Calendar = (function () {
         }
         const saveZoom = () => lsSet('bh_sc_zoom', zoom.toFixed(2));
         const compressTarget = () => {
+            if (ctCache != null) return ctCache;
             const [s, e] = workSpan();
             const n = +root.dataset.n || 1;
-            const zv = (scroll.clientHeight - HEAD - 4) / ((e - s) / 60) / HH0;
-            const zh = n > 3 ? (scroll.clientWidth - GUT) / n / CW0 : zv;
-            return clampZoom(Math.min(zv, zh));
+            const zv = (viewH - HEAD - 4) / ((e - s) / 60) / HH0;
+            const zh = n > 3 ? (viewW - GUT) / n / CW0 : zv;
+            return (ctCache = clampZoom(Math.min(zv, zh)));
         };
         const isCompressed = () => zoom <= compressTarget() + 0.02;
 
         let tweenId = null;
         function tweenZoom(target, after) {
             cancelAnimationFrame(tweenId);
+            zReq = null; cancelAnimationFrame(zRaf); zRaf = 0;
             const from = zoom, t0 = performance.now(), dur = 240;
             const r = scroll.getBoundingClientRect();
             const ease = t => 1 - Math.pow(1 - t, 3);
             const step = (t) => {
                 const k = Math.min(1, (t - t0) / dur);
-                zoomAt(from + (target - from) * ease(k), r.left + GUT, r.top + HEAD);
+                zoomAtNow(from + (target - from) * ease(k), r.left + GUT, r.top + HEAD);
                 if (k < 1) tweenId = requestAnimationFrame(step);
                 else { saveZoom(); if (after) after(); }
             };
@@ -408,6 +430,7 @@ window.Calendar = (function () {
         if (window.ResizeObserver) new ResizeObserver(() => {
             if (view === 'month') return;
             const colsX = scroll.scrollLeft / curCw();
+            measure();
             applyZoom(zoom);
             scroll.scrollLeft = Math.round(colsX) * curCw();
         }).observe(scroll);
@@ -684,7 +707,7 @@ window.Calendar = (function () {
             lastTouchAt = Date.now();
             clearTimeout(lpTimer);
             if (!t) return;
-            if (t.mode === 'pinch') { if (!e.touches.length) { saveZoom(); t = null; } return; }
+            if (t.mode === 'pinch') { if (!e.touches.length) { flushZoom(); saveZoom(); t = null; } return; }
             if (e.touches.length) return;
             const was = t; t = null;
             if (was.mode === 'select') finishSelect();
@@ -731,7 +754,7 @@ window.Calendar = (function () {
         scroll.addEventListener('wheel', (e) => {
             if (!e.ctrlKey || view === 'month') return;
             e.preventDefault();
-            zoomAt(zoom * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
+            zoomAt(pendingZoom() * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
             clearTimeout(scroll._wz); scroll._wz = setTimeout(saveZoom, 200);
         }, { passive: false });
 
