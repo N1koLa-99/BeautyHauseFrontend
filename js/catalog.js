@@ -6,10 +6,12 @@
    я няма в подредбата, отива в „Други процедури" — нищо не се губи.
    Глобален достъп: window.BHCatalog.open(catKey, groupName) — за бутоните
    с плочките долу (пренасочва + отваря правилната категория).
+   window.BHCatalog.mount(box, { emp, onPick }) — същият каталог другаде
+   (стъпка 1 на резервацията): emp = само услугите на този специалист,
+   onPick(row, label) = „Запиши" се обработва на място, без презареждане.
    ===================================================================== */
-document.addEventListener('DOMContentLoaded', () => {
-    const box = document.getElementById('bh-catalog');
-    if (!box || !window.BH_CATALOG) return;
+(function () {
+function mount(box, opts = {}) {
     const E = window.esc || (s => String(s ?? ''));
 
     // Професионални икони за категориите (реални PNG икони).
@@ -31,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Име на услуга -> [{ serviceId, emp, price, dur }] (по реда на специалистите).
     async function loadPrices() {
         const [services, employees] = await Promise.all([API.get('/services'), API.get('/employees')]);
-        const emps = (employees || []).filter(e => e.isActive !== false).sort((a, b) => a.id - b.id);
+        const emps = (employees || []).filter(e => e.isActive !== false && (!opts.emp || String(e.id) === String(opts.emp))).sort((a, b) => a.id - b.id);
         const lists = await Promise.all(emps.map(e => API.get('/employees/' + e.id + '/services').catch(() => [])));
         const active = new Map((services || []).filter(s => s.isActive !== false).map(s => [s.id, s.name]));
         const map = new Map();
@@ -54,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!hit) return [];
             used.add(norm(db));
             const multi = hit.rows.length > 1;
-            return hit.rows.map(r => ({ label: multi ? `${label ? label + ' ' : ''}при ${firstName(r.emp.fullName)}` : label, db: hit.name, price: r.price, dur: r.dur, emp: r.emp, multi }));
+            return hit.rows.map(r => ({ label: multi ? `${label ? label + ' ' : ''}при ${firstName(r.emp.fullName)}` : label, db: hit.name, serviceId: r.serviceId, price: r.price, dur: r.dur, emp: r.emp, multi }));
         };
         const empOrder = r => (r.emp ? r.emp.id : 0);
         const cats = BH_CATALOG.map(c => ({ key: c.key, label: c.label, groups: c.groups.map(g => ({
@@ -153,7 +155,12 @@ document.addEventListener('DOMContentLoaded', () => {
         centerActive(groupsEl, true);
     }
 
+    // „Запиши" -> редът, който стои зад бутона (за opts.onPick).
+    let picks = [];
+    const pickAttr = (row, label) => `data-r="${picks.push({ row, label }) - 1}"`;
+
     function renderItems() {
+        picks = [];
         const g0 = curTab().groups[groupIdx];
         const itemsEl = panelEl.querySelector('.cat__items');
         itemsEl.innerHTML = g0.items.map(it => itemHtml(it)).join('');
@@ -221,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="cat__item-name">${E(it.name)}</div>
                         <div class="cat__item-dur">${E(dur)}</div>
                     </div>
-                    <div class="cat__item-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name)}" class="cat__pick">Запиши</a></div>
+                    <div class="cat__item-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name)}" class="cat__pick" ${pickAttr(r, it.name)}>Запиши</a></div>
                 </div>
             </div>`;
         }
@@ -238,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="cat__opts" hidden>${rows.map(r => `
                 <div class="cat__opt">
                     <div><div class="cat__opt-name">${E(r.label)}</div><div class="cat__opt-dur">${E(fmtMin(r.dur))}</div></div>
-                    <div class="cat__opt-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name + ' — ' + r.label)}" class="cat__pick cat__pick--sm">Запиши</a></div>
+                    <div class="cat__opt-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name + ' — ' + r.label)}" class="cat__pick cat__pick--sm" ${pickAttr(r, it.name + ' — ' + r.label)}>Запиши</a></div>
                 </div>`).join('')}</div>
         </div>`;
     }
@@ -258,16 +265,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (r.top < 60 || r.top > window.innerHeight * 0.5) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // Публичен достъп за плочките/линковете долу.
-    window.BHCatalog = { open };
-
-    // Линкове/плочки [data-open-cat] -> отварят каталога на правилната категория.
-    document.querySelectorAll('[data-open-cat]').forEach(el =>
-        el.addEventListener('click', (e) => { e.preventDefault(); open(el.dataset.openCat, el.dataset.openGroup || ''); }));
+    if (opts.onPick) box.addEventListener('click', (e) => {
+        const a = e.target.closest('.cat__pick[data-r]');
+        if (!a) return;
+        e.preventDefault();
+        const p = picks[+a.dataset.r];
+        if (p) opts.onPick(p.row, p.label);
+    });
 
     // Отваряне през URL хеш: #cat=face&g=Мигли (за линкове от други страници).
     // Първо се зареждат цените от базата, после се рисува.
-    const params = new URLSearchParams((location.hash || '').slice(1));
+    const params = new URLSearchParams(opts.fromHash ? (location.hash || '').slice(1) : '');
     panelEl.innerHTML = `<div class="cat__empty"><div class="spinner"></div></div>`;
     loadPrices().then(prices => {
         tabs = buildTabs(prices);
@@ -278,4 +286,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(() => {
         panelEl.innerHTML = `<div class="cat__empty">${ICONS.all}<p>Цените не могат да се заредят в момента. Опитай отново след малко.</p></div>`;
     });
+    return { open };
+}
+
+window.BHCatalog = { mount, open() {} };
+
+document.addEventListener('DOMContentLoaded', () => {
+    const box = document.getElementById('bh-catalog');
+    if (!box || !window.BH_CATALOG) return;
+    const { open } = mount(box, { fromHash: true });
+    // Публичен достъп за плочките/линковете долу.
+    window.BHCatalog.open = open;
+
+    // Линкове/плочки [data-open-cat] -> отварят каталога на правилната категория.
+    document.querySelectorAll('[data-open-cat]').forEach(el =>
+        el.addEventListener('click', (e) => { e.preventDefault(); open(el.dataset.openCat, el.dataset.openGroup || ''); }));
 });
+})();

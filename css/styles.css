@@ -691,10 +691,10 @@ em, .italic { font-style: italic; }
         linear-gradient(0deg, rgba(15,11,9,.5) 0%, rgba(15,11,9,0) 32%);
 }
 .hero__content { position: relative; z-index: 2; min-height: 100svh; display: flex; align-items: center; padding-top: var(--nav-h); }
-.hero__inner { width: 100%; }
+.hero__inner { width: 100%; padding-inline: clamp(24px, 5vw, 72px); } /* „рамка" — отстрани остава само клипът */
 
 .hero__copy { max-width: 600px; }
-.hero__title { margin: 1.4rem 0 0; font-size: clamp(2.6rem, 5.4vw, 4.6rem); font-family: var(--font-display); font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; color: #fff; }
+.hero__title { margin: 1.4rem 0 0; font-size: clamp(2.2rem, 4.3vw, 3.7rem); font-family: var(--font-display); font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; color: #fff; }
 .hero__title .accent { font-style: italic; font-weight: 500; color: var(--gold-soft); }
 .hero__lead { margin-top: 1.3rem; font-size: 1.12rem; line-height: 1.7; letter-spacing: .012em; color: rgba(255,255,255,.82); max-width: 42ch; }
 .hero__cta { display: flex; gap: 1rem; margin-top: 2.4rem; flex-wrap: wrap; }
@@ -743,7 +743,7 @@ em, .italic { font-style: italic; }
 .hero__stat strong {
     display: inline-flex; align-items: flex-start;
     font-family: var(--font-display); font-style: italic; font-weight: 500;
-    font-size: clamp(2.4rem, 4.4vw, 3.4rem); line-height: .9; letter-spacing: -.02em;
+    font-size: clamp(2rem, 3.6vw, 2.8rem); line-height: .9; letter-spacing: -.02em;
     color: transparent;
     background: linear-gradient(100deg, #fff 42%, #F3DDB0 50%, #fff 58%) 100% 0 / 260% 100%;
     -webkit-background-clip: text; background-clip: text;
@@ -1006,6 +1006,15 @@ textarea.input { resize: vertical; min-height: 110px; }
 /* Резервация (booking.html) — основна зона + sticky обобщение --------- */
 .booking-grid { grid-template-columns: 1.5fr .9fr; gap: 28px; align-items: start; margin-top: 2rem; }
 .booking-panel-summary { position: sticky; top: calc(var(--nav-h) + 16px); background: linear-gradient(180deg, #fff, var(--ivory)); }
+.booking-panel-main { min-width: 0; }
+
+/* Стъпка 1 — каталогът от началната страница, на цяла ширина, без обобщението */
+.booking-grid.is-picking { grid-template-columns: minmax(0, 1fr); }
+.booking-grid.is-picking .booking-panel-summary { display: none; }
+.booking-grid.is-picking .booking-panel-main { background: none; border: 0; box-shadow: none; backdrop-filter: none; padding: 0; min-height: 0 !important; overflow: visible; }
+
+/* Стъпка 2 — по-компактни карти със специалисти */
+#bk-employees .bk-pick { padding: 1rem 1.2rem; }
 
 /* ---- Некоректни клиенти: подредени карти ---- */
 .ns-card {
@@ -1650,10 +1659,11 @@ textarea.input { resize: vertical; min-height: 110px; }
     /* Героят остава закотвен долу — както на iPhone SE. На по-високи телефони съдържанието
        самото леко нараства (шрифт и разстояния), за да запълни въздуха с наличното, вместо да го центрира. */
     .hero__content { align-items: flex-end; padding-bottom: clamp(44px, 9svh, 88px); }
-    .hero__copy { max-width: none; padding: 0 1.4rem; }
+    .hero__inner { padding-inline: 0; }
+    .hero__copy { max-width: none; padding: 0 clamp(1.9rem, 8vw, 2.4rem); }
     .hero__title {
         margin-top: 0; line-height: 1.18; letter-spacing: .002em;
-        font-size: clamp(2rem, calc(8.6vw + (100svh - 667px) * .02), 2.9rem);
+        font-size: clamp(1.7rem, calc(7vw + (100svh - 667px) * .015), 2.4rem);
     }
     .hero__title .accent, .hero__title.is-typing .tw-accent { font-style: normal; font-weight: 600; }
     .hero__lead { display: none; }
@@ -1680,7 +1690,7 @@ textarea.input { resize: vertical; min-height: 110px; }
     }
     .hero__stat { padding: .1rem .7rem 0 1rem; gap: .3rem; }
     .hero__stat:first-child { padding-left: 0; }
-    .hero__stat strong { font-size: 1.95rem; }
+    .hero__stat strong { font-size: 1.7rem; }
     .hero__stat span { font-size: .52rem; letter-spacing: .1em; }
     .hero__scrollcue { display: none; }
 
@@ -1690,6 +1700,11 @@ textarea.input { resize: vertical; min-height: 110px; }
     /* Резервация — една колона, обобщението слиза под стъпките, не sticky/стеснено */
     .booking-grid { grid-template-columns: 1fr; gap: 20px; margin-top: 1.6rem; }
     .booking-panel-summary { position: static; }
+    /* Стъпките — един ред: само номера, а текст има само активната */
+    .steps--booking { flex-wrap: nowrap; gap: .5rem; }
+    .steps--booking .step:not(.active) { font-size: 0; gap: 0; }
+    .booking-panel-main { padding: 1.3rem 1.1rem; }
+    .booking-grid.is-picking .booking-panel-main { padding: 0; }
     .steps--booking { justify-content: flex-start; gap: .7rem 1.1rem; }
     .steps--booking .step { font-size: .82rem; gap: .4rem; }
     .steps--booking .step__num { width: 26px; height: 26px; font-size: .76rem; }

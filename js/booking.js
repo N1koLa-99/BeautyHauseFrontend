@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const preEmp = PRE.get('emp');
 
     // Банер „Избрана процедура" (вижда се на всички стъпки).
-    function showPickedBanner(txt) {
+    function showPickedBanner(txt, inPage) {
         const main = document.querySelector('.booking-panel-main');
         let b = document.getElementById('bk-picked');
         if (!b) {
@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         b.innerHTML = `<span>Избрана процедура: <strong>${esc(txt)}</strong></span>
             <a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени процедура</a>`;
+        if (inPage) b.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); goStep(1); });
     }
 
     // Банер за избран специалист (влизане през "Екип" / "Запази пак").
@@ -56,6 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Навигация между стъпки ---
     function goStep(n) {
         panes.forEach(p => p.hidden = (+p.dataset.pane !== n));
+        // Стъпка 1 е на цяла ширина (като каталога на началната страница), без обобщението.
+        document.querySelector('.booking-grid').classList.toggle('is-picking', n === 1);
+        if (n === 1 && fromCatalog) {
+            fromCatalog = false;
+            if (lockedEmp) showEmployeeBanner(lockedEmp);
+            else { const b = $('bk-picked'); if (b) b.remove(); }
+            state.srv = null; state.emp = null; state.sel = null; state.slot = null;
+            updateSummary();
+        }
         steps.forEach(s => {
             const num = +s.dataset.step;
             s.classList.toggle('active', num === n);
@@ -80,46 +90,44 @@ document.addEventListener('DOMContentLoaded', () => {
         $('bk-confirm').disabled = !(state.emp && state.srv && state.slot);
     }
 
-    // --- Стъпка 1: услуги (процедури) ---
+    // --- Стъпка 1: каталогът от началната страница (категории → групи → „Запиши") ---
+    // Всеки ред в каталога е конкретна услуга при конкретен специалист, така че
+    // „Запиши" попълва и двете и води направо на дата и час (стъпка 2 се прескача).
+    let fromCatalog = false;      // изборът е направен от каталога (банерът е наш)
+    let specialistsShown = false; // стъпка 2 е заредена — иначе „Назад" от дата/час води към каталога
+    let lockedEmp = null;         // влизане през „Екип" — банерът му се връща при смяна на процедурата
+    function mountCatalog(empId) {
+        window.BHCatalog.mount($('bk-services'), { emp: empId, onPick: pickFromCatalog });
+    }
+    function pickFromCatalog(row, label) {
+        fromCatalog = true;
+        specialistsShown = false;
+        state.srv = { serviceId: row.serviceId, serviceName: label };
+        state.emp = row.emp;
+        state.sel = { price: row.price, durationMinutes: row.dur };
+        state.slot = null;
+        showPickedBanner(`${label} · при ${row.emp.fullName}`, true);
+        updateSummary();
+        goStep(3);
+        initDate();
+    }
+
     async function loadServices() {
-        const box = $('bk-services');
+        mountCatalog();
+        // Предварителен избор от страница „Услуги" (?srv=) → маркирай услугата и прескочи напред.
+        // auto=1 прескача и избора на специалист, ако само 1 човек я прави.
+        if (!preSrv) return;
         try {
             const list = await API.get('/services');
-            if (!list || !list.length) { box.innerHTML = `<p class="hint">Няма налични услуги в момента.</p>`; return; }
-            box.innerHTML = `<div class="cards" style="gap:12px">` + list.map(s => `
-                <button class="card bk-srv" data-id="${s.id}" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;text-align:left;width:100%">
-                    <div style="flex:1;min-width:0"><strong style="font-size:1.05rem">${esc(s.name)}</strong>
-                    ${s.description ? `<div class="hint" style="margin-top:.15rem">${esc(s.description)}</div>` : ''}</div>
-                    <span class="btn__arrow">→</span>
-                </button>`).join('') + `</div>`;
-            box.querySelectorAll('.bk-srv').forEach(btn =>
-                btn.addEventListener('click', () => {
-                    const id = +btn.dataset.id;
-                    const s = list.find(x => x.id === id);
-                    state.srv = { serviceId: id, serviceName: s.name };
-                    state.emp = null; state.sel = null; state.slot = null;
-                    updateSummary();
-                    loadSpecialists(id);
-                    goStep(2);
-                }));
-
-            // Предварителен избор от каталога → маркирай услугата и прескочи напред.
-            // auto=1 (само от каталога с готови процедури) прескача и избора на специалист,
-            // ако само 1 човек я прави. От страница "Услуги" (без auto) винаги се пита кой да я направи.
-            if (preSrv) {
-                const s = list.find(x => (x.name || '').toLowerCase() === preSrv.toLowerCase());
-                if (s) {
-                    state.srv = { serviceId: s.id, serviceName: preLabel || s.name };
-                    state.emp = null; state.sel = null; state.slot = null;
-                    showPickedBanner(state.srv.serviceName);
-                    updateSummary();
-                    goStep(2);
-                    loadSpecialists(s.id, preAuto);
-                }
-            }
-        } catch (err) {
-            box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
-        }
+            const s = (list || []).find(x => (x.name || '').toLowerCase() === preSrv.toLowerCase());
+            if (!s) return;
+            state.srv = { serviceId: s.id, serviceName: preLabel || s.name };
+            state.emp = null; state.sel = null; state.slot = null;
+            showPickedBanner(state.srv.serviceName);
+            updateSummary();
+            goStep(2);
+            loadSpecialists(s.id, preAuto);
+        } catch (err) { /* каталогът остава за ръчен избор */ }
     }
 
     // --- Влизане през "Екип" / "Запази пак": специалистът е вече избран ---
@@ -144,6 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             showEmployeeBanner(emp);
+            lockedEmp = emp;
+            mountCatalog(emp.id);
 
             // Ако идваме от "Запази пак" с конкретна услуга — и той все още я предлага, скачаме направо на дата/час.
             if (preSrv) {
@@ -165,30 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            box.innerHTML = `<div class="cards" style="gap:12px">` + empServices.map(es => {
-                const s = (allServices || []).find(x => x.id === es.serviceId);
-                const name = s ? s.name : ('Услуга #' + es.serviceId);
-                const desc = s && s.description ? `<div class="hint" style="margin-top:.15rem">${esc(s.description)}</div>` : '';
-                return `
-                <button class="card bk-srv" data-id="${es.serviceId}" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;text-align:left;width:100%">
-                    <div style="flex:1;min-width:0"><strong style="font-size:1.05rem">${esc(name)}</strong>${desc}</div>
-                    <span class="price">${es.price.toFixed(0)} <small>€</small></span>
-                    <span class="btn__arrow">→</span>
-                </button>`;
-            }).join('') + `</div>`;
-            box.querySelectorAll('.bk-srv').forEach(btn =>
-                btn.addEventListener('click', () => {
-                    const id = +btn.dataset.id;
-                    const es = empServices.find(x => x.serviceId === id);
-                    const s = (allServices || []).find(x => x.id === id);
-                    state.srv = { serviceId: id, serviceName: s ? s.name : ('Услуга #' + id) };
-                    state.emp = emp;
-                    state.sel = { price: es.price, durationMinutes: es.durationMinutes };
-                    state.slot = null;
-                    updateSummary();
-                    goStep(3);
-                    initDate();
-                }));
         } catch (err) {
             box.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
@@ -196,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Стъпка 2: специалисти, които правят избраната услуга ---
     async function loadSpecialists(serviceId, auto) {
+        specialistsShown = true;
         const box = $('bk-employees');
         box.innerHTML = `<div class="spinner"></div>`;
         try {
@@ -367,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Назад ---
     $('bk-back-1').addEventListener('click', () => goStep(1));
-    $('bk-back-2').addEventListener('click', () => goStep(2));
+    $('bk-back-2').addEventListener('click', () => goStep(specialistsShown ? 2 : 1));
 
     // --- Потвърждение ---
     // Ключ за пазене на избора, докато потребителят влиза/се регистрира.
@@ -466,6 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.date = pending.date;
         state.slot = pending.slot;
 
+        mountCatalog();
         showEmployeeBanner(state.emp);
         goStep(3);
         updateSummary();
