@@ -258,6 +258,57 @@ em, .italic { font-style: italic; }
 .cmrow { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .7rem 0; border-bottom: 1px solid var(--line); }
 .cmrow:first-child { padding-top: .2rem; }
 .cmrow:last-child { border-bottom: 0; }
+/* Бърз избор на услуга в „Нов час": търсене + категории + последно избирани */
+/* Попъп „Нов час": компактен, за да се побира целият без скрол (и на телефон). */
+.cal-modal--add { padding: 1.25rem 1.25rem 1.3rem; max-height: calc(100vh - 36px); max-height: calc(100dvh - 36px); }
+.cal-modal--add:has(.svp.is-open) { overflow: hidden; }
+.ad-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: .7rem; }
+.ad-form .field { margin: 0; min-width: 0; }
+.ad-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.ad-pair--time { grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); }
+.ad-form .input, .ad-form .select { padding-top: .7rem; padding-bottom: .7rem; }
+.ad-form .select { padding-left: .9rem; background-position: right .8rem center; padding-right: 2rem; text-overflow: ellipsis; }
+.ad-form .input { padding-left: .9rem; padding-right: .9rem; }
+.ad-lbl { display: block; margin-bottom: .3rem; font-size: .8rem; font-weight: 600; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-lbl small { font-size: inherit; font-weight: 400; color: var(--muted); }
+.ad-save { margin-top: .15rem; }
+.ad-msg:empty { display: none; }
+.svp-btn { display: flex; align-items: baseline; gap: .6rem; text-align: left; cursor: pointer; }
+.svp-btn span { flex: 1 1 0; width: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.svp-btn small { flex: none; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.svp-btn:disabled { color: var(--muted); cursor: default; }
+.svp.is-open .svp-btn { border-color: var(--rose); box-shadow: 0 0 0 4px rgba(165, 144, 121,.14); background-color: #fff; }
+.svp-pop { margin-top: .5rem; border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; overflow: hidden; animation: calFadeIn .15s; }
+.svp-pop[hidden] { display: none; }
+.svp { min-width: 0; contain: inline-size; }   /* дългото име не разпъва попъпа */
+.svp-top { display: none; }
+.svp--sheet .svp-pop { position: absolute; inset: 0; z-index: 5; margin: 0; border: 0; border-radius: 0; display: flex; flex-direction: column; animation: calFadeIn .15s; }
+.svp--sheet .svp-pop[hidden] { display: none; }
+.svp--sheet .svp-top { display: flex; align-items: center; gap: .35rem; padding: .9rem 1rem .55rem .6rem; font-weight: 800; font-size: 1.1rem; color: var(--ink); }
+.svp-back { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--ink-soft); cursor: pointer; }
+.svp-back:hover { background: rgba(0,0,0,.05); }
+.svp-q { -webkit-appearance: none; appearance: none; }
+.svp--sheet .svp-q, .svp--sheet .svp-q:focus { flex: none; width: auto; margin: 0 1rem; border: 1px solid var(--line); border-radius: var(--r-md); padding: .7rem .9rem; }
+.svp--sheet .svp-q:focus { border-color: var(--rose); }
+.svp--sheet .svp-cats { border-bottom: 1px solid var(--line); padding: .7rem 1rem; flex: none; }
+.svp--sheet .svp-list { flex: 1; min-height: 0; max-height: none; }
+.svp-pop .svp-q, .svp-pop .svp-q:focus { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; background: #fff; }
+.svp-cats { display: flex; gap: .4rem; padding: .6rem .75rem; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.svp-cats::-webkit-scrollbar { display: none; }
+.svp-cats:empty { display: none; }
+.svp-cat { flex: none; padding: .38rem .9rem; border: 1px solid var(--line); border-radius: 999px; background: rgba(165, 144, 121, .1); font: inherit; font-size: .85rem; color: var(--ink-soft); cursor: pointer; }
+.svp-cat.is-on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.svp-list { max-height: min(46vh, 340px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: .35rem; }
+.svp-h { position: sticky; top: 0; z-index: 1; background: #fff; padding: .6rem 1rem .3rem; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.svp-it { display: flex; align-items: baseline; gap: .75rem; width: 100%; padding: .62rem 1rem; border: 0; background: none; text-align: left; font: inherit; font-size: .93rem; color: var(--ink); cursor: pointer; }
+.svp-it span { flex: 1; min-width: 0; }
+.svp-it small { flex: none; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.svp-it.is-act { background: rgba(165, 144, 121, .12); }
+@media (hover: hover) { .svp-it:hover { background: rgba(165, 144, 121, .12); } }
+.svp-it.is-sel { font-weight: 600; }
+.svp-it.is-sel::after { content: "✓"; color: var(--rose); }
+.svp-it mark { background: rgba(165, 144, 121, .25); color: inherit; border-radius: 3px; }
+.svp-empty { padding: 1.1rem 1rem; text-align: center; font-size: .9rem; color: var(--muted); }
 .cmrow > .hint { flex: none; }
 .cmrow > :last-child:not(.hint) { text-align: right; font-weight: 600; }
 .cal-modal__price { border-top: 1px dashed var(--rose); margin-top: 1.1rem; padding-top: 1.1rem; }
@@ -1222,13 +1273,13 @@ textarea.input { resize: vertical; min-height: 110px; }
         linear-gradient(to bottom, var(--sc-line) 1px, transparent 1px),
         linear-gradient(to bottom, transparent calc(50% - .5px), var(--sc-line-soft) calc(50% - .5px), var(--sc-line-soft) calc(50% + .5px), transparent calc(50% + .5px)),
         linear-gradient(to bottom, #F6F6F6 1px, transparent 1px);
-    background-size: 100% var(--hh), 100% var(--hh), 100% calc(var(--hh) / 4);
+    background-size: 100% calc(100% / 24), 100% calc(100% / 24), 100% calc(100% / 96);
 }
 .sc.no-q .sc-lines {
     background-image:
         linear-gradient(to bottom, var(--sc-line) 1px, transparent 1px),
         linear-gradient(to bottom, transparent calc(50% - .5px), var(--sc-line-soft) calc(50% - .5px), var(--sc-line-soft) calc(50% + .5px), transparent calc(50% + .5px));
-    background-size: 100% var(--hh);
+    background-size: 100% calc(100% / 24);
 }
 .sc.is-tiny .sc-lines { background-image: linear-gradient(to bottom, var(--sc-line) 1px, transparent 1px); }
 
@@ -1245,6 +1296,8 @@ textarea.input { resize: vertical; min-height: 110px; }
     background: color-mix(in srgb, var(--bc) 20%, #fff);
     color: #222; text-align: left; font: inherit; cursor: pointer;
     box-shadow: 0 1px 2px rgba(0,0,0,.12);
+    /* Блокчетата извън екрана не се подреждат/рисуват -> мащабът остава гладък при много часове. */
+    content-visibility: auto;
 }
 .sc-bk:active { filter: brightness(.95); }
 /* Много тясно блокче -> само цветът, без смачкан текст. Класовете hl1..hl8 ги слага JS
@@ -1861,3 +1914,39 @@ textarea.input { resize: vertical; min-height: 110px; }
 @keyframes bhFade { from { opacity: 0; } }
 @keyframes bhPop  { from { opacity: 0; transform: translateY(8px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .bh-confirm, .bh-confirm__box { animation: none; } }
+
+/* Моят акаунт: данните се показват като текст, моливчето отваря редакцията */
+.acc-sec { display: grid; gap: .9rem; }
+.acc-sec--line { padding-top: 1.2rem; border-top: 1px solid var(--line); }
+.acc-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 38px; }
+.acc-title { font-weight: 700; font-size: .88rem; color: var(--ink); }
+.acc-edit {
+    flex: none; width: 38px; height: 38px; display: grid; place-items: center;
+    border: 1px solid var(--line); border-radius: 50%; background: var(--ivory);
+    color: var(--ink-soft); cursor: pointer;
+    transition: background .2s var(--ease-out), color .2s var(--ease-out), border-color .2s var(--ease-out);
+}
+.acc-edit:hover, .acc-edit:focus-visible { background: var(--ink); border-color: var(--ink); color: var(--ivory); }
+.acc-edit[hidden] { display: none; }
+.acc-view { margin: 0; display: grid; gap: .85rem; }
+.acc-view[hidden] { display: none; }
+.acc-view dt { font-size: .78rem; font-weight: 600; color: var(--muted); letter-spacing: .02em; margin-bottom: .15rem; }
+.acc-view dd { margin: 0; font-size: 1rem; color: var(--ink); overflow-wrap: anywhere; }
+.acc-form { display: grid; gap: .8rem; }
+.acc-form[hidden] { display: none; }
+.acc-form .field { margin: 0; }
+.acc-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.acc-msg:empty, .pwd-msg:empty { display: none; }
+
+/* Око в полетата за парола */
+.pwd-wrap { position: relative; display: block; }
+.pwd-wrap .input { padding-right: 3rem; }
+.pwd-eye {
+    position: absolute; top: 50%; right: .45rem; transform: translateY(-50%);
+    width: 38px; height: 38px; display: grid; place-items: center;
+    border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer;
+    transition: color .2s var(--ease-out), background .2s var(--ease-out);
+}
+.pwd-eye:hover, .pwd-eye:focus-visible { color: var(--ink); background: rgba(0,0,0,.05); }
+.pwd-eye[aria-pressed="true"] { color: var(--ink); }
+.pwd-wrap input::-ms-reveal, .pwd-wrap input::-ms-clear { display: none; }   /* Edge си има свое око -> да не са две */

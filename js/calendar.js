@@ -60,6 +60,9 @@ window.Calendar = (function () {
     // Геометрия на решетката. --hh = пиксели за 1 час, --cw = ширина на колона.
     const HH0 = 60, CW0 = 105, GUT = 50, HEAD = 46, SNAP = 15;
     const Z_MIN = 0.3, Z_MAX = 4, Z_DEF = 1.2;
+    // Позиция във времевата решетка като % от денонощието — блокчетата следват
+    // височината на колоната сами, без да се пресмятат наново при мащаб.
+    const pct = min => (min / 1440 * 100).toFixed(4) + '%';
     const VIEWS = [['day', 'Ден'], ['3day', '3 дни'], ['week', 'Седмица'], ['month', 'Месец']];
 
     const ICO = {
@@ -76,6 +79,144 @@ window.Calendar = (function () {
     };
     const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
     const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+    // ---- Бърз избор на услуга: търсене + категории + последно избирани ----
+    // Стои върху обикновения <select> (той остава източникът на стойността), така че
+    // останалият код (зареждане, продължителност, запис) работи както преди.
+    const svcNorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const LAT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sht', ъ: 'a', ь: 'y', ю: 'yu', я: 'ya' };
+    // И „мигли", и „migli" намират едно и също.
+    const toLat = s => svcNorm(s).replace(/[а-я]/g, c => LAT[c] || c);
+    let catIndex = null;
+    function svcCatalog() {
+        if (catIndex) return catIndex;
+        catIndex = new Map();
+        let i = 0;
+        (window.BH_CATALOG || []).forEach(c => c.groups.forEach(g => g.items.forEach(it => {
+            const put = db => { const k = svcNorm(db); if (k && !catIndex.has(k)) catIndex.set(k, { cat: c.label, group: g.name, order: i++ }); };
+            if (it.options) it.options.forEach(o => put(o.db)); else put(it.db || it.name);
+        })));
+        return catIndex;
+    }
+
+    function svcPicker(sel, recentKey) {
+        const wrap = document.createElement('div');
+        // В попъпа списъкът се отваря върху целия попъп (не го удължава).
+        const sheet = !!sel.closest('.cal-modal');
+        wrap.className = 'svp' + (sheet ? ' svp--sheet' : '');
+        wrap.innerHTML = `<button type="button" class="select svp-btn"></button>
+            <div class="svp-pop" hidden>
+                <div class="svp-top"><button type="button" class="svp-back" aria-label="Назад"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span>Избери услуга</span></div>
+                <input class="input svp-q" type="search" placeholder="Търси услуга… (гел, лице, мигли)" autocomplete="off" enterkeyhint="done">
+                <div class="svp-cats"></div>
+                <div class="svp-list" role="listbox"></div>
+            </div>`;
+        sel.hidden = true;
+        sel.after(wrap);
+        const btn = wrap.querySelector('.svp-btn'), pop = wrap.querySelector('.svp-pop');
+        const qEl = wrap.querySelector('.svp-q'), catsEl = wrap.querySelector('.svp-cats'), listEl = wrap.querySelector('.svp-list');
+        let q = '', cat = '', act = 0, shown = [];
+
+        const rKey = () => 'bh_svc_recent_' + recentKey();
+        const recent = () => { try { return JSON.parse(lsGet(rKey())) || []; } catch (e) { return []; } };
+        const remember = v => lsSet(rKey(), JSON.stringify([v, ...recent().filter(x => x !== v)].slice(0, 5)));
+
+        function items() {
+            const idx = svcCatalog();
+            return [...sel.options].filter(o => o.value).map(o => {
+                const m = o.text.match(/^(.*) · (\d+) мин$/);
+                const name = m ? m[1] : o.text, c = idx.get(svcNorm(name));
+                return { v: o.value, name, dur: m ? +m[2] : null, cat: c ? c.cat : 'Други', group: c ? c.group : 'Други', order: c ? c.order : 1e6,
+                    hay: toLat(`${name} ${c ? c.cat + ' ' + c.group : ''}`) };
+            }).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'bg'));
+        }
+        // Удебелява написаното в името (когато е на кирилица, както е в името).
+        function hl(name) {
+            const low = name.toLowerCase(), marks = [];
+            svcNorm(q).split(' ').filter(Boolean).forEach(w => { const i = low.indexOf(w); if (i >= 0) marks.push([i, i + w.length]); });
+            marks.sort((a, b) => a[0] - b[0]);
+            let out = '', at = 0;
+            marks.forEach(([s, e]) => { if (s < at) return; out += esc(name.slice(at, s)) + `<mark>${esc(name.slice(s, e))}</mark>`; at = e; });
+            return out + esc(name.slice(at));
+        }
+
+        function paintBtn() {
+            const o = sel.selectedOptions[0];
+            const m = o && o.value && o.text.match(/^(.*) · (\d+) мин$/);
+            btn.disabled = !items().length;
+            btn.innerHTML = m ? `<span>${esc(m[1])}</span><small>${m[2]} мин</small>` : `<span>${esc(o ? o.text : '')}</span>`;
+        }
+        function renderList() {
+            const all = items(), words = toLat(q).split(' ').filter(Boolean);
+            const cats = [...new Set(all.map(i => i.cat))];
+            catsEl.innerHTML = cats.length > 1 ? ['', ...cats].map(c =>
+                `<button type="button" class="svp-cat${c === cat ? ' is-on' : ''}" data-c="${esc(c)}">${c ? esc(c) : 'Всички'}</button>`).join('') : '';
+            shown = [];
+            const row = it => `<button type="button" class="svp-it${it.v === sel.value ? ' is-sel' : ''}" data-i="${shown.push(it) - 1}" role="option"><span>${hl(it.name)}</span>${it.dur ? `<small>${it.dur} мин</small>` : ''}</button>`;
+            let html = '';
+            if (!q && !cat) {
+                const rec = recent().map(v => all.find(i => i.v === v)).filter(Boolean);
+                if (rec.length) html += `<div class="svp-h">Последно избирани</div>` + rec.map(row).join('');
+            }
+            let g = null;
+            all.filter(it => (!cat || it.cat === cat) && words.every(w => it.hay.includes(w))).forEach(it => {
+                const h = it.group === 'Други' ? 'Други' : (cat ? it.group : `${it.cat} · ${it.group}`);
+                if (h !== g) { g = h; html += `<div class="svp-h">${esc(h)}</div>`; }
+                html += row(it);
+            });
+            listEl.innerHTML = html || `<div class="svp-empty">Няма услуга с „${esc(q)}“</div>`;
+            act = Math.min(act, Math.max(0, shown.length - 1));
+            paintAct();
+        }
+        function paintAct(center) {
+            listEl.querySelectorAll('.svp-it.is-act').forEach(x => x.classList.remove('is-act'));
+            const el = listEl.querySelector(`.svp-it[data-i="${act}"]`);
+            if (el) { el.classList.add('is-act'); el.scrollIntoView({ block: center ? 'center' : 'nearest' }); }
+        }
+
+        function open() {
+            if (btn.disabled) return;
+            q = ''; cat = ''; qEl.value = '';
+            pop.hidden = false; wrap.classList.add('is-open');
+            renderList();
+            act = Math.max(0, shown.findIndex(i => i.v === sel.value)); paintAct(true);
+            if (!sheet) wrap.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            // На компютър -> направо се пише; на телефон клавиатурата не изскача сама.
+            if (matchMedia('(hover: hover) and (pointer: fine)').matches) qEl.focus({ preventScroll: true });
+        }
+        function close() { pop.hidden = true; wrap.classList.remove('is-open'); }
+        function pick(it) {
+            if (!it) return;
+            sel.value = it.v;
+            sel.dispatchEvent(new Event('change'));
+            remember(it.v);
+            paintBtn(); close();
+        }
+
+        btn.addEventListener('click', () => pop.hidden ? open() : close());
+        wrap.querySelector('.svp-back').addEventListener('click', () => { close(); btn.focus(); });
+        qEl.addEventListener('input', () => { q = qEl.value; act = 0; renderList(); listEl.scrollTop = 0; });
+        qEl.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                act = Math.max(0, Math.min(shown.length - 1, act + (e.key === 'ArrowDown' ? 1 : -1))); paintAct();
+            } else if (e.key === 'Enter') { e.preventDefault(); pick(shown[act]); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); btn.focus(); }
+        });
+        catsEl.addEventListener('click', (e) => {
+            const c = e.target.closest('.svp-cat'); if (!c) return;
+            cat = c.dataset.c; act = 0; renderList(); listEl.scrollTop = 0;
+        });
+        listEl.addEventListener('click', (e) => { const b = e.target.closest('.svp-it'); if (b) pick(shown[+b.dataset.i]); });
+        const outside = (e) => {
+            if (!document.body.contains(wrap)) { document.removeEventListener('pointerdown', outside, true); return; }
+            if (!pop.hidden && !wrap.contains(e.target)) close();
+        };
+        document.addEventListener('pointerdown', outside, true);
+        // Списъкът се сменя (друга специалистка, зареждане…) -> бутонът се обновява.
+        new MutationObserver(() => { paintBtn(); if (!pop.hidden) renderList(); }).observe(sel, { childList: true });
+        paintBtn();
+    }
 
     function mount(container, cfg) {
         const todayKey = () => { const d = new Date(); return key(d.getFullYear(), d.getMonth(), d.getDate()); };
@@ -262,7 +403,7 @@ window.Calendar = (function () {
                 const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}`;
                 const online = b.isOnline
                     ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
-                return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="top:calc(var(--hh) * ${(s / 60).toFixed(4)});height:calc(var(--hh) * ${((e - s) / 60).toFixed(4)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px);--bc:${c}">
+                return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="top:${pct(s)};height:calc(${pct(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px);--bc:${c}">
                     <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
                     <span class="sc-bk__s">${esc(b.serviceName)}</span>
                     <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
@@ -283,21 +424,21 @@ window.Calendar = (function () {
                     heads += `<button type="button" class="sc-hd${isToday ? ' is-today' : ''}${isSel ? ' is-sel' : ''}" data-k="${c.k}"><span>${WD_S[c.d.getDay()]}</span> <b>${c.d.getDate()}</b><span class="sc-hd__m"> ${MON_S[c.d.getMonth()]}</span></button>`;
                 }
                 const items = listFor(c.k).filter(b => !c.emp || b.employeeId === c.emp.id);
-                const work = wh ? `<div class="sc-work" style="top:calc(var(--hh) * ${wh[0] / 60});height:calc(var(--hh) * ${(wh[1] - wh[0]) / 60})"></div>` : '';
-                const nowL = c.k === tk ? `<div class="sc-now" style="top:calc(var(--hh) * ${(nm / 60).toFixed(4)})"></div>` : '';
+                const work = wh ? `<div class="sc-work" style="top:${pct(wh[0])};height:${pct(wh[1] - wh[0])}"></div>` : '';
+                const nowL = c.k === tk ? `<div class="sc-now" style="top:${pct(nm)}"></div>` : '';
                 bodies += `<div class="sc-col" data-k="${c.k}"${c.emp ? ` data-emp="${c.emp.id}"` : ''}>${work}<div class="sc-lines"></div>${blocksHtml(items)}${nowL}</div>`;
             });
             let gut = '';
             // Надпис на всеки 15 мин: кръгъл час (плътно), :30 и :15/:45 (по-дребно).
             for (let m = 15; m < 24 * 60; m += 15) {
                 const q = m % 60, cls = q === 0 ? (Math.floor(m / 60) % 2 ? ' is-odd' : '') : (q === 30 ? ' sc-gl--h' : ' sc-gl--q');
-                gut += `<span class="sc-gl${cls}" style="top:calc(var(--hh) * ${m / 60})">${minToHHMM(m)}</span>`;
+                gut += `<span class="sc-gl${cls}" style="top:${pct(m)}">${minToHHMM(m)}</span>`;
             }
 
             const prevTop = scroll.scrollTop, prevLeft = scroll.scrollLeft;
             root.dataset.n = n;
             scroll.innerHTML = `
-                <div class="sc-grid" style="grid-template-columns:${GUT}px repeat(${n}, var(--cw));grid-template-rows:${HEAD}px calc(var(--hh) * 24)">
+                <div class="sc-grid">
                     <button type="button" class="sc-corner" aria-label="Свий / разгъни графика"></button>
                     ${heads}
                     <div class="sc-gut">${gut}</div>
@@ -356,8 +497,13 @@ window.Calendar = (function () {
             zoom = clampZoom(z);
             const hh = HH0 * zoom;
             cw = cwFor(zoom);
-            root.style.setProperty('--hh', hh.toFixed(2) + 'px');
-            root.style.setProperty('--cw', cw.toFixed(2) + 'px');
+            // Само размерът на решетката се сменя; всичко вътре е в % -> браузърът
+            // не пресмята стиловете на стотиците блокчета на всеки кадър.
+            const grid = scroll.querySelector('.sc-grid');
+            if (grid) {
+                grid.style.gridTemplateColumns = `${GUT}px repeat(${+root.dataset.n || 1}, ${cw.toFixed(2)}px)`;
+                grid.style.gridTemplateRows = `${HEAD}px ${(hh * 24).toFixed(2)}px`;
+            }
             root.classList.toggle('is-small', hh < 50);
             root.classList.toggle('is-tiny', hh < 30);
             root.classList.toggle('is-narrow', cw < 92);
@@ -603,8 +749,8 @@ window.Calendar = (function () {
         }
         function paintSel() {
             const { s, e, el } = sel;
-            el.style.top = `calc(var(--hh) * ${s / 60})`;
-            el.style.height = `calc(var(--hh) * ${(e - s) / 60})`;
+            el.style.top = pct(s);
+            el.style.height = pct(e - s);
             el.innerHTML = `<span>${minToHHMM(s)} – ${minToHHMM(e)}</span><small>${durLabel(e - s)}</small>`;
         }
         function clearSel() { if (sel) sel.el.remove(); sel = null; root.classList.remove('is-selecting'); cancelAnimationFrame(asRaf); asRaf = null; }
@@ -763,7 +909,7 @@ window.Calendar = (function () {
         const nowTimer = setInterval(() => {
             if (!document.body.contains(root)) { clearInterval(nowTimer); return; }
             if (todayKey() !== dayAtMount) { dayAtMount = todayKey(); render(); return; }
-            root.querySelectorAll('.sc-now').forEach(el => el.style.top = `calc(var(--hh) * ${(nowMin() / 60).toFixed(4)})`);
+            root.querySelectorAll('.sc-now').forEach(el => el.style.top = pct(nowMin()));
         }, 60000);
 
         // Попъп за добавяне на час (клик на празно място / маркиран период в графика).
@@ -780,28 +926,31 @@ window.Calendar = (function () {
             for (let mm = 0; mm < 24 * 60; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
             const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${presetEmp === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
             const staticSvc = pickEmp ? '' : (cfg.services || []).map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('');
-            const lbl = 'display:block;font-size:.82rem;font-weight:600;color:var(--ink-soft);margin-bottom:.35rem';
 
             const backdrop = document.createElement('div');
             backdrop.className = 'cal-modal-backdrop';
             backdrop.innerHTML = `
-                <div class="cal-modal">
+                <div class="cal-modal cal-modal--add">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
                     <div style="font-weight:800;font-size:1.15rem">Нов час</div>
-                    <div class="hint" style="margin:.2rem 0 1rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
-                    <div style="display:grid;gap:.85rem">
-                        ${pickEmp ? `<label class="field" style="margin:0"><span style="${lbl}">Специалист</span>
+                    <div class="hint" style="margin:.15rem 0 .85rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
+                    <div class="ad-form">
+                        ${pickEmp ? `<label class="field"><span class="ad-lbl">Специалист</span>
                             <select class="select ad-emp">${empOpts}</select></label>` : ''}
-                        <label class="field" style="margin:0"><span style="${lbl}">Услуга</span>
+                        <label class="field"><span class="ad-lbl">Услуга</span>
                             <select class="select ad-svc">${pickEmp ? '<option value="">Избери специалист…</option>' : (staticSvc || '<option value="">Няма зададени услуги</option>')}</select></label>
-                        <label class="field" style="margin:0"><span style="${lbl}">Начален час</span>
-                            <select class="select ad-time">${timeOpts}</select></label>
-                        <label class="field" style="margin:0"><span style="${lbl}">Продължителност в графика <span style="font-weight:400;color:var(--muted)">(процедура + почивка)</span></span>
-                            <select class="select ad-dur"></select></label>
-                        <label class="field" style="margin:0"><span style="${lbl}">Име на клиента</span>
-                            <input class="input ad-name" type="text" placeholder="напр. Мария (по телефон)"></label>
-                        <label class="field" style="margin:0"><span style="${lbl}">Телефон (по избор)</span>
-                            <input class="input ad-phone" type="tel" placeholder="+359…"></label>
+                        <div class="ad-pair ad-pair--time">
+                            <label class="field"><span class="ad-lbl">Начален час</span>
+                                <select class="select ad-time">${timeOpts}</select></label>
+                            <label class="field"><span class="ad-lbl" title="Процедура + почивка">Продължителност <small>(+ почивка)</small></span>
+                                <select class="select ad-dur"></select></label>
+                        </div>
+                        <div class="ad-pair">
+                            <label class="field"><span class="ad-lbl">Име на клиента</span>
+                                <input class="input ad-name" type="text" placeholder="напр. Мария"></label>
+                            <label class="field"><span class="ad-lbl">Телефон <small>(по избор)</small></span>
+                                <input class="input ad-phone" type="tel" placeholder="+359…"></label>
+                        </div>
                         <button class="btn btn--primary ad-save">Запиши часа</button>
                         <div class="ad-msg"></div>
                     </div>
@@ -848,6 +997,7 @@ window.Calendar = (function () {
                 } catch (e) { svcSel.innerHTML = `<option value="">Грешка при зареждане</option>`; }
             }
             svcSel.addEventListener('change', () => fillDur(svcDur[+svcSel.value]));
+            svcPicker(svcSel, () => (empSel ? empSel.value : cfg.staffId));
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
             else fillDur(svcDur[+svcSel.value]); // единичен специалист: услугите вече са налични
 
@@ -1044,6 +1194,7 @@ window.Calendar = (function () {
                 }
             }
             svc.addEventListener('change', loadSlots);
+            svcPicker(svc, () => cfg.staffId);
             loadSlots();
 
             box.querySelector('.f-save').addEventListener('click', async (e) => {

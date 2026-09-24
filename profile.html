@@ -36,19 +36,43 @@
                 <p class="lead">Име, имейл и парола за вход.</p>
             </div>
             <div class="card" style="padding:1.3rem 1.4rem;display:grid;gap:1.4rem">
-                <form id="acc-form" style="display:grid;gap:.8rem">
-                        <div class="field"><label>Име и фамилия</label><input class="input" id="acc-name" required placeholder="Име Фамилия"></div>
-                        <div class="field"><label>Имейл</label><input class="input" type="email" id="acc-email" required placeholder="ти@example.com"></div>
-                        <div class="acc-msg"></div>
-                        <button class="btn btn--primary" type="submit" style="justify-self:start;--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Запази промените</button>
-                </form>
-                <form id="pwd-form" style="display:grid;gap:.8rem;padding-top:1.1rem;border-top:1px solid var(--line)">
-                        <span style="font-weight:700;font-size:.88rem;color:var(--ink)">Смяна на парола</span>
-                        <div class="field"><label>Текуща парола</label><input class="input" type="password" id="pwd-current" required placeholder="••••••••"></div>
-                        <div class="field"><label>Нова парола</label><input class="input" type="password" id="pwd-new" required minlength="6" placeholder="мин. 6 символа"></div>
-                        <div class="pwd-msg"></div>
-                        <button class="btn btn--ghost" type="submit" style="justify-self:start;--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Смени паролата</button>
-                </form>
+                <div class="acc-sec">
+                    <div class="acc-head">
+                        <span class="acc-title">Лични данни</span>
+                        <button type="button" class="acc-edit" id="acc-edit" aria-label="Редактирай личните данни" title="Редактирай"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button>
+                    </div>
+                    <dl class="acc-view" id="acc-view">
+                        <div><dt>Име и фамилия</dt><dd id="acc-v-name">—</dd></div>
+                        <div><dt>Имейл</dt><dd id="acc-v-email">—</dd></div>
+                    </dl>
+                    <form id="acc-form" class="acc-form" hidden>
+                        <div class="field"><label for="acc-name">Име и фамилия</label><input class="input" id="acc-name" required placeholder="Име Фамилия" autocomplete="name"></div>
+                        <div class="field"><label for="acc-email">Имейл</label><input class="input" type="email" id="acc-email" required placeholder="ти@example.com" autocomplete="email"></div>
+                        <div class="acc-actions">
+                            <button class="btn btn--primary" type="submit" style="--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Запази</button>
+                            <button class="btn btn--ghost acc-cancel" type="button" style="--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Откажи</button>
+                        </div>
+                    </form>
+                    <div class="acc-msg"></div>
+                </div>
+                <div class="acc-sec acc-sec--line">
+                    <div class="acc-head">
+                        <span class="acc-title">Парола</span>
+                        <button type="button" class="acc-edit" id="pwd-edit" aria-label="Смени паролата" title="Смени паролата"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button>
+                    </div>
+                    <dl class="acc-view" id="pwd-view">
+                        <div><dt>Парола за вход</dt><dd>••••••••</dd></div>
+                    </dl>
+                    <form id="pwd-form" class="acc-form" hidden>
+                        <div class="field"><label for="pwd-current">Текуща парола</label><input class="input" type="password" id="pwd-current" required placeholder="••••••••" autocomplete="current-password"></div>
+                        <div class="field"><label for="pwd-new">Нова парола</label><input class="input" type="password" id="pwd-new" required minlength="6" placeholder="мин. 6 символа" autocomplete="new-password"></div>
+                        <div class="acc-actions">
+                            <button class="btn btn--primary" type="submit" style="--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Смени паролата</button>
+                            <button class="btn btn--ghost acc-cancel" type="button" style="--pad-y:.6rem;--pad-x:1.3rem;font-size:.85rem">Откажи</button>
+                        </div>
+                    </form>
+                    <div class="pwd-msg"></div>
+                </div>
             </div>
         </div>
     </section>

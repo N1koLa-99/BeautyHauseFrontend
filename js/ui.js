@@ -191,3 +191,38 @@ function revealNew(container) {
     if (_revealObserver) root.querySelectorAll('.reveal:not(.in)').forEach(el => _revealObserver.observe(el));
     else root.querySelectorAll('.reveal:not(.in)').forEach(el => el.classList.add('in'));
 }
+
+// ---- Око в полетата за парола: показва/скрива написаното ----
+(function () {
+    const EYE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.5M6.6 6.6A17.3 17.3 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></svg>';
+
+    function addEye(input) {
+        if (input.dataset.eye) return;
+        input.dataset.eye = '1';
+        const wrap = document.createElement('span');
+        wrap.className = 'pwd-wrap';
+        input.parentNode.insertBefore(wrap, input);
+        wrap.appendChild(input);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pwd-eye';
+        wrap.appendChild(btn);
+        const paint = () => {
+            const shown = input.type === 'text';
+            btn.innerHTML = shown ? EYE_OFF : EYE;
+            btn.setAttribute('aria-label', shown ? 'Скрий паролата' : 'Покажи паролата');
+            btn.title = shown ? 'Скрий паролата' : 'Покажи паролата';
+            btn.setAttribute('aria-pressed', String(shown));
+        };
+        btn.addEventListener('mousedown', e => e.preventDefault()); // курсорът остава в полето
+        btn.addEventListener('click', () => { input.type = input.type === 'password' ? 'text' : 'password'; paint(); });
+        // При изчистване/затваряне на формата паролата пак се скрива.
+        if (input.form) input.form.addEventListener('reset', () => { input.type = 'password'; paint(); });
+        paint();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('input[type="password"]').forEach(addEye);
+    });
+})();
