@@ -50,6 +50,16 @@ window.API = (function () {
                     location.href = 'auth.html?next=' + encodeURIComponent(here) + '&expired=1';
                 throw new Error('Сесията изтече. Влез отново.');
             }
+            // 403: токенът не е за правилния профил (напр. в друг таб си влязъл
+            // като служител/шеф). Ако сесията е сменена -> презареждаме страницата.
+            if (res.status === 403 && window.Session) {
+                if (Session.changed && Session.changed()) { location.reload(); throw new Error('Профилът е сменен — презареждам…'); }
+                if (!(data && data.error)) {
+                    const err = new Error('Моля, влез отново в профила си.');
+                    err.status = 403;
+                    throw err;
+                }
+            }
             const msg = (data && data.error) ? data.error : ('Грешка (' + res.status + ')');
             const err = new Error(msg);
             err.status = res.status;

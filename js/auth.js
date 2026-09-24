@@ -12,8 +12,24 @@ window.Session = (function () {
     }
     function clear() { Object.values(K).forEach(k => localStorage.removeItem(k)); }
 
+    // Токенът, с който е заредена ТАЗИ страница. Ако в друг таб някой излезе
+    // или влезе с друг профил, страницата се презарежда -> няма заявки с чужд
+    // токен (оттам идваше 403 при отмяна на час).
+    let pageToken = localStorage.getItem(K.token);
+    const changed = () => localStorage.getItem(K.token) !== pageToken;
+    function syncIfChanged() { if (changed()) location.reload(); }
+    window.addEventListener('storage', e => {
+        if (e.key === K.token || e.key === null) syncIfChanged();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') syncIfChanged();
+    });
+    window.addEventListener('pageshow', e => { if (e.persisted) syncIfChanged(); });
+
     return {
-        save, clear,
+        save:  (auth) => { save(auth); pageToken = auth.token; },
+        clear: () => { clear(); pageToken = null; },
+        changed,
         isIn:  () => !!localStorage.getItem(K.token),
         role:  () => localStorage.getItem(K.role) || '',
         name:  () => localStorage.getItem(K.name) || '',
@@ -21,6 +37,41 @@ window.Session = (function () {
         logout: () => { clear(); location.href = 'index.html'; }
     };
 })();
+
+/* Прозорче за потвърждение в стила на сайта. Връща Promise<boolean>. */
+function confirmBox({ title, text, ok = 'Да', cancel = 'Отказ' }) {
+    return new Promise(resolve => {
+        const safe = window.esc || (x => x);
+        const wrap = document.createElement('div');
+        wrap.className = 'bh-confirm';
+        wrap.innerHTML = `
+            <div class="bh-confirm__box" role="dialog" aria-modal="true" aria-labelledby="bh-confirm-t">
+                <h3 id="bh-confirm-t" class="bh-confirm__title">${safe(title)}</h3>
+                <p class="bh-confirm__text">${safe(text)}</p>
+                <div class="bh-confirm__actions">
+                    <button type="button" class="btn btn--ghost" data-a="0">${safe(cancel)}</button>
+                    <button type="button" class="btn btn--primary" data-a="1">${safe(ok)}</button>
+                </div>
+            </div>`;
+        const prevFocus = document.activeElement;
+        function close(v) {
+            document.removeEventListener('keydown', onKey);
+            wrap.remove();
+            if (prevFocus && prevFocus.focus) prevFocus.focus();
+            resolve(v);
+        }
+        function onKey(e) { if (e.key === 'Escape') close(false); }
+        wrap.addEventListener('click', e => {
+            if (e.target === wrap) return close(false);          // клик извън прозорчето
+            const b = e.target.closest('[data-a]');
+            if (b) close(b.dataset.a === '1');
+        });
+        document.addEventListener('keydown', onKey);
+        document.body.appendChild(wrap);
+        wrap.querySelector('[data-a="0"]').focus();
+    });
+}
+window.confirmBox = confirmBox;
 
 /* Обновява дясната част на навигацията според това дали има вход. */
 function renderAuthNav() {
@@ -51,7 +102,15 @@ function renderAuthNav() {
                 </svg>
             </button>`;
         const lb = document.getElementById('logout-btn');
-        if (lb) lb.addEventListener('click', (e) => { e.preventDefault(); Session.logout(); });
+        if (lb) lb.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const ok = await confirmBox({
+                title: 'Изход от профила',
+                text: 'Сигурен ли си, че искаш да излезеш?',
+                ok: 'Изход', cancel: 'Отказ'
+            });
+            if (ok) Session.logout();
+        });
 
         // „График" в основното меню — само за екипа (служител/шеф).
         // Клиенти и гости не го виждат. Шефът отива директно на раздел „График".
