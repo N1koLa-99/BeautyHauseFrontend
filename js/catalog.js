@@ -85,33 +85,86 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const t = curTab();
         if (groupIdx >= t.groups.length) groupIdx = 0;
-        const g0 = t.groups[groupIdx];
-        const realCat = g0._cat || tabKey;
         panelEl.innerHTML = `
             <div class="cat__body">
-                <aside class="cat__groups">${t.groups.map((g, i) =>
-                    `<button class="cat__group${i === groupIdx ? ' is-active' : ''}" data-i="${i}">
-                        <span>${E(g.name)}</span><span class="cat__group-n">${count(g)}</span><span class="cat__group-arrow">›</span>
-                    </button>`).join('')}</aside>
-                <div class="cat__items">${g0.items.map(it => itemHtml(it, realCat, g0.name)).join('')}</div>
+                <div class="cat__groups-wrap">
+                    <aside class="cat__groups">${t.groups.map((g, i) =>
+                        `<button class="cat__group${i === groupIdx ? ' is-active' : ''}" data-i="${i}">
+                            <span>${E(g.name)}</span><span class="cat__group-n">${count(g)}</span><span class="cat__group-arrow">›</span>
+                        </button>`).join('')}</aside>
+                    <span class="cat__groups-bar" aria-hidden="true"><i></i></span>
+                </div>
+                <div class="cat__items"></div>
             </div>`;
-        panelEl.querySelectorAll('.cat__group').forEach(b =>
-            b.addEventListener('click', () => { groupIdx = +b.dataset.i; renderPanel(); }));
-        panelEl.querySelectorAll('.cat__opts-toggle').forEach(b => b.addEventListener('click', () => {
+        const groupsEl = panelEl.querySelector('.cat__groups');
+        groupsEl.querySelectorAll('.cat__group').forEach(b =>
+            b.addEventListener('click', () => selectGroup(+b.dataset.i)));
+        renderItems();
+        setupScroller(groupsEl);
+        requestAnimationFrame(() => centerActive(groupsEl, false));
+    }
+
+    // Сменя само списъка с процедури — редът с чиповете остава на място (без подскачане).
+    function selectGroup(i) {
+        groupIdx = i;
+        const groupsEl = panelEl.querySelector('.cat__groups');
+        groupsEl.querySelectorAll('.cat__group').forEach(b =>
+            b.classList.toggle('is-active', +b.dataset.i === i));
+        renderItems();
+        centerActive(groupsEl, true);
+    }
+
+    function renderItems() {
+        const g0 = curTab().groups[groupIdx];
+        const itemsEl = panelEl.querySelector('.cat__items');
+        itemsEl.innerHTML = g0.items.map(it => itemHtml(it, g0._cat || tabKey, g0.name)).join('');
+        itemsEl.querySelectorAll('.cat__opts-toggle').forEach(b => b.addEventListener('click', () => {
             const wrap = b.closest('.cat__item').querySelector('.cat__opts');
             if (wrap.hasAttribute('hidden')) { wrap.removeAttribute('hidden'); b.classList.add('is-open'); }
             else { wrap.setAttribute('hidden', ''); b.classList.remove('is-open'); }
         }));
+    }
 
-        // След пре-рендиране скролът на чиповете се нулира — връщаме избрания в изглед.
-        requestAnimationFrame(() => {
-            const wrap = panelEl.querySelector('.cat__groups');
-            const act = panelEl.querySelector('.cat__group.is-active');
-            if (wrap && act && wrap.scrollWidth > wrap.clientWidth) {
-                wrap.scrollLeft += act.getBoundingClientRect().left - wrap.getBoundingClientRect().left
-                    - (wrap.clientWidth / 2 - act.offsetWidth / 2);
-            }
-        });
+    // Избраният чип отива в средата на реда (на телефон, където редът се плъзга).
+    function centerActive(wrap, smooth) {
+        const act = wrap.querySelector('.cat__group.is-active');
+        if (!act || wrap.scrollWidth <= wrap.clientWidth) return;
+        const left = act.offsetLeft - (wrap.clientWidth - act.offsetWidth) / 2;
+        wrap.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+    }
+
+    // Избледнели ръбове + индикатор за позиция + еднократно „побутване", което подсказва плъзгане.
+    let nudged = false;
+    function setupScroller(wrap) {
+        const box = wrap.parentElement;
+        const bar = box.querySelector('.cat__groups-bar i');
+        const update = () => {
+            const max = wrap.scrollWidth - wrap.clientWidth;
+            box.classList.toggle('no-scroll', max <= 2);
+            if (max <= 2) return;
+            wrap.classList.toggle('is-scrolled', wrap.scrollLeft > 4);
+            wrap.classList.toggle('is-end', wrap.scrollLeft >= max - 4);
+            const ratio = wrap.clientWidth / wrap.scrollWidth;
+            const track = bar.parentElement.clientWidth;
+            bar.style.setProperty('--bar-w', (ratio * 100) + '%');
+            bar.style.setProperty('--bar-x', ((wrap.scrollLeft / max) * track * (1 - ratio)) + 'px');
+        };
+        wrap.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        requestAnimationFrame(update);
+
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (nudged || reduce || !('IntersectionObserver' in window)) return;
+        const io = new IntersectionObserver(entries => {
+            if (!entries[0].isIntersecting) return;
+            io.disconnect();
+            if (nudged || wrap.scrollWidth <= wrap.clientWidth || wrap.scrollLeft > 4) return;
+            nudged = true;
+            wrap.classList.add('is-nudge');
+            setTimeout(() => wrap.classList.remove('is-nudge'), 1200);
+        }, { threshold: .9 });
+        io.observe(wrap);
+        wrap.addEventListener('pointerdown', () => { nudged = true; io.disconnect(); }, { once: true });
     }
 
     function itemHtml(it, cat, gname) {

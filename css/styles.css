@@ -316,7 +316,9 @@ em, .italic { font-style: italic; }
 .cat__empty p { max-width: 340px; margin: 0; }
 
 .cat__body { display: grid; grid-template-columns: 250px 1fr; }
-.cat__groups { border-right: 1px solid var(--line); padding: .6rem; display: flex; flex-direction: column; gap: .2rem; }
+.cat__groups-wrap { border-right: 1px solid var(--line); min-width: 0; }
+.cat__groups { padding: .6rem; display: flex; flex-direction: column; gap: .2rem; }
+.cat__groups-bar { display: none; }
 .cat__group {
     display: flex; align-items: center; gap: .5rem; width: 100%; text-align: left;
     border: 1px solid var(--line); background: #fff; cursor: pointer; padding: .7rem .9rem; border-radius: 12px;
@@ -404,12 +406,44 @@ em, .italic { font-style: italic; }
     .cat__tab-ic { width: 44px; height: 44px; }
     .cat__ic-img { width: 23px; height: 23px; }
     .cat__tab-lb { font-size: .72rem; }
-    .cat__body { grid-template-columns: 1fr; }
-    /* Категориите се пренасят на нов ред вместо да се скролват настрани — всички се виждат наведнъж */
-    .cat__groups { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); gap: .35rem; padding: .55rem .5rem; }
-    .cat__group { width: auto; flex: none; white-space: nowrap; padding: .4rem .65rem; font-size: .78rem; }
-    .cat__group-n { font-size: .66rem; padding: .1rem .4rem; }
+    .cat__body { grid-template-columns: minmax(0, 1fr); }
+    /* Подкатегориите са един ред, който се плъзга настрани (като в App Store / Instagram).
+       Последният видим чип нарочно се подава отрязан, а ръбовете избледняват — така
+       окото веднага разбира, че има още вдясно. */
+    .cat__groups-wrap { position: relative; border-right: 0; border-bottom: 1px solid var(--line); }
+    .cat__groups {
+        flex-direction: row; flex-wrap: nowrap; border-right: 0; gap: .4rem;
+        padding: .7rem .9rem 1rem; overflow-x: auto; overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity; scroll-padding-inline: .9rem;
+        scrollbar-width: none; -webkit-overflow-scrolling: touch;
+        --fade-l: 0px; --fade-r: 36px;
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+                mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+    }
+    .cat__groups::-webkit-scrollbar { display: none; }
+    .cat__groups.is-scrolled { --fade-l: 28px; }
+    .cat__groups.is-end { --fade-r: 0px; }
+    .cat__group {
+        width: auto; flex: none; white-space: nowrap; scroll-snap-align: start;
+        padding: .5rem .8rem; font-size: .8rem; border-radius: 999px; box-shadow: none;
+    }
+    .cat__group.is-active { box-shadow: 0 4px 12px rgba(125, 107, 95,.32); }
+    .cat__group-n { font-size: .66rem; padding: .08rem .42rem; min-width: 20px; }
     .cat__group-arrow { display: none; }
+    /* Тънък индикатор под реда — показва колко от списъка се вижда и къде си. */
+    .cat__groups-bar {
+        display: block; position: absolute; left: 50%; width: 56px; margin-left: -28px; bottom: 5px; height: 2px;
+        border-radius: 2px; background: var(--line); overflow: hidden; pointer-events: none;
+        transition: opacity .3s;
+    }
+    .cat__groups-bar i {
+        position: absolute; top: 0; bottom: 0; left: 0; border-radius: 2px; background: var(--rose);
+        width: var(--bar-w, 30%); transform: translateX(var(--bar-x, 0));
+    }
+    .cat__groups-wrap.no-scroll .cat__groups-bar { opacity: 0; }
+    .cat__groups-wrap.no-scroll .cat__groups { -webkit-mask-image: none; mask-image: none; }
+    @keyframes catNudge { 0%, 100% { transform: none; } 45% { transform: translateX(-26px); } }
+    .cat__groups.is-nudge > .cat__group { animation: catNudge .9s var(--ease-out) .15s; }
     .cat__items { padding: .4rem .3rem; gap: .05rem; }
     .cat__item-row { padding: .8rem .7rem; gap: .6rem; align-items: flex-start; }
     .cat__item:not(:last-child)::after { margin: 0 .7rem; }
@@ -702,8 +736,6 @@ em, .italic { font-style: italic; }
 .hero__inner { width: 100%; }
 
 .hero__copy { max-width: 600px; }
-.hero__copy .eyebrow { color: var(--gold-soft); }
-.hero__copy .eyebrow::before { background: var(--gold-soft); }
 .hero__title { margin: 1.4rem 0 0; font-size: clamp(2.6rem, 5.4vw, 4.6rem); font-family: var(--font-display); font-weight: 400; line-height: 1.1; letter-spacing: -0.015em; color: #fff; }
 .hero__title .accent { font-style: italic; font-weight: 500; color: var(--gold-soft); }
 .hero__lead { margin-top: 1.3rem; font-size: 1.12rem; line-height: 1.7; letter-spacing: .012em; color: rgba(255,255,255,.82); max-width: 42ch; }
@@ -721,6 +753,16 @@ em, .italic { font-style: italic; }
 .wd { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .12em; margin-bottom: -.12em; }
 .wd__inner { display: inline-block; transform: translateY(115%); animation: wdIn 1s var(--ease-out) forwards; }
 @keyframes wdIn { to { transform: translateY(0); } }
+
+/* Заглавие „пишеща машина": след първата анимация фразите се изтриват и изписват наново.
+   Височината е заключена по най-дългата фраза (JS), за да не подскача съдържанието отдолу. */
+.hero__title.is-typing .tw-accent { font-style: italic; font-weight: 500; color: var(--gold-soft); }
+.tw-caret {
+    display: inline-block; width: 2px; height: .9em; margin-left: .06em; vertical-align: -.06em;
+    background: var(--gold-soft); border-radius: 1px; animation: twBlink 1s steps(1) infinite;
+}
+.hero__title.is-busy .tw-caret { animation: none; }
+@keyframes twBlink { 50% { opacity: 0; } }
 
 /* Статистика в редица под бутоните, разделена с тънка линия */
 .hero__stats { display: flex; gap: clamp(1.6rem, 4vw, 2.6rem); margin-top: 2.8rem; padding-top: 1.7rem; border-top: 1px solid rgba(255,255,255,.2); }
@@ -1155,14 +1197,18 @@ textarea.input { resize: vertical; min-height: 110px; }
 .bento-tile__meta a { color: #fff; font-weight: 600; font-size: .88rem; display: inline-flex; align-items: center; gap: .3rem; transition: gap .25s var(--ease-out); }
 .bento-tile__meta a:hover { gap: .55rem; }
 .bento-tile--c .bento-tile__body p, .bento-tile--d .bento-tile__body p { display: none; }
+/* ниската широка карта няма място за икона — иначе се реже отгоре */
+.bento-tile--b .bento-tile__body .service-card__icon { display: none; }
 
-/* Тъмен градиент върху снимката — за да се чете белият текст. */
+/* Градиент върху снимката: горе снимката се вижда, долу (където е текстът) е тъмно,
+   за да се чете белият текст. opacity: 1 — иначе наследява .55 от .ph::after и избледнява. */
 .bento-tile__photo::after {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: rgba(10,6,7,.72);
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 1;
+    background: linear-gradient(180deg, rgba(15,10,9,.18) 0%, rgba(15,10,9,.38) 38%, rgba(15,10,9,.82) 68%, rgba(15,10,9,.94) 100%);
 }
-.bento-tile__body h3 { text-shadow: 0 1px 12px rgba(0,0,0,.45); }
-.bento-tile__body p  { text-shadow: 0 1px 8px rgba(0,0,0,.4); }
+.bento-tile__body h3 { text-shadow: 0 1px 12px rgba(0,0,0,.5); }
+.bento-tile__body p  { color: rgba(255,255,255,.93); text-shadow: 0 1px 8px rgba(0,0,0,.5); }
+.bento-tile__meta .pill { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .bento-tile__meta a, .bento-tile__meta .pill { text-shadow: 0 1px 6px rgba(0,0,0,.35); }
 
 /* Tilt-on-hover 3D (JS добавя --rx/--ry чрез pointermove) */
@@ -1403,18 +1449,13 @@ textarea.input { resize: vertical; min-height: 110px; }
     }
     /* Героят остава закотвен долу — както на iPhone SE. На по-високи телефони съдържанието
        самото леко нараства (шрифт и разстояния), за да запълни въздуха с наличното, вместо да го центрира. */
-    .hero__content { align-items: flex-end; padding-bottom: clamp(24px, 5.5svh, 52px); }
+    .hero__content { align-items: flex-end; padding-bottom: clamp(44px, 9svh, 88px); }
     .hero__copy { max-width: none; padding: 0 1.4rem; }
-    /* Надписът "Салон за красота" стои отделно, най-горе вляво — не тежи върху текстовия блок долу */
-    .hero__copy > .eyebrow {
-        position: absolute; top: calc(var(--nav-h) + 18px); left: 1.4rem;
-        font-size: .62rem; margin: 0;
-    }
     .hero__title {
         margin-top: 0; line-height: 1.18; letter-spacing: .002em;
         font-size: clamp(2rem, calc(8.6vw + (100svh - 667px) * .02), 2.9rem);
     }
-    .hero__title .accent { font-style: normal; font-weight: 600; }
+    .hero__title .accent, .hero__title.is-typing .tw-accent { font-style: normal; font-weight: 600; }
     .hero__lead { display: none; }
     .hero__cta {
         flex-direction: column; align-items: stretch; gap: 0;
@@ -1471,6 +1512,13 @@ textarea.input { resize: vertical; min-height: 110px; }
 
     .bento-tile { flex: 0 0 66%; min-width: 0; grid-column: auto; grid-row: auto; aspect-ratio: 4/5; scroll-snap-align: start; }
     .bento-tile--c .bento-tile__body p, .bento-tile--d .bento-tile__body p { display: block; }
+    /* на телефон: по-широка карта и без декоративната икона — текстът диша и снимката се вижда */
+    .bento-tile { flex-basis: 80%; }
+    .bento-tile__body { padding: 1.3rem 1.25rem 1.2rem; }
+    .bento-tile__body .service-card__icon { display: none; }
+    .bento-tile__body h3 { font-size: 1.7rem; line-height: 1.1; }
+    .bento-tile__body p { font-size: .88rem; line-height: 1.5; margin-top: .4rem; }
+    .bento-tile__meta { margin-top: .9rem; }
 
     /* Галерия — статична мрежа 2 в ред, изцяло видима без скрол */
     .gallery { grid-template-columns: 1fr 1fr; grid-template-rows: none; gap: 12px; }
@@ -1535,4 +1583,43 @@ textarea.input { resize: vertical; min-height: 110px; }
     .cookie-banner__inner { gap: .8rem; }
     .cookie-banner__actions { width: 100%; }
     .cookie-banner__actions .btn { width: 100%; }
+}
+
+/* "Защо нас" на телефон — компактни, разчупени карти вместо високи бели кутии:
+   иконата е до текста, картите се редуват зигзаг (отместени и леко завъртени),
+   с огледални асиметрични ъгли, органична форма на иконата и бледа цифра отзад. */
+@media (max-width: 560px) {
+    .feature-grid { grid-template-columns: 1fr; gap: 12px; counter-reset: feat; }
+    .feature-grid > .card {
+        display: grid; grid-template-columns: 50px 1fr; column-gap: 14px; align-items: start;
+        padding: 1.05rem 1.15rem 1.15rem; counter-increment: feat;
+        border-radius: 28px 28px 28px 8px;
+    }
+    .feature-grid > .card .service-card__icon {
+        grid-row: span 2; width: 50px; height: 50px; margin: 0;
+        border-radius: 46% 54% 42% 58% / 52% 44% 56% 48%;
+    }
+    .feature-grid > .card .service-card__icon svg { width: 21px; height: 21px; }
+    .feature-grid > .card h3 { min-height: 0; font-size: 1.06rem; margin: .1rem 0 .3rem; }
+    .feature-grid > .card p { font-size: .84rem; line-height: 1.5; position: relative; z-index: 1; }
+    .feature-grid > .card::after {
+        content: counter(feat, decimal-leading-zero); position: absolute; right: .9rem; bottom: -.9rem;
+        font-family: var(--font-display); font-size: 4.2rem; line-height: 1; font-style: italic;
+        color: var(--rose); opacity: .09; pointer-events: none;
+    }
+
+    /* зигзаг: нечетните вляво, четните вдясно — с огледални ъгли и икона от другата страна */
+    .feature-grid > .card:nth-child(odd) { margin-right: 9%; transform: rotate(-.8deg); }
+    .feature-grid > .card:nth-child(even) {
+        margin-left: 9%; transform: rotate(.8deg);
+        grid-template-columns: 1fr 50px; border-radius: 28px 28px 8px 28px;
+    }
+    .feature-grid > .card:nth-child(even) .service-card__icon { grid-column: 2; grid-row: 1 / span 2; border-radius: 54% 46% 58% 42% / 44% 52% 48% 56%; }
+    .feature-grid > .card:nth-child(even) h3,
+    .feature-grid > .card:nth-child(even) p { grid-column: 1; }
+    .feature-grid > .card:nth-child(even) h3 { grid-row: 1; }
+    .feature-grid > .card:nth-child(even) p { grid-row: 2; }
+    .feature-grid > .card:nth-child(even)::after { right: auto; left: .9rem; }
+    /* лек „застъпващ" ритъм между картите */
+    .feature-grid > .card + .card { margin-top: -2px; }
 }
