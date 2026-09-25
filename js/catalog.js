@@ -20,6 +20,7 @@ function mount(box, opts = {}) {
         nails: IMG('nail.png', 'Нокти'),
         face: IMG('FaceIcon.png', 'Лице'),
         wax: IMG('waxing.png', 'Епилация'),
+        piercing: IMG('PiercingIcon.png', 'Пробиване'),
         all: IMG('AllIcon.png', 'Всички')
     };
 

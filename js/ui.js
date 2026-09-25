@@ -115,9 +115,9 @@ function esc(s) {
 
 /* Локални снимки за членове на екипа, докато нямат photoUrl в базата. */
 const TEAM_PHOTO_BY_NAME = {
-    'Радина Димитрова': 'img/RadinaProfileImage.jpg',
-    'Анелия Красимирова': 'img/AniProfileImage.jpg',
-    'Ирина Загацка': 'img/IrinaProfileImage.jpg'
+    'Радина Димитрова': 'img/RadinaProfilePicture.jpg',
+    'Анелия Красимирова': 'img/AniProfilePicture.jpg',
+    'Ирина Загацка': 'img/IrinaProfilePicture.jpg'
 };
 
 /* Споделена карта за член на екипа (ползва се в index.html и team.html). */

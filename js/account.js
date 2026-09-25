@@ -77,6 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // „30%" или „30% · 20% за някои" (Биорепил, пробиване са с фиксиран процент).
+    const deductLbl = x => {
+        const fx = (x.fixedBossPercents || []).filter(p => p !== 100 - x.percent);
+        return `${100 - x.percent}%` + (fx.length ? ` · ${fx.join('/')}% за някои` : '');
+    };
+
     // Нетно разпределение: работничка = дела ѝ; шефът = своя дял + комисионните.
     // Шефът се разпознава по флага r.isBoss от backend-а (не по session id).
     function computeShares(rows, bossName) {
@@ -84,12 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const bossId = BOSS_ID || Session.userId();
         const byEmp = {};
         rows.forEach(r => {
-            const e = byEmp[r.employeeId] || (byEmp[r.employeeId] = { id: r.employeeId, name: r.employeeName, isBoss: (!!r.isBoss) || (r.employeeId === bossId), rows: [], total: 0, count: 0, worker: 0, boss: 0, pct: r.workerPercent });
+            const e = byEmp[r.employeeId] || (byEmp[r.employeeId] = { id: r.employeeId, name: r.employeeName, isBoss: (!!r.isBoss) || (r.employeeId === bossId), rows: [], total: 0, count: 0, worker: 0, boss: 0, pct: null, fixedPct: r.workerPercent });
+            if (e.pct == null && !r.isFixed) e.pct = r.workerPercent;
             e.rows.push(r); e.total += r.total; e.count += r.count; e.worker += (r.workerShare || 0); e.boss += (r.bossShare || 0);
         });
         const commissionToBoss = rows.reduce((s, r) => s + (r.bossShare || 0), 0);
         const persons = Object.values(byEmp).map(e => ({
-            name: e.name, isBoss: e.isBoss, pct: e.pct,
+            name: e.name, isBoss: e.isBoss, pct: e.pct != null ? e.pct : e.fixedPct,
             net: e.worker + (e.isBoss ? commissionToBoss : 0)
         }));
         if (commissionToBoss > 0 && !persons.some(p => p.isBoss))
@@ -253,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ], earnColor(boss.employeeId)));
             workers.forEach(w => cards.push(earnCard(w.name, false, [
                 { label: 'Изкарала', value: w.gross },
-                { label: `Удръжка (${100 - w.percent}%)`, value: -(w.gross - w.take) },
+                { label: `Удръжка (${deductLbl(w)})`, value: -(w.gross - w.take) },
                 { label: 'Ще вземе', value: w.take, total: true }
             ], earnColor(w.employeeId))));
 
@@ -324,7 +331,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const comm = {}; (commissions || []).forEach(c => comm[c.employeeId] = c.percent);
             const bossShareOf = b => (b.employeeId === BOSS_ID)
                 ? (b.priceSnapshot || 0)
-                : (b.priceSnapshot || 0) * (100 - (comm[b.employeeId] != null ? comm[b.employeeId] : 100)) / 100;
+                : (b.serviceBossPercent != null)   // Биорепил, пробиване… -> фиксиран % за Радина
+                    ? (b.priceSnapshot || 0) * b.serviceBossPercent / 100
+                    : (b.priceSnapshot || 0) * (100 - (comm[b.employeeId] != null ? comm[b.employeeId] : 100)) / 100;
             const bossProjected = (cal || []).filter(b => b.status === 'completed' || b.status === 'booked').reduce((s, b) => s + bossShareOf(b), 0);
 
             dbox.innerHTML = `
@@ -501,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!m) { body.innerHTML = `<div class="alert alert--info">Няма данни за периода.</div>`; return; }
                 body.innerHTML = `<div style="max-width:420px">${earnCard(m.name, false, [
                     { label: 'Изкарала', value: m.gross },
-                    { label: `Удръжка (${100 - m.percent}%)`, value: -(m.gross - m.take) },
+                    { label: `Удръжка (${deductLbl(m)})`, value: -(m.gross - m.take) },
                     { label: 'Ще вземеш', value: m.take, total: true }
                 ], earnColor(m.employeeId))}</div>
                 <p class="hint" style="margin-top:.7rem">${all ? 'Включени са и предстоящите записани часове.' : 'Само проведените часове.'}</p>`;
