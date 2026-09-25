@@ -3,7 +3,7 @@
    Данните се показват като текст; моливчето отваря полетата за редакция.
    ===================================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!Session.isIn()) { location.href = 'auth.html?next=' + encodeURIComponent('profile.html'); return; }
+    if (!Session.isIn()) { Session.goLogin(); return; }
 
     const accForm = document.getElementById('acc-form');
     const pwdForm = document.getElementById('pwd-form');

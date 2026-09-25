@@ -43,12 +43,14 @@ window.API = (function () {
         if (!res.ok) {
             // Изтекла/невалидна сесия при вече влязъл потребител -> автоматичен
             // изход и пренасочване към вход (с връщане към текущата страница).
-            if (res.status === 401 && t) {
+            // Без токен (не си влязъл) -> също към вход, после обратно тук.
+            if (res.status === 401 && !/\/auth(\.html)?$/.test(location.pathname)) {
                 try { if (window.Session) window.Session.clear(); } catch (e) {}
-                const here = (location.pathname.split('/').pop() || 'index.html');
-                if (!/auth\.html/.test(location.pathname))
-                    location.href = 'auth.html?next=' + encodeURIComponent(here) + '&expired=1';
-                throw new Error('Сесията изтече. Влез отново.');
+                if (window.Session && window.Session.goLogin) window.Session.goLogin({ expired: !!t });
+                else location.href = 'auth.html?next=' + encodeURIComponent((location.pathname.split('/').pop() || 'index.html') + location.search) + (t ? '&expired=1' : '');
+                const err = new Error(t ? 'Сесията изтече. Влез отново.' : 'Влез в профила си, за да продължиш.');
+                err.status = 401;
+                throw err;
             }
             // 403: токенът не е за правилния профил (напр. в друг таб си влязъл
             // като служител/шеф). Ако сесията е сменена -> презареждаме страницата.

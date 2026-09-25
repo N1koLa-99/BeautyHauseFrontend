@@ -12,6 +12,39 @@ window.Session = (function () {
     }
     function clear() { Object.values(K).forEach(k => localStorage.removeItem(k)); }
 
+    // Кога изтича токенът (JWT „exp", в ms) — четем го направо от токена.
+    function expOf(t) {
+        try {
+            const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            return p.exp ? p.exp * 1000 : 0;
+        } catch (e) { return 0; }
+    }
+    const expired = t => { const x = expOf(t); return !!x && x <= Date.now() + 15000; };
+
+    // Изтекла сесия при отваряне на страницата -> чистим я веднага, за да не
+    // изглеждаш „влязъл", а после да ти гърми при първото действие.
+    (function dropIfExpired() {
+        const t = localStorage.getItem(K.token);
+        if (t && expired(t)) {
+            clear();
+            try { sessionStorage.setItem('bh_expired', '1'); } catch (e) {}
+        }
+    })();
+
+    // Страници, които изискват вход -> при изтичане отиваме направо на вход.
+    const PROTECTED = /\/(account|profile)(\.html)?$/;
+    const hereUrl = () => (location.pathname.split('/').pop() || 'index.html') + location.search;
+
+    // Преди пренасочване към вход страницата може да си запази състоянието
+    // (напр. избрания час) — регистрира се с Session.beforeLogin(fn).
+    const beforeLoginHooks = [];
+    function goLogin(opts = {}) {
+        if (/\/auth(\.html)?$/.test(location.pathname)) return;
+        beforeLoginHooks.forEach(fn => { try { fn(); } catch (e) {} });
+        const q = 'next=' + encodeURIComponent(opts.next || hereUrl()) + (opts.expired ? '&expired=1' : '');
+        location.href = 'auth.html?' + q;
+    }
+
     // Токенът, с който е заредена ТАЗИ страница. Ако в друг таб някой излезе
     // или влезе с друг профил, страницата се презарежда -> няма заявки с чужд
     // токен (оттам идваше 403 при отмяна на час).
@@ -26,11 +59,38 @@ window.Session = (function () {
     });
     window.addEventListener('pageshow', e => { if (e.persisted) syncIfChanged(); });
 
+    // Сесията изтича, докато страницата е отворена -> излизаме навреме:
+    // на защитена страница пренасочваме към вход, иначе само обновяваме менюто.
+    function onExpire() {
+        clear(); pageToken = null;
+        try { sessionStorage.setItem('bh_expired', '1'); } catch (e) {}
+        if (PROTECTED.test(location.pathname)) goLogin({ expired: true });
+        else if (typeof renderAuthNav === 'function') renderAuthNav();
+    }
+    function armExpiry() {
+        const t = localStorage.getItem(K.token);
+        const x = t ? expOf(t) : 0;
+        if (!x) return;
+        // setTimeout не приема > ~24 дни; проверяваме пак при връщане към таба.
+        const ms = Math.min(x - Date.now() - 15000, 2 ** 31 - 1);
+        if (ms <= 0) onExpire(); else setTimeout(armExpiry, ms);
+    }
+    armExpiry();
+    document.addEventListener('visibilitychange', () => {
+        const t = localStorage.getItem(K.token);
+        if (document.visibilityState === 'visible' && t && expired(t)) onExpire();
+    });
+
     return {
         save:  (auth) => { save(auth); pageToken = auth.token; },
         clear: () => { clear(); pageToken = null; },
         changed,
-        isIn:  () => !!localStorage.getItem(K.token),
+        isIn:  () => { const t = localStorage.getItem(K.token); return !!t && !expired(t); },
+        // Към вход и обратно тук след това: Session.goLogin({ expired, next }).
+        goLogin,
+        beforeLogin: (fn) => beforeLoginHooks.push(fn),
+        // „Сесията изтече" — показва се веднъж на страницата за вход.
+        takeExpiredFlag: () => { try { const v = sessionStorage.getItem('bh_expired'); sessionStorage.removeItem('bh_expired'); return !!v; } catch (e) { return false; } },
         role:  () => localStorage.getItem(K.role) || '',
         name:  () => localStorage.getItem(K.name) || '',
         userId: () => parseInt(localStorage.getItem(K.id), 10) || 0,

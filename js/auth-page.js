@@ -4,8 +4,10 @@
    (?next=booking.html) или към "Моите часове".
    ===================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
-    // Ако вече е влязъл, няма смисъл да е тук.
-    if (Session.isIn()) { location.href = 'account.html'; return; }
+    // Връщане само към страница от сайта (не към чужд адрес през ?next=).
+    const safeNext = v => (v && /^[\w-]+(\.html)?(\?[^#]*)?$/.test(v)) ? v : 'account.html';
+    // Ако вече е влязъл, няма смисъл да е тук -> направо където е тръгнал.
+    if (Session.isIn()) { location.href = safeNext(new URLSearchParams(location.search).get('next')); return; }
 
     const tabs   = document.getElementById('auth-tabs');
     const thumb  = document.getElementById('tabs-thumb');
@@ -17,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetF  = document.getElementById('reset-form');
     const note   = document.getElementById('auth-note');
     const params = new URLSearchParams(location.search);
-    const next   = params.get('next') || 'account.html';
+    const next   = safeNext(params.get('next'));
     let pendingEmail = null; // имейл, който чака потвърждение
 
     // --- Позициониране на плъзгача под активния таб ---
@@ -74,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (params.get('tab') === 'register') activate('register');
 
     // Ако сесията е изтекла и потребителят е върнат тук.
-    if (params.get('expired')) note.innerHTML = `<div class="alert alert--info">Сесията изтече. Влез отново, за да продължиш.</div>`;
+    if (Session.takeExpiredFlag() || params.get('expired')) note.innerHTML = `<div class="alert alert--info">Сесията изтече. Влез отново, за да продължиш.</div>`;
 
     // --- Помощник за бутон "зареждане" ---
     function busy(form, on) {

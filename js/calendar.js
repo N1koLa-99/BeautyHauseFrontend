@@ -38,12 +38,13 @@ window.Calendar = (function () {
     const addMinIso = (iso, mins) => { const d = new Date(iso); d.setMinutes(d.getMinutes() + mins); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`; };
     const WDNAMES = ['неделя', 'понеделник', 'вторник', 'сряда', 'четвъртък', 'петък', 'събота'];
     // Видимата част от денонощието в графика: 08:00–20:00 (извън нея салонът не работи).
-    const DAY_S = 8 * 60, DAY_E = 20 * 60, SPAN = DAY_E - DAY_S;
+    const DAY_S = 7 * 60 + 30, DAY_E = 20 * 60 + 30, SPAN = DAY_E - DAY_S;   // видимо: 07:30–20:30 (по половин час буфер)
+    const BOOK_S = 8 * 60, BOOK_E = 20 * 60;                                 // записване: 08:00–20:00
     const clampM = m => Math.max(DAY_S, Math.min(DAY_E, m));
     // 24-часови опции за час (стъпка 30 мин) — гарантира 24ч формат навсякъде.
     const timeOptions = (selected) => {
         let o = '';
-        for (let m = DAY_S; m <= DAY_E; m += 30) {
+        for (let m = BOOK_S; m <= BOOK_E; m += 30) {
             const v = minToHHMM(m);
             o += `<option value="${v}"${v === selected ? ' selected' : ''}>${v}</option>`;
         }
@@ -57,8 +58,9 @@ window.Calendar = (function () {
     const EMP_COLORS = ['#2F6BB0', '#9C6614', '#9B3E7D', '#1F7A6B', '#6B4BA8', '#5E7A1E'];
     const empColor = id => EMP_COLORS[Math.abs(+id || 0) % EMP_COLORS.length];
 
-    // Работно време на салона (0 = неделя). Извън него решетката е сива.
-    const SALON_HOURS = { 0: null, 1: [540, 1110], 2: [540, 1110], 3: [540, 1110], 4: [540, 1110], 5: [540, 1110], 6: [600, 870] };
+    // Бялата (работна) част на графика: пн–сб 08:00–20:00 — толкова може да се записва ръчно.
+    // Неделя остава сива (салонът е затворен), но пак може да се запише час при нужда.
+    const SALON_HOURS = { 0: null, 1: [480, 1200], 2: [480, 1200], 3: [480, 1200], 4: [480, 1200], 5: [480, 1200], 6: [480, 1200] };
 
     // Геометрия на решетката. --hh = пиксели за 1 час, --cw = ширина на колона.
     const HH0 = 60, CW0 = 105, GUT = 50, HEAD = 46, SNAP = 15;
@@ -558,6 +560,7 @@ window.Calendar = (function () {
             if (grid) {
                 grid.style.gridTemplateColumns = `${GUT}px repeat(${+root.dataset.n || 1}, ${cw.toFixed(2)}px)`;
                 grid.style.gridTemplateRows = `${HEAD}px ${(hh * SPAN / 60).toFixed(2)}px`;
+                grid.style.setProperty('--sc-hh', hh.toFixed(3) + 'px');   // линиите по часове (графикът започва от :30)
             }
             root.classList.toggle('is-small', hh < 50);
             root.classList.toggle('is-tiny', hh < 30);
@@ -763,7 +766,7 @@ window.Calendar = (function () {
             const wh = workHours[parseK(selKey).getDay()];
             let m = wh ? wh[0] : 9 * 60;
             if (selKey === todayKey()) m = Math.max(m, Math.ceil(nowMin() / SNAP) * SNAP);
-            openAddModal(minToHHMM(Math.max(DAY_S, Math.min(m, DAY_E - SNAP))), { dayKey: selKey });
+            openAddModal(minToHHMM(Math.max(BOOK_S, Math.min(m, BOOK_E - SNAP))), { dayKey: selKey });
         });
 
         // ================= Докосване / мишка върху решетката =================
@@ -791,21 +794,21 @@ window.Calendar = (function () {
         // Маркиране на период: задържане + плъзгане (телефон) / влачене (мишка).
         let sel = null;
         function beginSelect(col, clientY) {
-            const a = Math.max(DAY_S, Math.min(DAY_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
+            const a = Math.max(BOOK_S, Math.min(BOOK_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
             const el = document.createElement('div');
             el.className = 'sc-sel';
             col.appendChild(el);
-            sel = { col, a, s: a, e: Math.min(DAY_E, a + 2 * SNAP), el };
+            sel = { col, a, s: a, e: Math.min(BOOK_E, a + 2 * SNAP), el };
             paintSel();
             root.classList.add('is-selecting');
             if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {}
         }
         function updateSelect(clientY) {
             if (!sel) return;
-            const m = Math.max(DAY_S, Math.min(DAY_E, minAt(sel.col, clientY)));
+            const m = Math.max(BOOK_S, Math.min(BOOK_E, minAt(sel.col, clientY)));
             if (m >= sel.a) { sel.s = sel.a; sel.e = Math.max(sel.a + SNAP, Math.ceil(m / SNAP) * SNAP); }
             else { sel.s = Math.floor(m / SNAP) * SNAP; sel.e = sel.a + SNAP; }
-            sel.e = Math.min(DAY_E, sel.e);
+            sel.e = Math.min(BOOK_E, sel.e);
             paintSel();
         }
         function paintSel() {
@@ -839,7 +842,7 @@ window.Calendar = (function () {
             asRaf = requestAnimationFrame(autoScroll);
         }
         function tapAdd(col, clientY) {
-            const m = Math.max(DAY_S, Math.min(DAY_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
+            const m = Math.max(BOOK_S, Math.min(BOOK_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
             openAddModal(minToHHMM(m), { dayKey: col.dataset.k, empId: col.dataset.emp ? +col.dataset.emp : undefined });
         }
 
@@ -987,7 +990,7 @@ window.Calendar = (function () {
             const SPECIAL = canRest() ? `<option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>` : '';
 
             let timeOpts = '';
-            for (let mm = DAY_S; mm < DAY_E; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
+            for (let mm = BOOK_S; mm < BOOK_E; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
             const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${presetEmp === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
             const staticSvc = pickEmp ? '' : (cfg.services || []).map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('');
             const REST_OPTS = [0, 5, 10, 15, 20, 30, 45, 60];

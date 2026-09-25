@@ -5,7 +5,7 @@
    - шеф     → табло с раздели: Табло · Статистики · График · Настройки.
    ===================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
-    if (!Session.isIn()) { location.href = 'auth.html?next=' + encodeURIComponent('account.html'); return; }
+    if (!Session.isIn()) { Session.goLogin(); return; }
 
     const role = Session.role();
     const list = document.getElementById('acc-list');

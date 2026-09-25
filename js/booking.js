@@ -425,19 +425,33 @@ document.addEventListener('DOMContentLoaded', () => {
     $('bk-confirm').addEventListener('click', async () => {
         if (!(state.emp && state.srv && state.slot)) return;
 
-        // Не е вписан -> пазим избора и го връщаме след вход/регистрация.
+        // Не е вписан (или сесията е изтекла) -> пазим избора, пращаме към вход
+        // и след това часът се довършва сам.
         if (!Session.isIn()) {
             savePending();
-            location.href = 'auth.html?next=' + encodeURIComponent('booking.html');
+            Session.goLogin({ next: 'booking.html' });
             return;
         }
+        // Влязъл е служител/шеф -> предлагаме вход с клиентски профил.
         if (Session.role() !== 'client') {
-            $('bk-note-msg').innerHTML = `<div class="alert alert--info">Само клиентски профил може да запазва часове.</div>`;
+            const ok = await confirmBox({
+                title: 'Влязъл си като служител',
+                text: 'Онлайн часове се запазват с клиентски профил. Да излезеш и да влезеш като клиент? Избраният час ще се запази.',
+                ok: 'Влез като клиент', cancel: 'Отказ'
+            });
+            if (!ok) return;
+            savePending();
+            Session.clear();
+            Session.goLogin({ next: 'booking.html' });
             return;
         }
 
         await doConfirm();
     });
+
+    // Изтекла сесия по време на запазването (API-то пренасочва към вход) ->
+    // избраното се пази и се довършва след влизане.
+    Session.beforeLogin(() => { if (state.emp && state.srv && state.slot) savePending(); });
 
     // Ако се връщаме логнати с чакаща резервация (след вход/регистрация от
     // тази страница) — възстановяваме избора, показваме резюме и пращаме
