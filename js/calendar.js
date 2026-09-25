@@ -125,7 +125,10 @@ window.Calendar = (function () {
             const idx = svcCatalog();
             return [...sel.options].filter(o => o.value).map(o => {
                 const m = o.text.match(/^(.*) · (\d+) мин$/);
-                const name = m ? m[1] : o.text, c = idx.get(svcNorm(name));
+                const name = m ? m[1] : o.text;
+                if (o.value.startsWith('__'))
+                    return { v: o.value, name, dur: null, cat: 'Почивка', group: 'Почивка', order: -1, hay: toLat(`${name} почивка почивен ден`) };
+                const c = idx.get(svcNorm(name));
                 return { v: o.value, name, dur: m ? +m[2] : null, cat: c ? c.cat : 'Други', group: c ? c.group : 'Други', order: c ? c.order : 1e6,
                     hay: toLat(`${name} ${c ? c.cat + ' ' + c.group : ''}`) };
             }).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'bg'));
@@ -160,7 +163,7 @@ window.Calendar = (function () {
             }
             let g = null;
             all.filter(it => (!cat || it.cat === cat) && words.every(w => it.hay.includes(w))).forEach(it => {
-                const h = it.group === 'Други' ? 'Други' : (cat ? it.group : `${it.cat} · ${it.group}`);
+                const h = it.group === 'Други' ? 'Други' : ((cat || it.cat === it.group) ? it.group : `${it.cat} · ${it.group}`);
                 if (h !== g) { g = h; html += `<div class="svp-h">${esc(h)}</div>`; }
                 html += row(it);
             });
@@ -223,6 +226,7 @@ window.Calendar = (function () {
         const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
         let selKey = todayKey();
         let data = {};            // 'YYYY-MM-DD' -> [bookings]
+        let offs = {};            // 'YYYY-MM-DD' -> [почивки {kind:'rest'} / почивен ден {kind:'off'}]
         let empFilter = null;     // избрана специалистка (null = всички)
         let view = VIEWS.some(v => v[0] === lsGet('bh_sc_view')) ? lsGet('bh_sc_view') : 'week';
         const clampZoom = z => Math.min(Z_MAX, Math.max(Z_MIN, z));
@@ -294,6 +298,10 @@ window.Calendar = (function () {
         const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
         const endMin = b => b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30;
         const listFor = k => { const a = data[k] || []; return empFilter != null ? a.filter(b => b.employeeId === empFilter) : a; };
+        const offsFor = k => { const a = offs[k] || []; return empFilter != null ? a.filter(o => o.employeeId === empFilter) : a; };
+        // Почивки/почивни дни: за служител (собствения график) и шефа (чужд / целия салон).
+        const canRest = () => !!(cfg.editable && (cfg.staffId || hasEmps()));
+        const ITEM_SEL = '.sc-bk, .sc-dayoff, .sc-offtag';
 
         function visibleDays() {
             const sd = parseK(selKey);
@@ -316,9 +324,20 @@ window.Calendar = (function () {
         async function fetchMonthInto(Y, M0) {
             const from = key(Y, M0, 1);
             const to = `${M0 === 11 ? Y + 1 : Y}-${pad((M0 + 1) % 12 + 1)}-01`;
-            const items = await cfg.fetchMonth(from, to);
-            for (const dk of Object.keys(data)) { const dt = parseK(dk); if (dt.getFullYear() === Y && dt.getMonth() === M0) delete data[dk]; }
+            const rangeQ = hasEmps() ? 'all=true' : `employeeId=${cfg.staffId}`;
+            const [items, rng] = await Promise.all([
+                cfg.fetchMonth(from, to),
+                // Почивките не са задължителни за графика -> грешка тук не спира зареждането.
+                canRest() ? window.API.get(`/schedule/range?${rangeQ}&from=${from}&to=${to}`).catch(() => null) : null
+            ]);
+            const inMonth = dk => { const dt = parseK(dk); return dt.getFullYear() === Y && dt.getMonth() === M0; };
+            for (const dk of Object.keys(data)) if (inMonth(dk)) delete data[dk];
+            for (const dk of Object.keys(offs)) if (inMonth(dk)) delete offs[dk];
             (items || []).forEach(b => { const k = b.startAt.slice(0, 10); (data[k] = data[k] || []).push(b); });
+            if (rng) {
+                (rng.blocks || []).forEach(r => { const k = r.startAt.slice(0, 10); (offs[k] = offs[k] || []).push({ kind: 'rest', ...r }); });
+                (rng.offDays || []).forEach(o => { const k = String(o.date).slice(0, 10); (offs[k] = offs[k] || []).push({ kind: 'off', employeeId: o.employeeId, employeeName: o.employeeName, k }); });
+            }
             loadedMonths.add(`${Y}-${M0}`);
         }
         // Зарежда липсващите видими месеци (force = презарежда ги пак — след промяна).
@@ -384,32 +403,57 @@ window.Calendar = (function () {
             return days.map(d => ({ k: kOf(d), d, emp: null }));
         }
 
-        function blocksHtml(items) {
-            const arr = items.slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
+        function blocksHtml(items, rests) {
+            const arr = items.map(b => ({ b, s: toMin(b.startAt), e: endMin(b) }))
+                .concat((rests || []).map(r => ({ r, s: toMin(r.startAt), e: r.endAt.slice(0, 10) > r.startAt.slice(0, 10) ? 1440 : toMin(r.endAt) })))
+                .sort((x, y) => x.s - y.s || x.e - y.e);
             const laneEnd = [], laneOf = [];
-            arr.forEach((b, i) => {
-                const s = toMin(b.startAt), e = endMin(b);
-                let l = laneEnd.findIndex(x => x <= s);
-                if (l === -1) { l = laneEnd.length; laneEnd.push(e); } else laneEnd[l] = e;
+            arr.forEach((x, i) => {
+                let l = laneEnd.findIndex(v => v <= x.s);
+                if (l === -1) { l = laneEnd.length; laneEnd.push(x.e); } else laneEnd[l] = x.e;
                 laneOf[i] = l;
             });
             const lanes = Math.max(1, laneEnd.length), dl = Math.min(lanes, 8);
-            return arr.map((b, i) => {
-                const s = toMin(b.startAt), e = endMin(b);
+            return arr.map((x, i) => {
+                const { s, e } = x, w = 100 / lanes, left = laneOf[i] * w;
+                const pos = `top:${pct(s)};height:calc(${pct(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px)`;
+                if (x.r) {
+                    // Почивка — щрихована, в цвета на специалистката.
+                    const r = x.r;
+                    const who = cfg.showEmployee && empFilter == null ? esc(firstName(r.employeeName)) : '';
+                    return `<button type="button" class="sc-bk sc-rest" data-l="${dl}" data-rest="${r.id}" data-k="${r.startAt.slice(0, 10)}" style="${pos};--bc:${empColor(r.employeeId)}">
+                    <span class="sc-bk__t">${r.startAt.slice(11, 16)}–${minToHHMM(e)}</span>
+                    <span class="sc-bk__s">Почивка</span>
+                    ${who ? `<span class="sc-bk__c">${who}</span>` : ''}
+                </button>`;
+                }
+                const b = x.b;
                 const flagged = b.noShowCount > 0, noShow = b.status === 'no_show';
                 const c = (flagged || noShow) ? '#D9534F' : empColor(b.employeeId);
-                const w = 100 / lanes, left = laneOf[i] * w;
                 const mark = flagged ? ' ⚠' : (b.status === 'completed' ? ' ✓' : '');
                 const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}`;
                 const online = b.isOnline
                     ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
-                return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="top:${pct(s)};height:calc(${pct(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px);--bc:${c}">
+                return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="${pos};--bc:${c}">
                     <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
                     <span class="sc-bk__s">${esc(b.serviceName)}</span>
                     <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
                     ${online}
                 </button>`;
             }).join('');
+        }
+
+        // Почивен ден в колоната: за една специалистка -> щрихова зона през работното време;
+        // в обща колона (няколко специалистки) -> етикетче „Почивен · Име" най-горе.
+        function dayOffHtml(c, wh) {
+            const list = offsFor(c.k).filter(o => o.kind === 'off' && (!c.emp || o.employeeId === c.emp.id));
+            if (!list.length) return '';
+            const [ws, we] = wh || [540, 1110];
+            const single = !!c.emp || !cfg.showEmployee || empFilter != null;
+            if (single)
+                return `<button type="button" class="sc-dayoff" data-off="${list[0].employeeId}" data-k="${c.k}" style="top:${pct(ws)};height:${pct(we - ws)};--bc:${empColor(list[0].employeeId)}"><span>Почивен ден</span></button>`;
+            return `<div class="sc-offtags" style="top:${pct(ws)}">${list.map(o =>
+                `<button type="button" class="sc-offtag" data-off="${o.employeeId}" data-k="${c.k}" style="--bc:${empColor(o.employeeId)}">Почивен · ${esc(firstName(o.employeeName))}</button>`).join('')}</div>`;
         }
 
         function renderGrid() {
@@ -424,9 +468,10 @@ window.Calendar = (function () {
                     heads += `<button type="button" class="sc-hd${isToday ? ' is-today' : ''}${isSel ? ' is-sel' : ''}" data-k="${c.k}"><span>${WD_S[c.d.getDay()]}</span> <b>${c.d.getDate()}</b><span class="sc-hd__m"> ${MON_S[c.d.getMonth()]}</span></button>`;
                 }
                 const items = listFor(c.k).filter(b => !c.emp || b.employeeId === c.emp.id);
+                const rests = offsFor(c.k).filter(o => o.kind === 'rest' && (!c.emp || o.employeeId === c.emp.id));
                 const work = wh ? `<div class="sc-work" style="top:${pct(wh[0])};height:${pct(wh[1] - wh[0])}"></div>` : '';
                 const nowL = c.k === tk ? `<div class="sc-now" style="top:${pct(nm)}"></div>` : '';
-                bodies += `<div class="sc-col" data-k="${c.k}"${c.emp ? ` data-emp="${c.emp.id}"` : ''}>${work}<div class="sc-lines"></div>${blocksHtml(items)}${nowL}</div>`;
+                bodies += `<div class="sc-col" data-k="${c.k}"${c.emp ? ` data-emp="${c.emp.id}"` : ''}>${work}<div class="sc-lines"></div>${dayOffHtml(c, wh)}${blocksHtml(items, rests)}${nowL}</div>`;
             });
             let gut = '';
             // Надпис на всеки 15 мин: кръгъл час (плътно), :30 и :15/:45 (по-дребно).
@@ -589,6 +634,8 @@ window.Calendar = (function () {
                 const k = kOf(d), arr = listFor(k).slice().sort((a, b) => a.startAt.localeCompare(b.startAt));
                 const other = d.getMonth() !== sd.getMonth();
                 const cnt = arr.length;
+                const offTags = offsFor(k).filter(o => o.kind === 'off').map(o =>
+                    `<span class="sc-mi sc-mi--off" style="--bc:${empColor(o.employeeId)}">Почивен${cfg.showEmployee && empFilter == null ? ' · ' + esc(firstName(o.employeeName)) : ' ден'}</span>`).join('');
                 const dot = cnt ? (cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76')) : '';
                 const items = arr.slice(0, 3).map(b => {
                     const c = (b.noShowCount > 0 || b.status === 'no_show') ? '#D9534F' : empColor(b.employeeId);
@@ -596,7 +643,7 @@ window.Calendar = (function () {
                 }).join('');
                 return `<button type="button" class="sc-mc${other ? ' is-other' : ''}${workHours[d.getDay()] ? '' : ' is-off'}${k === tk ? ' is-today' : ''}${k === selKey ? ' is-sel' : ''}" data-k="${k}">
                     <span class="sc-mc__n">${d.getDate()}${dot ? `<i style="background:${dot}"></i>` : ''}</span>
-                    ${items}${cnt > 3 ? `<span class="sc-mc__more">+${cnt - 3} още</span>` : ''}
+                    ${offTags}${items}${cnt > 3 ? `<span class="sc-mc__more">+${cnt - 3} още</span>` : ''}
                 </button>`;
             }).join('');
             root.dataset.n = 7;
@@ -715,6 +762,10 @@ window.Calendar = (function () {
         let suppressClickUntil = 0;
         scroll.addEventListener('click', (e) => {
             if (Date.now() < suppressClickUntil) return;
+            const rs = e.target.closest('[data-rest]');
+            if (rs) { openRestModal((offs[rs.dataset.k] || []).find(x => x.kind === 'rest' && x.id === +rs.dataset.rest)); return; }
+            const od = e.target.closest('[data-off]');
+            if (od) { openRestModal((offs[od.dataset.k] || []).find(x => x.kind === 'off' && x.employeeId === +od.dataset.off)); return; }
             const bk = e.target.closest('.sc-bk');
             if (bk) { const b = (data[bk.dataset.k] || []).find(x => x.id === +bk.dataset.id); openBookingModal(b); return; }
             if (e.target.closest('.sc-corner')) { toggleCompress(); return; }
@@ -814,7 +865,7 @@ window.Calendar = (function () {
             const col = e.target.closest('.sc-col');
             const slide = slideEl(); if (slide) slide.style.transition = 'none';
             t = { mode: 'pending', x0: p.clientX, y0: p.clientY, dx: 0, col, t0: Date.now(), fling: Date.now() - lastScrollAt < 120 };
-            if (col && canAdd() && !e.target.closest('.sc-bk'))
+            if (col && canAdd() && !e.target.closest(ITEM_SEL))
                 lpTimer = setTimeout(() => { if (t && t.mode === 'pending') { t.mode = 'select'; beginSelect(col, t.y0); } }, 380);
         }, { passive: true });
 
@@ -858,7 +909,7 @@ window.Calendar = (function () {
             const was = t; t = null;
             if (was.mode === 'select') finishSelect();
             else if (was.mode === 'swipe') commitSwipe(was.dx);
-            else if (was.mode === 'pending' && was.col && !was.fling && canAdd() && !e.target.closest('.sc-bk')) {
+            else if (was.mode === 'pending' && was.col && !was.fling && canAdd() && !e.target.closest(ITEM_SEL)) {
                 // Кратко докосване на празно място -> нов час в този момент.
                 suppressClickUntil = Date.now() + 450;
                 tapAdd(was.col, was.y0);
@@ -875,7 +926,7 @@ window.Calendar = (function () {
         scroll.addEventListener('mousedown', (e) => {
             if (e.button !== 0 || Date.now() - lastTouchAt < 800) return;
             const col = e.target.closest('.sc-col');
-            if (!col || e.target.closest('.sc-bk') || !canAdd()) return;
+            if (!col || e.target.closest(ITEM_SEL) || !canAdd()) return;
             e.preventDefault();
             mSel = { col, y0: e.clientY, moved: false };
         });
@@ -914,38 +965,48 @@ window.Calendar = (function () {
 
         // Попъп за добавяне на час (клик на празно място / маркиран период в графика).
         // В „Целият салон" има и избор на специалист (за кого е часът).
+        // В списъка с услуги има и „Почивка" (блокира време) и „Почивен ден" (цял ден).
         // opts: { dayKey, dur (маркирани минути), empId (от колоната), onClose }
+        const REST = 15; // стандартна почивка след процедура (като в backend-а)
         function openAddModal(hhmm, opts = {}) {
             document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
             const pickEmp = !!(cfg.showEmployee && cfg.employees && cfg.employees.length && cfg.servicesFor);
             const dayKey = opts.dayKey || selKey;
             const dd = parseK(dayKey);
             const presetEmp = opts.empId != null ? opts.empId : empFilter;
+            const SPECIAL = canRest() ? `<option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>` : '';
 
             let timeOpts = '';
             for (let mm = 0; mm < 24 * 60; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
             const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${presetEmp === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
             const staticSvc = pickEmp ? '' : (cfg.services || []).map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('');
+            const REST_OPTS = [0, 5, 10, 15, 20, 30, 45, 60];
 
             const backdrop = document.createElement('div');
             backdrop.className = 'cal-modal-backdrop';
             backdrop.innerHTML = `
                 <div class="cal-modal cal-modal--add">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
-                    <div style="font-weight:800;font-size:1.15rem">Нов час</div>
+                    <div class="ad-title" style="font-weight:800;font-size:1.15rem">Нов час</div>
                     <div class="hint" style="margin:.15rem 0 .85rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
                     <div class="ad-form">
                         ${pickEmp ? `<label class="field"><span class="ad-lbl">Специалист</span>
                             <select class="select ad-emp">${empOpts}</select></label>` : ''}
                         <label class="field"><span class="ad-lbl">Услуга</span>
-                            <select class="select ad-svc">${pickEmp ? '<option value="">Избери специалист…</option>' : (staticSvc || '<option value="">Няма зададени услуги</option>')}</select></label>
-                        <div class="ad-pair ad-pair--time">
+                            <select class="select ad-svc">${pickEmp ? '<option value="">Избери специалист…</option>' : (staticSvc || '<option value="">Няма зададени услуги</option>') + SPECIAL}</select></label>
+                        <div class="ad-pair ad-pair--time ad-row-time">
                             <label class="field"><span class="ad-lbl">Начален час</span>
                                 <select class="select ad-time">${timeOpts}</select></label>
-                            <label class="field"><span class="ad-lbl" title="Процедура + почивка">Продължителност <small>(+ почивка)</small></span>
+                            <label class="field"><span class="ad-lbl ad-dur-lbl">Процедура</span>
                                 <select class="select ad-dur"></select></label>
                         </div>
-                        <div class="ad-pair">
+                        <div class="ad-pair ad-pair--time ad-row-rest">
+                            <label class="field"><span class="ad-lbl" title="Свободно време след процедурата, преди следващия клиент">Почивка след</span>
+                                <select class="select ad-rest"></select></label>
+                            <div class="ad-sum"></div>
+                        </div>
+                        <div class="ad-off-note hint" style="display:none">Целият ден ще е почивен — никой няма да може да си запише час. Отменя се с клик върху деня в графика.</div>
+                        <div class="ad-pair ad-row-client">
                             <label class="field"><span class="ad-lbl">Име на клиента</span>
                                 <input class="input ad-name" type="text" placeholder="напр. Мария"></label>
                             <label class="field"><span class="ad-lbl">Телефон <small>(по избор)</small></span>
@@ -960,29 +1021,59 @@ window.Calendar = (function () {
             backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
 
-            const empSel = backdrop.querySelector('.ad-emp');
-            const svcSel = backdrop.querySelector('.ad-svc');
-            const durSel = backdrop.querySelector('.ad-dur');
-            const msg = backdrop.querySelector('.ad-msg');
-            const REST = 10; // почивка по подразбиране след процедурата
-
-            // Опции за продължителност в графика: процедура (без почивка),
-            // процедура + почивка (по подразбиране) и още варианти за удължаване.
-            function fillDur(procMin) {
-                const p = procMin || 30;
-                const set = new Set([p, p + REST, p + 20, p + 30, p + 45, p + 60, p + 90]);
-                // Маркиран период в графика -> той е продължителността по подразбиране.
-                if (opts.dur) set.add(opts.dur);
-                const def = opts.dur || p + REST;
-                durSel.innerHTML = [...set].sort((a, b) => a - b).map(m => {
-                    const tag = m === opts.dur ? ' · маркирано в графика' : (m === p ? ' (само процедура)' : (m === p + REST ? ' · препоръчано' : ''));
-                    return `<option value="${m}"${m === def ? ' selected' : ''}>${m} мин${tag}</option>`;
-                }).join('');
-            }
+            const $ = sel => backdrop.querySelector(sel);
+            const empSel = $('.ad-emp'), svcSel = $('.ad-svc'), timeSel = $('.ad-time');
+            const durSel = $('.ad-dur'), restSel = $('.ad-rest'), sumEl = $('.ad-sum');
+            const saveBtn = $('.ad-save'), msg = $('.ad-msg');
+            const show = (sel, on) => { $(sel).style.display = on ? '' : 'none'; };
+            const mode = () => svcSel.value === '__rest' ? 'rest' : (svcSel.value === '__off' ? 'off' : 'svc');
+            const whEnd = () => { const wh = workHours[dd.getDay()]; return wh ? wh[1] : 1110; };
+            const numOpts = (vals, def, label) => [...new Set(vals)].sort((a, b) => a - b)
+                .map(m => `<option value="${m}"${m === def ? ' selected' : ''}>${label(m)}</option>`).join('');
 
             // Карта service_id -> времетраене на процедурата.
             let svcDur = {};
             (cfg.services || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; });
+
+            function fillDur() {
+                const md = mode();
+                if (md === 'rest') {
+                    const def = opts.dur || 60;
+                    durSel.innerHTML = numOpts([15, 30, 45, 60, 90, 120, 180, 240, def], def,
+                        m => durLabel(m) + (m === opts.dur ? ' · маркирано' : '')) + `<option value="end">до края на деня</option>`;
+                } else if (md === 'svc') {
+                    // Маркиран период -> процедурата остава стандартна, а разликата е почивка.
+                    const p = svcDur[+svcSel.value] || 30;
+                    let proc = p, rest = REST;
+                    if (opts.dur) {
+                        if (opts.dur < p) { proc = opts.dur; rest = 0; }
+                        else if (opts.dur - p <= 120) rest = opts.dur - p;
+                        else proc = opts.dur - REST;
+                    }
+                    durSel.innerHTML = numOpts([p, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, proc], proc,
+                        m => `${m} мин${m === p ? ' (стандартно)' : ''}`);
+                    restSel.innerHTML = numOpts([...REST_OPTS, rest], rest,
+                        m => (m ? `${m} мин` : 'без почивка'));
+                }
+                paintMode();
+            }
+            function paintMode() {
+                const md = mode();
+                show('.ad-row-time', md !== 'off');
+                show('.ad-row-rest', md === 'svc');
+                show('.ad-row-client', md === 'svc');
+                show('.ad-off-note', md === 'off');
+                $('.ad-dur-lbl').textContent = md === 'rest' ? 'Продължителност' : 'Процедура';
+                $('.ad-title').textContent = md === 'svc' ? 'Нов час' : (md === 'rest' ? 'Почивка' : 'Почивен ден');
+                saveBtn.textContent = md === 'svc' ? 'Запиши часа' : (md === 'rest' ? 'Запази почивката' : 'Маркирай почивен ден');
+                paintSum();
+            }
+            // „Готово в 09:45 · следващ час от 10:00"
+            function paintSum() {
+                if (mode() !== 'svc') { sumEl.innerHTML = ''; return; }
+                const st = hhmmToMin(timeSel.value), pr = +durSel.value || 0, rs = +restSel.value || 0;
+                sumEl.innerHTML = `<span>Готово в <b>${minToHHMM(Math.min(1440, st + pr))}</b></span><span>следващ час от <b>${minToHHMM(Math.min(1440, st + pr + rs))}</b></span>`;
+            }
 
             async function loadSvc(empId) {
                 svcSel.innerHTML = `<option value="">Зареждане…</option>`;
@@ -990,35 +1081,86 @@ window.Calendar = (function () {
                     const list = await cfg.servicesFor(empId);
                     svcDur = {};
                     (list || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; });
-                    svcSel.innerHTML = (list && list.length)
+                    svcSel.innerHTML = ((list && list.length)
                         ? list.map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('')
-                        : `<option value="">Няма зададени услуги</option>`;
-                    fillDur(svcDur[+svcSel.value]);
-                } catch (e) { svcSel.innerHTML = `<option value="">Грешка при зареждане</option>`; }
+                        : `<option value="">Няма зададени услуги</option>`) + SPECIAL;
+                    fillDur();
+                } catch (e) { svcSel.innerHTML = `<option value="">Грешка при зареждане</option>` + SPECIAL; fillDur(); }
             }
-            svcSel.addEventListener('change', () => fillDur(svcDur[+svcSel.value]));
+            svcSel.addEventListener('change', fillDur);
+            [timeSel, durSel, restSel].forEach(x => x.addEventListener('change', paintSum));
             svcPicker(svcSel, () => (empSel ? empSel.value : cfg.staffId));
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
-            else fillDur(svcDur[+svcSel.value]); // единичен специалист: услугите вече са налични
+            else fillDur(); // единичен специалист: услугите вече са налични
 
-            backdrop.querySelector('.ad-save').addEventListener('click', async (e) => {
-                const btn = e.currentTarget;
+            saveBtn.addEventListener('click', async () => {
                 const employeeId = empSel ? +empSel.value : cfg.staffId;
-                const dto = {
-                    employeeId,
-                    serviceId: +svcSel.value,
-                    startAt: `${dayKey}T${backdrop.querySelector('.ad-time').value}:00`,
-                    durationMinutes: +durSel.value || null,
-                    guestName: backdrop.querySelector('.ad-name').value.trim(),
-                    guestPhone: backdrop.querySelector('.ad-phone').value.trim() || null,
-                    note: null
-                };
-                if (pickEmp && !employeeId) { msg.innerHTML = `<div class="alert alert--err">Избери специалист.</div>`; return; }
-                if (!dto.serviceId) { msg.innerHTML = `<div class="alert alert--err">Избери услуга.</div>`; return; }
-                if (!dto.guestName) { msg.innerHTML = `<div class="alert alert--err">Въведи име на клиента.</div>`; return; }
-                btn.disabled = true; btn.style.opacity = .7;
-                try { await cfg.createBooking(dto); close(); await load(); }
-                catch (err) { msg.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; btn.disabled = false; btn.style.opacity = 1; }
+                const md = mode();
+                const startAt = `${dayKey}T${timeSel.value}:00`;
+                const err = t => { msg.innerHTML = `<div class="alert alert--err">${esc(t)}</div>`; };
+                if (pickEmp && !employeeId) return err('Избери специалист.');
+
+                let run;
+                if (md === 'off') {
+                    run = () => window.API.put('/schedule/override', { employeeId, date: dayKey, isOff: true });
+                } else if (md === 'rest') {
+                    const dur = durSel.value === 'end' ? whEnd() - hhmmToMin(timeSel.value) : +durSel.value;
+                    if (!(dur > 0)) return err('Началният час е след края на работния ден.');
+                    run = () => window.API.post('/schedule/block', { employeeId, startAt, endAt: addMinIso(startAt, Math.min(dur, 1440 - hhmmToMin(timeSel.value))) });
+                } else {
+                    const dto = {
+                        employeeId,
+                        serviceId: +svcSel.value,
+                        startAt,
+                        procedureMinutes: +durSel.value || null,
+                        restMinutes: +restSel.value || 0,
+                        guestName: $('.ad-name').value.trim(),
+                        guestPhone: $('.ad-phone').value.trim() || null,
+                        note: null
+                    };
+                    if (!dto.serviceId) return err('Избери услуга.');
+                    if (!dto.guestName) return err('Въведи име на клиента.');
+                    run = () => cfg.createBooking(dto);
+                }
+                saveBtn.disabled = true; saveBtn.style.opacity = .7;
+                try { await run(); close(); await load(); }
+                catch (e) { err(e.message); saveBtn.disabled = false; saveBtn.style.opacity = 1; }
+            });
+        }
+
+        // Попъп за почивка / почивен ден: детайли + премахване.
+        function openRestModal(o) {
+            if (!o) return;
+            document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
+            const isOff = o.kind === 'off';
+            const d = parseK(isOff ? o.k : o.startAt.slice(0, 10));
+            const time = isOff ? 'цял ден' : `${o.startAt.slice(11, 16)}–${o.endAt.slice(11, 16)}`;
+            const backdrop = document.createElement('div');
+            backdrop.className = 'cal-modal-backdrop';
+            backdrop.innerHTML = `
+                <div class="cal-modal">
+                    <button class="cal-modal__close" aria-label="Затвори">×</button>
+                    <div class="cal-modal__title">${isOff ? 'Почивен ден' : 'Почивка'}</div>
+                    <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
+                    <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : 'В това време никой не може да си запише час.'}</div>
+                    ${cfg.editable ? `<div class="cal-modal__actions"><button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : 'Премахни почивката'}</button></div>` : ''}
+                    <div class="md-msg" style="margin-top:.8rem"></div>
+                </div>`;
+            document.body.appendChild(backdrop);
+            const close = () => backdrop.remove();
+            backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+            backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
+            const del = backdrop.querySelector('.rm-del');
+            if (del) del.addEventListener('click', async () => {
+                del.disabled = true;
+                try {
+                    if (isOff) await window.API.del(`/schedule/override?employeeId=${o.employeeId}&date=${o.k}`);
+                    else await window.API.del(`/schedule/block/${o.id}?employeeId=${o.employeeId}`);
+                    close(); await load();
+                } catch (err) {
+                    backdrop.querySelector('.md-msg').innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+                    del.disabled = false;
+                }
             });
         }
 

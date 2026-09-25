@@ -271,6 +271,9 @@ em, .italic { font-style: italic; }
 .ad-form .input { padding-left: .9rem; padding-right: .9rem; }
 .ad-lbl { display: block; margin-bottom: .3rem; font-size: .8rem; font-weight: 600; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ad-lbl small { font-size: inherit; font-weight: 400; color: var(--muted); }
+/* „Готово в 09:45 · следващ час от 10:00" до „Почивка след" */
+.ad-sum { display: flex; flex-direction: column; justify-content: flex-end; gap: .1rem; padding-bottom: .55rem; font-size: .8rem; color: var(--ink-soft); line-height: 1.35; }
+.ad-sum b { color: var(--rose-deep); font-variant-numeric: tabular-nums; }
 .ad-save { margin-top: .15rem; }
 .ad-msg:empty { display: none; }
 .svp-btn { display: flex; align-items: baseline; gap: .6rem; text-align: left; cursor: pointer; }
@@ -1322,6 +1325,38 @@ textarea.input { resize: vertical; min-height: 110px; }
 .sc-bk.is-done { opacity: .72; }
 .sc-bk.is-cancel { opacity: .45; }
 .sc-bk.is-cancel .sc-bk__s { text-decoration: line-through; }
+
+/* Почивка (блокирано време) — щрихована, с цвета на специалистката отляво */
+.sc-bk.sc-rest {
+    background: repeating-linear-gradient(-45deg, #EFEFEF 0 6px, #F8F8F8 6px 12px);
+    box-shadow: none; outline: 1px dashed #C9C9C9; outline-offset: -1px;
+}
+.sc-bk.sc-rest .sc-bk__s { color: #666; font-weight: 700; }
+.sc-bk.sc-rest .sc-bk__t { color: #777; }
+
+/* Почивен ден — щрихова зона през работното време (под часовете) */
+.sc-dayoff {
+    position: absolute; left: 0; right: 0; z-index: 1;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: .6rem .3rem 0; margin: 0; border: 0; font: inherit; cursor: pointer;
+    background: repeating-linear-gradient(-45deg, rgba(0,0,0,.045) 0 8px, rgba(0,0,0,.015) 8px 16px);
+    border-top: 3px solid var(--bc);
+}
+.sc-dayoff span {
+    position: sticky; top: 52px;
+    font-size: .74rem; font-weight: 700; color: #666; background: #fff;
+    padding: .15rem .55rem; border-radius: 999px; box-shadow: 0 1px 3px rgba(0,0,0,.12);
+    white-space: nowrap;
+}
+/* Почивен ден в обща колона (няколко специалистки) */
+.sc-offtags { position: absolute; left: 2px; right: 2px; z-index: 3; display: flex; flex-direction: column; gap: 2px; pointer-events: none; padding-top: 2px; }
+.sc-offtag {
+    pointer-events: auto; display: block; width: 100%; margin: 0; cursor: pointer;
+    font: inherit; font-size: .66rem; font-weight: 700; text-align: left; color: #555;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 1px 4px; border: 0; border-left: 3px solid var(--bc); border-radius: 3px;
+    background: repeating-linear-gradient(-45deg, #EDEDED 0 5px, #F7F7F7 5px 10px);
+}
 .sc-bk__web {
     position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%;
     display: grid !important; place-items: center; background: #fff; color: var(--bc);
@@ -1372,6 +1407,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 }
 .sc-mi b { font-weight: 700; }
 .sc-mi.is-cancel { opacity: .45; text-decoration: line-through; }
+.sc-mi--off { color: #555; font-weight: 700; background: repeating-linear-gradient(-45deg, #EDEDED 0 5px, #F7F7F7 5px 10px); }
 .sc-mc__more { font-size: .66rem; color: #777; padding: 0 3px; }
 
 /* ---- Плаващи кръгчета ---- */
