@@ -37,10 +37,13 @@ window.Calendar = (function () {
     const hhmmToMin = v => { const p = (v || '').split(':'); return p.length < 2 ? null : (+p[0]) * 60 + (+p[1]); };
     const addMinIso = (iso, mins) => { const d = new Date(iso); d.setMinutes(d.getMinutes() + mins); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`; };
     const WDNAMES = ['неделя', 'понеделник', 'вторник', 'сряда', 'четвъртък', 'петък', 'събота'];
+    // Видимата част от денонощието в графика: 08:00–20:00 (извън нея салонът не работи).
+    const DAY_S = 8 * 60, DAY_E = 20 * 60, SPAN = DAY_E - DAY_S;
+    const clampM = m => Math.max(DAY_S, Math.min(DAY_E, m));
     // 24-часови опции за час (стъпка 30 мин) — гарантира 24ч формат навсякъде.
     const timeOptions = (selected) => {
         let o = '';
-        for (let m = 0; m < 24 * 60; m += 30) {
+        for (let m = DAY_S; m <= DAY_E; m += 30) {
             const v = minToHHMM(m);
             o += `<option value="${v}"${v === selected ? ' selected' : ''}>${v}</option>`;
         }
@@ -62,7 +65,9 @@ window.Calendar = (function () {
     const Z_MIN = 0.3, Z_MAX = 4, Z_DEF = 1.2;
     // Позиция във времевата решетка като % от денонощието — блокчетата следват
     // височината на колоната сами, без да се пресмятат наново при мащаб.
-    const pct = min => (min / 1440 * 100).toFixed(4) + '%';
+    // pct(минута) -> позиция; pctD(минути) -> височина. И двете спрямо 08:00–20:00.
+    const pct = min => ((clampM(min) - DAY_S) / SPAN * 100).toFixed(4) + '%';
+    const pctD = d => (d / SPAN * 100).toFixed(4) + '%';
     const VIEWS = [['day', 'Ден'], ['3day', '3 дни'], ['week', 'Седмица'], ['month', 'Месец']];
 
     const ICO = {
@@ -406,6 +411,11 @@ window.Calendar = (function () {
         function blocksHtml(items, rests) {
             const arr = items.map(b => ({ b, s: toMin(b.startAt), e: endMin(b) }))
                 .concat((rests || []).map(r => ({ r, s: toMin(r.startAt), e: r.endAt.slice(0, 10) > r.startAt.slice(0, 10) ? 1440 : toMin(r.endAt) })))
+                .map(x => {
+                    x.s = Math.min(clampM(x.s), DAY_E - 15);
+                    x.e = Math.max(clampM(x.e), x.s + 15);
+                    return x;
+                })
                 .sort((x, y) => x.s - y.s || x.e - y.e);
             const laneEnd = [], laneOf = [];
             arr.forEach((x, i) => {
@@ -416,7 +426,7 @@ window.Calendar = (function () {
             const lanes = Math.max(1, laneEnd.length), dl = Math.min(lanes, 8);
             return arr.map((x, i) => {
                 const { s, e } = x, w = 100 / lanes, left = laneOf[i] * w;
-                const pos = `top:${pct(s)};height:calc(${pct(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px)`;
+                const pos = `top:${pct(s)};height:calc(${pctD(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px)`;
                 if (x.r) {
                     // Почивка — щрихована, в цвета на специалистката.
                     const r = x.r;
@@ -448,10 +458,10 @@ window.Calendar = (function () {
         function dayOffHtml(c, wh) {
             const list = offsFor(c.k).filter(o => o.kind === 'off' && (!c.emp || o.employeeId === c.emp.id));
             if (!list.length) return '';
-            const [ws, we] = wh || [540, 1110];
+            const ws = clampM((wh || [540, 1110])[0]), we = clampM((wh || [540, 1110])[1]);
             const single = !!c.emp || !cfg.showEmployee || empFilter != null;
             if (single)
-                return `<button type="button" class="sc-dayoff" data-off="${list[0].employeeId}" data-k="${c.k}" style="top:${pct(ws)};height:${pct(we - ws)};--bc:${empColor(list[0].employeeId)}"><span>Почивен ден</span></button>`;
+                return `<button type="button" class="sc-dayoff" data-off="${list[0].employeeId}" data-k="${c.k}" style="top:${pct(ws)};height:${pctD(we - ws)};--bc:${empColor(list[0].employeeId)}"><span>Почивен ден</span></button>`;
             return `<div class="sc-offtags" style="top:${pct(ws)}">${list.map(o =>
                 `<button type="button" class="sc-offtag" data-off="${o.employeeId}" data-k="${c.k}" style="--bc:${empColor(o.employeeId)}">Почивен · ${esc(firstName(o.employeeName))}</button>`).join('')}</div>`;
         }
@@ -469,13 +479,13 @@ window.Calendar = (function () {
                 }
                 const items = listFor(c.k).filter(b => !c.emp || b.employeeId === c.emp.id);
                 const rests = offsFor(c.k).filter(o => o.kind === 'rest' && (!c.emp || o.employeeId === c.emp.id));
-                const work = wh ? `<div class="sc-work" style="top:${pct(wh[0])};height:${pct(wh[1] - wh[0])}"></div>` : '';
-                const nowL = c.k === tk ? `<div class="sc-now" style="top:${pct(nm)}"></div>` : '';
+                const work = wh ? `<div class="sc-work" style="top:${pct(wh[0])};height:${pctD(clampM(wh[1]) - clampM(wh[0]))}"></div>` : '';
+                const nowL = c.k === tk && nm >= DAY_S && nm <= DAY_E ? `<div class="sc-now" style="top:${pct(nm)}"></div>` : '';
                 bodies += `<div class="sc-col" data-k="${c.k}"${c.emp ? ` data-emp="${c.emp.id}"` : ''}>${work}<div class="sc-lines"></div>${dayOffHtml(c, wh)}${blocksHtml(items, rests)}${nowL}</div>`;
             });
             let gut = '';
             // Надпис на всеки 15 мин: кръгъл час (плътно), :30 и :15/:45 (по-дребно).
-            for (let m = 15; m < 24 * 60; m += 15) {
+            for (let m = DAY_S + 15; m < DAY_E; m += 15) {
                 const q = m % 60, cls = q === 0 ? (Math.floor(m / 60) % 2 ? ' is-odd' : '') : (q === 30 ? ' sc-gl--h' : ' sc-gl--q');
                 gut += `<span class="sc-gl${cls}" style="top:${pct(m)}">${minToHHMM(m)}</span>`;
             }
@@ -496,8 +506,8 @@ window.Calendar = (function () {
             const layout = `${view}|${n}`;
             if (layout !== lastLayout || pendingScroll) {
                 const hh = HH0 * zoom;
-                if (pendingScroll === 'now' && selKey === tk) scroll.scrollTop = Math.max(0, (nm - 90) / 60 * hh);
-                else scroll.scrollTop = Math.max(0, firstMinute(cols) / 60 * hh - 12);
+                if (pendingScroll === 'now' && selKey === tk) scroll.scrollTop = Math.max(0, (clampM(nm) - 90 - DAY_S) / 60 * hh);
+                else scroll.scrollTop = Math.max(0, (clampM(firstMinute(cols)) - DAY_S) / 60 * hh - 12);
                 // Седмица, която не се побира -> избраният ден да е в началото.
                 const idx = cols.findIndex(c => c.k === selKey && !c.emp);
                 scroll.scrollLeft = idx > 0 ? idx * curCw() : 0;
@@ -523,7 +533,7 @@ window.Calendar = (function () {
                 listFor(c.k).forEach(b => { s = Math.min(s, toMin(b.startAt)); e = Math.max(e, endMin(b)); });
             });
             if (e <= s) { s = 9 * 60; e = 19 * 60; }
-            return [Math.floor(s / 60) * 60, Math.ceil(e / 60) * 60];
+            return [clampM(Math.floor(s / 60) * 60), clampM(Math.ceil(e / 60) * 60)];
         }
 
         // ---- Мащаб: само CSS променливи -> гладко, без пре-рендиране ----
@@ -547,7 +557,7 @@ window.Calendar = (function () {
             const grid = scroll.querySelector('.sc-grid');
             if (grid) {
                 grid.style.gridTemplateColumns = `${GUT}px repeat(${+root.dataset.n || 1}, ${cw.toFixed(2)}px)`;
-                grid.style.gridTemplateRows = `${HEAD}px ${(hh * 24).toFixed(2)}px`;
+                grid.style.gridTemplateRows = `${HEAD}px ${(hh * SPAN / 60).toFixed(2)}px`;
             }
             root.classList.toggle('is-small', hh < 50);
             root.classList.toggle('is-tiny', hh < 30);
@@ -612,7 +622,7 @@ window.Calendar = (function () {
             if (isCompressed()) tweenZoom(Z_DEF);
             else {
                 const s = workSpan()[0];
-                tweenZoom(compressTarget(), () => { scroll.scrollTop = s / 60 * HH0 * zoom; scroll.scrollLeft = 0; });
+                tweenZoom(compressTarget(), () => { scroll.scrollTop = (s - DAY_S) / 60 * HH0 * zoom; scroll.scrollLeft = 0; });
             }
         }
 
@@ -753,7 +763,7 @@ window.Calendar = (function () {
             const wh = workHours[parseK(selKey).getDay()];
             let m = wh ? wh[0] : 9 * 60;
             if (selKey === todayKey()) m = Math.max(m, Math.ceil(nowMin() / SNAP) * SNAP);
-            openAddModal(minToHHMM(Math.min(m, 23 * 60 + 45)), { dayKey: selKey });
+            openAddModal(minToHHMM(Math.max(DAY_S, Math.min(m, DAY_E - SNAP))), { dayKey: selKey });
         });
 
         // ================= Докосване / мишка върху решетката =================
@@ -775,33 +785,33 @@ window.Calendar = (function () {
             if (mc) { selKey = mc.dataset.k; setView('day'); }
         });
 
-        const minAt = (col, clientY) => (clientY - col.getBoundingClientRect().top) / (HH0 * zoom) * 60;
+        const minAt = (col, clientY) => DAY_S + (clientY - col.getBoundingClientRect().top) / (HH0 * zoom) * 60;
         const durLabel = d => { const h = Math.floor(d / 60), m = d % 60; return h ? `${h} ч${m ? ` ${m} мин` : ''}` : `${m} мин`; };
 
         // Маркиране на период: задържане + плъзгане (телефон) / влачене (мишка).
         let sel = null;
         function beginSelect(col, clientY) {
-            const a = Math.max(0, Math.min(24 * 60 - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
+            const a = Math.max(DAY_S, Math.min(DAY_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
             const el = document.createElement('div');
             el.className = 'sc-sel';
             col.appendChild(el);
-            sel = { col, a, s: a, e: Math.min(24 * 60, a + 2 * SNAP), el };
+            sel = { col, a, s: a, e: Math.min(DAY_E, a + 2 * SNAP), el };
             paintSel();
             root.classList.add('is-selecting');
             if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {}
         }
         function updateSelect(clientY) {
             if (!sel) return;
-            const m = Math.max(0, Math.min(24 * 60, minAt(sel.col, clientY)));
+            const m = Math.max(DAY_S, Math.min(DAY_E, minAt(sel.col, clientY)));
             if (m >= sel.a) { sel.s = sel.a; sel.e = Math.max(sel.a + SNAP, Math.ceil(m / SNAP) * SNAP); }
             else { sel.s = Math.floor(m / SNAP) * SNAP; sel.e = sel.a + SNAP; }
-            sel.e = Math.min(24 * 60, sel.e);
+            sel.e = Math.min(DAY_E, sel.e);
             paintSel();
         }
         function paintSel() {
             const { s, e, el } = sel;
             el.style.top = pct(s);
-            el.style.height = pct(e - s);
+            el.style.height = pctD(e - s);
             el.innerHTML = `<span>${minToHHMM(s)} – ${minToHHMM(e)}</span><small>${durLabel(e - s)}</small>`;
         }
         function clearSel() { if (sel) sel.el.remove(); sel = null; root.classList.remove('is-selecting'); cancelAnimationFrame(asRaf); asRaf = null; }
@@ -829,7 +839,7 @@ window.Calendar = (function () {
             asRaf = requestAnimationFrame(autoScroll);
         }
         function tapAdd(col, clientY) {
-            const m = Math.max(0, Math.min(24 * 60 - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
+            const m = Math.max(DAY_S, Math.min(DAY_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
             openAddModal(minToHHMM(m), { dayKey: col.dataset.k, empId: col.dataset.emp ? +col.dataset.emp : undefined });
         }
 
@@ -960,7 +970,7 @@ window.Calendar = (function () {
         const nowTimer = setInterval(() => {
             if (!document.body.contains(root)) { clearInterval(nowTimer); return; }
             if (todayKey() !== dayAtMount) { dayAtMount = todayKey(); render(); return; }
-            root.querySelectorAll('.sc-now').forEach(el => el.style.top = pct(nowMin()));
+            root.querySelectorAll('.sc-now').forEach(el => { const m = nowMin(); el.style.top = pct(m); el.style.display = m >= DAY_S && m <= DAY_E ? '' : 'none'; });
         }, 60000);
 
         // Попъп за добавяне на час (клик на празно място / маркиран период в графика).
@@ -977,7 +987,7 @@ window.Calendar = (function () {
             const SPECIAL = canRest() ? `<option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>` : '';
 
             let timeOpts = '';
-            for (let mm = 0; mm < 24 * 60; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
+            for (let mm = DAY_S; mm < DAY_E; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
             const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${presetEmp === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
             const staticSvc = pickEmp ? '' : (cfg.services || []).map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('');
             const REST_OPTS = [0, 5, 10, 15, 20, 30, 45, 60];

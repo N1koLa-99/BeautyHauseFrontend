@@ -1276,13 +1276,13 @@ textarea.input { resize: vertical; min-height: 110px; }
         linear-gradient(to bottom, var(--sc-line) 1px, transparent 1px),
         linear-gradient(to bottom, transparent calc(50% - .5px), var(--sc-line-soft) calc(50% - .5px), var(--sc-line-soft) calc(50% + .5px), transparent calc(50% + .5px)),
         linear-gradient(to bottom, #F6F6F6 1px, transparent 1px);
-    background-size: 100% calc(100% / 24), 100% calc(100% / 24), 100% calc(100% / 96);
+    background-size: 100% calc(100% / 12), 100% calc(100% / 12), 100% calc(100% / 48); /* 12 часа: 08:00–20:00 */
 }
 .sc.no-q .sc-lines {
     background-image:
         linear-gradient(to bottom, var(--sc-line) 1px, transparent 1px),
         linear-gradient(to bottom, transparent calc(50% - .5px), var(--sc-line-soft) calc(50% - .5px), var(--sc-line-soft) calc(50% + .5px), transparent calc(50% + .5px));
-    background-size: 100% calc(100% / 24);
+    background-size: 100% calc(100% / 12);
 }
 .sc.is-tiny .sc-lines { background-image: linear-gradient(to bottom, var(--sc-line) 1px, transparent 1px); }
 
