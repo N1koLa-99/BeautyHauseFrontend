@@ -226,3 +226,17 @@ function revealNew(container) {
         document.querySelectorAll('input[type="password"]').forEach(addEye);
     });
 })();
+
+/* На телефон (слайдър) екипът върви: Радина (шефът) → Анелия → Ирина → останалите.
+   На десктоп подредбата не се пипа. */
+const TEAM_MOBILE_ORDER = ['радина', 'анелия', 'ирина'];
+function isMobileLayout() { return window.matchMedia('(max-width: 720px)').matches; }
+function teamMobileOrder(list) {
+    const rank = e => {
+        if (e.role === 'boss') return -1;
+        const n = (e.fullName || '').toLowerCase();
+        const i = TEAM_MOBILE_ORDER.findIndex(x => n.startsWith(x));
+        return i === -1 ? 99 : i;
+    };
+    return list.map((e, i) => ({ e, i })).sort((a, b) => (rank(a.e) - rank(b.e)) || (a.i - b.i)).map(x => x.e);
+}

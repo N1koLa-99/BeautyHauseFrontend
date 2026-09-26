@@ -12,19 +12,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             box.innerHTML = `<p class="hint center" style="grid-column:1/-1">Скоро тук ще видиш нашия екип.</p>`;
             return;
         }
-        box.innerHTML = centerBoss(employees.slice(0, 3)).map((e, i) => teamCardHTML(e, i)).join('');
+        box.innerHTML = arrange(employees).map((e, i) => teamCardHTML(e, i)).join('');
         revealNew(box);
     } catch (err) {
         // Без сървър → показваме резервния екип.
         const fb = (window.BH_FALLBACK && BH_FALLBACK.employees) || [];
         if (fb.length) {
-            box.innerHTML = centerBoss(fb.slice(0, 3)).map((e, i) => teamCardHTML(e, i)).join('');
+            box.innerHTML = arrange(fb).map((e, i) => teamCardHTML(e, i)).join('');
             revealNew(box);
         } else {
             box.innerHTML = `<p class="hint center" style="grid-column:1/-1">Запознай се с екипа на страница <a class="nav__link" href="team.html">Екип →</a></p>`;
         }
     }
 });
+
+/* Телефон: Радина → Анелия → Ирина. Десктоп: шефът в средата. */
+function arrange(list) {
+    const top = teamMobileOrder(list).slice(0, 3);
+    return isMobileLayout() ? top : centerBoss(top);
+}
 
 /* Собственикът винаги застава в средната (издигнатата) карта на прегледа. */
 function centerBoss(list) {

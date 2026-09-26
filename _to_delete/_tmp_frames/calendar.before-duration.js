@@ -1010,16 +1010,14 @@ window.Calendar = (function () {
                         <div class="ad-pair ad-pair--time ad-row-time">
                             <label class="field"><span class="ad-lbl">Начален час</span>
                                 <select class="select ad-time">${timeOpts}</select></label>
-                            <label class="field ad-f-dur"><span class="ad-lbl ad-dur-lbl">Продължителност</span>
+                            <label class="field"><span class="ad-lbl ad-dur-lbl">Процедура</span>
                                 <select class="select ad-dur"></select></label>
-                            <div class="field ad-f-hm"><span class="ad-lbl" title="Колко време да заеме часът в графика. Удължи го, ако искаш почивка след клиента.">Времетраене</span>
-                                <div class="ad-hm">
-                                    <select class="ad-h" aria-label="Часове"></select>
-                                    <span class="ad-hm__sep"></span>
-                                    <select class="ad-m" aria-label="Минути"></select>
-                                </div></div>
                         </div>
-                        <div class="ad-row-rest"><div class="ad-sum"></div></div>
+                        <div class="ad-pair ad-pair--time ad-row-rest">
+                            <label class="field"><span class="ad-lbl" title="Свободно време след процедурата, преди следващия клиент">Почивка след</span>
+                                <select class="select ad-rest"></select></label>
+                            <div class="ad-sum"></div>
+                        </div>
                         <div class="ad-off-note hint" style="display:none">Целият ден ще е почивен — никой няма да може да си запише час. Отменя се с клик върху деня в графика.</div>
                         <div class="ad-pair ad-row-client">
                             <label class="field"><span class="ad-lbl">Име на клиента</span>
@@ -1038,7 +1036,7 @@ window.Calendar = (function () {
 
             const $ = sel => backdrop.querySelector(sel);
             const empSel = $('.ad-emp'), svcSel = $('.ad-svc'), timeSel = $('.ad-time');
-            const durSel = $('.ad-dur'), hSel = $('.ad-h'), mSel = $('.ad-m'), sumEl = $('.ad-sum');
+            const durSel = $('.ad-dur'), restSel = $('.ad-rest'), sumEl = $('.ad-sum');
             const saveBtn = $('.ad-save'), msg = $('.ad-msg');
             const show = (sel, on) => { $(sel).style.display = on ? '' : 'none'; };
             const mode = () => svcSel.value === '__rest' ? 'rest' : (svcSel.value === '__off' ? 'off' : 'svc');
@@ -1050,16 +1048,6 @@ window.Calendar = (function () {
             let svcDur = {};
             (cfg.services || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; });
 
-            // Часове 0–8, минути през 5.
-            hSel.innerHTML = Array.from({ length: 9 }, (_, h) => `<option value="${h}">${h} ч</option>`).join('');
-            mSel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i * 5}">${String(i * 5).padStart(2, '0')} мин</option>`).join('');
-            const hmVal = () => (+hSel.value || 0) * 60 + (+mSel.value || 0);
-            function setHM(total) {
-                total = Math.max(5, Math.min(8 * 60, Math.round(total / 5) * 5));
-                hSel.value = String(Math.floor(total / 60));
-                mSel.value = String(total % 60);
-            }
-
             function fillDur() {
                 const md = mode();
                 if (md === 'rest') {
@@ -1067,9 +1055,18 @@ window.Calendar = (function () {
                     durSel.innerHTML = numOpts([15, 30, 45, 60, 90, 120, 180, 240, def], def,
                         m => durLabel(m) + (m === opts.dur ? ' · маркирано' : '')) + `<option value="end">до края на деня</option>`;
                 } else if (md === 'svc') {
-                    // Времетраене = стандартното за услугата (или маркирания период).
-                    // Специалистът може да го промени свободно — така си прави и почивката.
-                    setHM(opts.dur || svcDur[+svcSel.value] || 30);
+                    // Маркиран период -> процедурата остава стандартна, а разликата е почивка.
+                    const p = svcDur[+svcSel.value] || 30;
+                    let proc = p, rest = REST;
+                    if (opts.dur) {
+                        if (opts.dur < p) { proc = opts.dur; rest = 0; }
+                        else if (opts.dur - p <= 120) rest = opts.dur - p;
+                        else proc = opts.dur - REST;
+                    }
+                    durSel.innerHTML = numOpts([p, 15, 20, 30, 45, 60, 75, 90, 120, 150, 180, 240, proc], proc,
+                        m => `${m} мин${m === p ? ' (стандартно)' : ''}`);
+                    restSel.innerHTML = numOpts([...REST_OPTS, rest], rest,
+                        m => (m ? `${m} мин` : 'без почивка'));
                 }
                 paintMode();
             }
@@ -1077,8 +1074,6 @@ window.Calendar = (function () {
                 const md = mode();
                 show('.ad-row-time', md !== 'off');
                 show('.ad-row-rest', md === 'svc');
-                show('.ad-f-dur', md === 'rest');
-                show('.ad-f-hm', md === 'svc');
                 show('.ad-row-client', md === 'svc');
                 show('.ad-off-note', md === 'off');
                 $('.ad-dur-lbl').textContent = md === 'rest' ? 'Продължителност' : 'Процедура';
@@ -1089,8 +1084,8 @@ window.Calendar = (function () {
             // „Готово в 09:45 · следващ час от 10:00"
             function paintSum() {
                 if (mode() !== 'svc') { sumEl.innerHTML = ''; return; }
-                const st = hhmmToMin(timeSel.value), total = hmVal();
-                sumEl.innerHTML = `<span>${timeSel.value} – <b>${minToHHMM(Math.min(1440, st + total))}</b></span><span>${durLabel(total)}</span>`;
+                const st = hhmmToMin(timeSel.value), pr = +durSel.value || 0, rs = +restSel.value || 0;
+                sumEl.innerHTML = `<span>Готово в <b>${minToHHMM(Math.min(1440, st + pr))}</b></span><span>следващ час от <b>${minToHHMM(Math.min(1440, st + pr + rs))}</b></span>`;
             }
 
             async function loadSvc(empId) {
@@ -1106,7 +1101,7 @@ window.Calendar = (function () {
                 } catch (e) { svcSel.innerHTML = `<option value="">Грешка при зареждане</option>` + SPECIAL; fillDur(); }
             }
             svcSel.addEventListener('change', fillDur);
-            [timeSel, durSel, hSel, mSel].forEach(x => x.addEventListener('change', paintSum));
+            [timeSel, durSel, restSel].forEach(x => x.addEventListener('change', paintSum));
             svcPicker(svcSel, () => (empSel ? empSel.value : cfg.staffId));
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
             else fillDur(); // единичен специалист: услугите вече са налични
@@ -1130,14 +1125,13 @@ window.Calendar = (function () {
                         employeeId,
                         serviceId: +svcSel.value,
                         startAt,
-                        procedureMinutes: hmVal(),
-                        restMinutes: 0, // почивката е включена във времетраенето
+                        procedureMinutes: +durSel.value || null,
+                        restMinutes: +restSel.value || 0,
                         guestName: $('.ad-name').value.trim(),
                         guestPhone: $('.ad-phone').value.trim() || null,
                         note: null
                     };
                     if (!dto.serviceId) return err('Избери услуга.');
-                    if (dto.procedureMinutes < 5) return err('Времетраенето трябва да е поне 5 минути.');
                     if (!dto.guestName) return err('Въведи име на клиента.');
                     run = () => cfg.createBooking(dto);
                 }
@@ -1235,11 +1229,8 @@ window.Calendar = (function () {
                     <button class="btn btn--ghost md-absent">Не присъства</button>
                     ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">Отмени часа на клиента</button>` : ''}
                     ${canManage ? `
-                    <div class="hint" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.4rem">Времетраене
-                        <span class="ad-hm">
-                            <select class="md-h" aria-label="Часове">${Array.from({ length: 9 }, (_, h) => `<option value="${h}"${h === Math.floor(dur / 60) ? ' selected' : ''}>${h} ч</option>`).join('')}</select><span class="ad-hm__sep"></span>
-                            <select class="md-m" aria-label="Минути">${[...new Set([...Array.from({ length: 12 }, (_, i) => i * 5), dur % 60])].sort((a, b) => a - b).map(m => `<option value="${m}"${m === dur % 60 ? ' selected' : ''}>${String(m).padStart(2, '0')} мин</option>`).join('')}</select>
-                        </span></div>
+                    <label class="hint" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.4rem">Времетраене
+                        <select class="select md-dur" style="width:auto">${durOptions(dur)}</select></label>
                     <button class="btn btn--ghost md-del" style="color:#D9534F">Изтрий часа</button>` : ''}
                 </div>`;
             }
@@ -1304,15 +1295,8 @@ window.Calendar = (function () {
             });
             const del = backdrop.querySelector('.md-del');
             if (del) del.addEventListener('click', () => { if (confirm('Да изтрия ли този час?')) run(() => cfg.deleteBk(b.id)); });
-            const mdH = backdrop.querySelector('.md-h'), mdM = backdrop.querySelector('.md-m');
-            if (mdH && mdM) {
-                const onDur = () => {
-                    const total = (+mdH.value || 0) * 60 + (+mdM.value || 0);
-                    if (total < 5) { msg.innerHTML = `<div class="alert alert--err">Времетраенето трябва да е поне 5 минути.</div>`; return; }
-                    if (total !== dur) run(() => cfg.setDuration(b.id, total));
-                };
-                mdH.addEventListener('change', onDur); mdM.addEventListener('change', onDur);
-            }
+            const durSel = backdrop.querySelector('.md-dur');
+            if (durSel) durSel.addEventListener('change', () => run(() => cfg.setDuration(b.id, +durSel.value)));
         }
 
         function renderForm(box) {
