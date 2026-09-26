@@ -146,76 +146,53 @@ function renderAuthNav() {
         const profileLabel = role === 'boss' ? 'Табло'
             : (role === 'employee' ? 'Моят график' : 'Моите часове');
         const initial = safe(first.charAt(0).toUpperCase());
-        // Допълнителните страници (График / Моят акаунт) НЕ пълнят основното меню —
-        // на компютър са в падащо меню под профилния чип, на телефон — в менюто ☰.
-        const page = location.pathname.split('/').pop() || 'index.html';
-        const q = location.search;
-        const extra = [{ href: 'account.html', label: profileLabel, icon: 'M4 20h16M7 16.5v-5M12 16.5V6.5M17 16.5v-7.5', on: page === 'account.html' && !/tab=calendar/.test(q) }];
-        if (role === 'employee' || role === 'boss')
-            extra.push({ href: role === 'boss' ? 'account.html?tab=calendar' : 'account.html', label: 'График', icon: 'M3.5 9.5h17M8 3v4M16 3v4M5.5 5h13a2 2 0 0 1 2 2v11.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', on: /tab=calendar/.test(q), dup: role === 'employee' });
-        extra.push({ href: 'profile.html', label: 'Моят акаунт', icon: 'M12 11.8a3.6 3.6 0 1 0 0-7.2 3.6 3.6 0 0 0 0 7.2ZM4.5 20c1.4-3.6 4.3-5.4 7.5-5.4s6.1 1.8 7.5 5.4', on: page === 'profile.html' });
-        const svg = d => `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
-
         box.innerHTML = `
-            <div class="nav__acct">
-                <a class="nav__profile" href="account.html" title="${profileLabel}" aria-haspopup="menu" aria-expanded="false">
-                    <span class="nav__profile__av">${initial}</span>
-                    <span class="nav__profile__text">
-                        <span class="nav__profile__name">${first}</span>
-                        <span class="nav__profile__label">${profileLabel}</span>
-                    </span>
-                    <svg class="nav__profile__chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </a>
-                <div class="nav__menu" role="menu">
-                    ${extra.filter(x => !x.dup).map(x => `<a role="menuitem" class="nav__menu-item${x.on ? ' is-on' : ''}" href="${x.href}">${svg(x.icon)}<span>${x.label}</span></a>`).join('')}
-                    <span class="nav__menu-sep"></span>
-                    <button type="button" role="menuitem" class="nav__menu-item nav__menu-item--out" data-logout>${svg('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9')}<span>Изход</span></button>
-                </div>
-            </div>
-            <button type="button" class="nav__logout" data-logout title="Изход" aria-label="Изход">
+            <a class="nav__profile" href="account.html" title="${profileLabel}">
+                <span class="nav__profile__av">${initial}</span>
+                <span class="nav__profile__text">
+                    <span class="nav__profile__name">${first}</span>
+                    <span class="nav__profile__label">${profileLabel}</span>
+                </span>
+            </a>
+            <button type="button" class="nav__logout" id="logout-btn" title="Изход" aria-label="Изход">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                     <path d="M16 17l5-5-5-5"/>
                     <path d="M21 12H9"/>
                 </svg>
             </button>`;
-
-        box.querySelectorAll('[data-logout]').forEach(lb => lb.addEventListener('click', async (e) => {
+        const lb = document.getElementById('logout-btn');
+        if (lb) lb.addEventListener('click', async (e) => {
             e.preventDefault();
-            closeMenu();
             const ok = await confirmBox({
                 title: 'Изход от профила',
                 text: 'Сигурен ли си, че искаш да излезеш?',
                 ok: 'Изход', cancel: 'Отказ'
             });
             if (ok) Session.logout();
-        }));
-
-        // Падащо меню (само на компютър/таблет; на телефон чипът води направо към профила).
-        const acct = box.querySelector('.nav__acct');
-        const chip = acct.querySelector('.nav__profile');
-        const desktop = () => window.matchMedia('(min-width: 721px)').matches;
-        function closeMenu() { acct.classList.remove('is-open'); chip.setAttribute('aria-expanded', 'false'); }
-        chip.addEventListener('click', (e) => {
-            if (!desktop()) return;
-            e.preventDefault();
-            const open = !acct.classList.contains('is-open');
-            acct.classList.toggle('is-open', open);
-            chip.setAttribute('aria-expanded', String(open));
         });
-        document.addEventListener('click', (e) => { if (!acct.contains(e.target)) closeMenu(); });
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
-        // Телефон: същите връзки в менюто ☰ (на компютър са скрити с CSS).
-        const links = document.getElementById('nav-links');
-        if (links && !links.querySelector('.nav__link--acct')) {
-            extra.slice(1).forEach(x => {
+        // „График" в основното меню — само за екипа (служител/шеф).
+        // Клиенти и гости не го виждат. Шефът отива директно на раздел „График".
+        if (role === 'employee' || role === 'boss') {
+            const links = document.getElementById('nav-links');
+            if (links && !links.querySelector('.nav__link--schedule')) {
                 const a = document.createElement('a');
-                a.className = 'nav__link nav__link--acct' + (x.on ? ' active' : '');
-                a.href = x.href;
-                a.textContent = x.label;
+                a.className = 'nav__link nav__link--schedule';
+                a.href = role === 'boss' ? 'account.html?tab=calendar' : 'account.html';
+                a.textContent = 'График';
                 links.appendChild(a);
-            });
+            }
+        }
+        // „Моят акаунт" (име/имейл/парола) — отделна страница, в менюто за всички роли.
+        const links = document.getElementById('nav-links');
+        if (links && !links.querySelector('.nav__link--profile')) {
+            const a = document.createElement('a');
+            a.className = 'nav__link nav__link--profile';
+            a.href = 'profile.html';
+            a.textContent = 'Моят акаунт';
+            if (location.pathname.endsWith('/profile.html')) a.classList.add('active');
+            links.appendChild(a);
         }
     } else {
         box.innerHTML = `

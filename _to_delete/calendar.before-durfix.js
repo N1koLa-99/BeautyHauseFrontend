@@ -1001,7 +1001,7 @@ window.Calendar = (function () {
                 <div class="cal-modal cal-modal--add">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
                     <div class="ad-title" style="font-weight:800;font-size:1.15rem">Нов час</div>
-                    <div class="hint ad-sub" style="margin:.15rem 0 .85rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
+                    <div class="hint" style="margin:.15rem 0 .85rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
                     <div class="ad-form">
                         ${pickEmp ? `<label class="field"><span class="ad-lbl">Специалист</span>
                             <select class="select ad-emp">${empOpts}</select></label>` : ''}
@@ -1037,7 +1037,6 @@ window.Calendar = (function () {
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
 
             const $ = sel => backdrop.querySelector(sel);
-            const subOrig = ($('.ad-sub') || {}).textContent || '';
             const empSel = $('.ad-emp'), svcSel = $('.ad-svc'), timeSel = $('.ad-time');
             const durSel = $('.ad-dur'), hSel = $('.ad-h'), mSel = $('.ad-m'), sumEl = $('.ad-sum');
             const saveBtn = $('.ad-save'), msg = $('.ad-msg');
@@ -1070,10 +1069,7 @@ window.Calendar = (function () {
                 } else if (md === 'svc') {
                     // Времетраене = стандартното за услугата (или маркирания период).
                     // Специалистът може да го промени свободно — така си прави и почивката.
-                    // По подразбиране: времето на процедурата. Ако в графика е маркиран
-                    // по-дълъг период (напр. с почивка) — остава маркираното.
-                    const std = svcDur[+svcSel.value] || 30;
-                    setHM(Math.max(std, opts.dur || 0));
+                    setHM(opts.dur || svcDur[+svcSel.value] || 30);
                 }
                 paintMode();
             }
@@ -1092,17 +1088,9 @@ window.Calendar = (function () {
             }
             // „Готово в 09:45 · следващ час от 10:00"
             function paintSum() {
-                if (mode() !== 'svc') { sumEl.innerHTML = ''; const sb = $('.ad-sub'); if (sb) sb.textContent = subOrig; return; }
+                if (mode() !== 'svc') { sumEl.innerHTML = ''; return; }
                 const st = hhmmToMin(timeSel.value), total = hmVal();
-                const end = minToHHMM(Math.min(1440, st + total));
-                const std = svcDur[+svcSel.value] || 0;
-                const diff = total - std;
-                const note = !std || diff === 0 ? 'стандартно'
-                    : (diff > 0 ? `+${durLabel(diff)} почивка` : `−${durLabel(-diff)} от стандартното`);
-                sumEl.innerHTML = `<span>${timeSel.value} – <b>${end}</b></span><span>${durLabel(total)} · <i class="ad-sum__note${diff < 0 ? ' is-short' : ''}">${note}</i></span>`;
-                // Подзаглавието горе следва реалния край на часа.
-                const sub = $('.ad-sub');
-                if (sub) sub.textContent = `${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()} · ${timeSel.value}–${end}`;
+                sumEl.innerHTML = `<span>${timeSel.value} – <b>${minToHHMM(Math.min(1440, st + total))}</b></span><span>${durLabel(total)}</span>`;
             }
 
             async function loadSvc(empId) {

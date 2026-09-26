@@ -231,6 +231,11 @@ function revealNew(container) {
    На десктоп подредбата не се пипа. */
 const TEAM_MOBILE_ORDER = ['радина', 'анелия', 'ирина'];
 function isMobileLayout() { return window.matchMedia('(max-width: 720px)').matches; }
+/* Извиква fn, когато оформлението мине от телефон към компютър или обратно. */
+function onLayoutChange(fn) {
+    const mq = window.matchMedia('(max-width: 720px)');
+    if (mq.addEventListener) mq.addEventListener('change', fn); else mq.addListener(fn);
+}
 function teamMobileOrder(list) {
     const rank = e => {
         if (e.role === 'boss') return -1;

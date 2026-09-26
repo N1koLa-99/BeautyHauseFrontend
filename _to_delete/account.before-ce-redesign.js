@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="dash-panel" data-p="settings" hidden></div>
             <nav class="dash-nav" aria-label="Навигация на таблото">
                 <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
-                <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">График</span></button>
+                <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('alert', { size: 20 })}</span><span class="dash-tab__lb">Некоректни</span></button>
                 <button class="dash-tab" data-t="courses"><span class="dash-tab__ic">${Icon('book', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">Курсове</span></button>
                 <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
@@ -155,61 +155,21 @@ document.addEventListener('DOMContentLoaded', () => {
             box.style.background = PANEL_BG[name] || '';
             // На телефон графикът заема целия екран под табовете (виж css/styles.css).
             document.body.classList.toggle('dash-on-cal', name === 'calendar');
-            if (name === 'courses') markCoursesSeen();
-            if (name === 'calendar') markCalSeen();
         }
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
         // ?tab=calendar (от менюто „График") отваря директно съответния раздел.
         const wanted = new URLSearchParams(location.search).get('tab');
         show(loaders[wanted] ? wanted : 'stats');
         refreshCourseBadge();
-        refreshCalBadge();
-        // нови заявки и часове, докато таблото е отворено
-        setInterval(() => { refreshCourseBadge(); refreshCalBadge(); }, 2 * 60 * 1000);
     }
 
     // Червено кръгче с броя НОВИ заявки за курсове върху таба „Курсове".
-    // Кръгчето е „непрочетено" известие: брои заявките, дошли СЛЕД последното
-    // отваряне на таба. Щом отвориш „Курсове" — изчезва (помни се в браузъра).
-    const COURSES_SEEN = 'bh_courses_seen';
-    const seenAt = () => { try { return +localStorage.getItem(COURSES_SEEN) || 0; } catch (e) { return 0; } };
-    function markCoursesSeen() {
-        try { localStorage.setItem(COURSES_SEEN, String(Date.now())); } catch (e) {}
-        const badge = document.querySelector('.dash-tab[data-t="courses"] .dash-tab__badge');
-        if (badge) badge.hidden = true;
-    }
-    // Същото за „График": кръгче с броя НОВИ онлайн часове (записани от клиенти
-    // през сайта) след последното отваряне на графика. Ръчно въведените не се броят.
-    const CAL_SEEN = 'bh_calendar_seen';
-    function markCalSeen() {
-        try { localStorage.setItem(CAL_SEEN, String(Date.now())); } catch (e) {}
-        const badge = document.querySelector('.dash-tab[data-t="calendar"] .dash-tab__badge');
-        if (badge) badge.hidden = true;
-    }
-    async function refreshCalBadge() {
-        const badge = document.querySelector('.dash-tab[data-t="calendar"] .dash-tab__badge');
-        if (!badge) return;
-        if (document.querySelector('.dash-tab[data-t="calendar"].active')) { badge.hidden = true; return; }
-        let since = 0;
-        try { since = +localStorage.getItem(CAL_SEEN) || 0; } catch (e) {}
-        // Първо отваряне на това устройство: броим от сега нататък, не цялата история.
-        if (!since) { markCalSeen(); return; }
-        try {
-            const r = await API.get(`/reports/new-bookings?since=${since}`);
-            const n = (r && r.count) || 0;
-            badge.textContent = n > 9 ? '9+' : String(n);
-            badge.hidden = n === 0;
-        } catch (e) { badge.hidden = true; }
-    }
     async function refreshCourseBadge() {
         const badge = document.querySelector('.dash-tab[data-t="courses"] .dash-tab__badge');
         if (!badge) return;
-        // Докато гледаш таба, няма какво да се брои.
-        if (document.querySelector('.dash-tab[data-t="courses"].active')) { badge.hidden = true; return; }
         try {
-            const rows = await API.get('/courses/enrollments');
-            const since = seenAt();
-            const n = (rows || []).filter(r => new Date(r.createdAt).getTime() > since).length;
+            const stats = await API.get('/courses/stats');
+            const n = (stats || []).reduce((a, c) => a + (c.newCount || 0), 0);
             badge.textContent = n > 9 ? '9+' : String(n);
             badge.hidden = n === 0;
         } catch (e) { badge.hidden = true; }
@@ -223,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelled: { label: 'Отказал(а) се',  cls: 'ce-st--cancelled' }
     };
     // „Курс по миглопластика" -> „Миглопластика" (за филтрите).
-    const shortTitle = t => { const x = t.replace(/^Курс по /, '').split(' ')[0]; return x.charAt(0).toUpperCase() + x.slice(1); };
+    const shortTitle = t => { const x = t.replace(/^Курс по /, '').replace(/ по миглопластика$/, ''); return x.charAt(0).toUpperCase() + x.slice(1); };
     async function renderCourses(box) {
         box.innerHTML = `
             ${sectionTitle('Курсове', ACC.crs, '0 0 .3rem')}
@@ -270,27 +230,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const items = list.map(r => {
                 const st = CE_STATUS[r.status] || CE_STATUS.new;
-                const initial = esc((r.fullName || '?').trim().charAt(0).toUpperCase());
-                const trash = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.8A.8.8 0 0 1 9.8 4h4.4a.8.8 0 0 1 .8.8V7"/></svg>';
                 return `
                 <article class="ce-item ${r.status === 'new' ? 'is-new' : ''}" data-id="${r.id}">
-                    <div class="ce-item__head">
-                        <span class="ce-av">${initial}</span>
+                    <div class="ce-item__top">
                         <div class="ce-item__who">
                             <b>${esc(r.fullName)}</b>
                             <span>${esc(r.courseTitle)}</span>
                         </div>
-                        <select class="ce-item__st ${st.cls}" aria-label="Статус">
+                        <select class="select ce-item__st ${st.cls}" aria-label="Статус">
                             ${Object.entries(CE_STATUS).map(([k, v]) => `<option value="${k}"${k === r.status ? ' selected' : ''}>${v.label}</option>`).join('')}
                         </select>
                     </div>
-                    ${r.message ? `<p class="ce-item__msg">${esc(r.message)}</p>` : ''}
-                    <div class="ce-item__foot">
-                        <a class="ce-act ce-act--call" href="tel:${esc(r.phone)}">${Icon('phone', { size: 15 })}<span>${esc(r.phone)}</span></a>
-                        <a class="ce-act" href="mailto:${esc(r.email)}" title="${esc(r.email)}">${Icon('mail', { size: 15 })}<span>Имейл</span></a>
-                        <span class="ce-item__date">${fmtDate(r.createdAt)}</span>
-                        <button class="ce-item__del" title="Изтрий заявката" aria-label="Изтрий заявката">${trash}</button>
+                    <div class="ce-item__meta">
+                        <a href="tel:${esc(r.phone)}">${Icon('phone', { size: 14 })}${esc(r.phone)}</a>
+                        <a href="mailto:${esc(r.email)}">${Icon('mail', { size: 14 })}${esc(r.email)}</a>
+                        <span>${Icon('clock', { size: 14 })}${fmtDate(r.createdAt)}</span>
                     </div>
+                    ${r.message ? `<p class="ce-item__msg">„${esc(r.message)}“</p>` : ''}
+                    <button class="ce-item__del" title="Изтрий заявката">Изтрий</button>
                 </article>`;
             }).join('');
 

@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         no_show:   { label: 'Не се яви', cls: 'alert--err' }
     };
     // Акцентни цветове на разделите в таблото — съвпадат с css/styles.css (--acc-*).
-    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', set: '#9B7FC2', crs: '#B07D52' };
+    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', set: '#9B7FC2' };
     const pad = n => String(n).padStart(2, '0');
     const money = v => Math.round(Number(v) || 0).toLocaleString('bg-BG') + ' €';
     const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -122,13 +122,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="dash-panel" data-p="stats"><div class="spinner"></div></div>
             <div class="dash-panel" data-p="calendar" hidden></div>
             <div class="dash-panel" data-p="noshow" hidden></div>
-            <div class="dash-panel" data-p="courses" hidden></div>
             <div class="dash-panel" data-p="settings" hidden></div>
             <nav class="dash-nav" aria-label="Навигация на таблото">
                 <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
-                <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">График</span></button>
+                <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('alert', { size: 20 })}</span><span class="dash-tab__lb">Некоректни</span></button>
-                <button class="dash-tab" data-t="courses"><span class="dash-tab__ic">${Icon('book', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">Курсове</span></button>
                 <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
             </nav>`;
 
@@ -144,9 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const panels = {};
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
-        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, courses: renderCourses, settings: renderSettings };
+        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, settings: renderSettings };
         // Фонът на цялото табло се оцветява леко според отворения раздел — веднага личи къде си.
-        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-alert-soft)', courses: 'var(--acc-crs-soft)', settings: 'var(--acc-set-soft)' };
+        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-alert-soft)', settings: 'var(--acc-set-soft)' };
 
         function show(name) {
             tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
@@ -155,196 +153,11 @@ document.addEventListener('DOMContentLoaded', () => {
             box.style.background = PANEL_BG[name] || '';
             // На телефон графикът заема целия екран под табовете (виж css/styles.css).
             document.body.classList.toggle('dash-on-cal', name === 'calendar');
-            if (name === 'courses') markCoursesSeen();
-            if (name === 'calendar') markCalSeen();
         }
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
         // ?tab=calendar (от менюто „График") отваря директно съответния раздел.
         const wanted = new URLSearchParams(location.search).get('tab');
         show(loaders[wanted] ? wanted : 'stats');
-        refreshCourseBadge();
-        refreshCalBadge();
-        // нови заявки и часове, докато таблото е отворено
-        setInterval(() => { refreshCourseBadge(); refreshCalBadge(); }, 2 * 60 * 1000);
-    }
-
-    // Червено кръгче с броя НОВИ заявки за курсове върху таба „Курсове".
-    // Кръгчето е „непрочетено" известие: брои заявките, дошли СЛЕД последното
-    // отваряне на таба. Щом отвориш „Курсове" — изчезва (помни се в браузъра).
-    const COURSES_SEEN = 'bh_courses_seen';
-    const seenAt = () => { try { return +localStorage.getItem(COURSES_SEEN) || 0; } catch (e) { return 0; } };
-    function markCoursesSeen() {
-        try { localStorage.setItem(COURSES_SEEN, String(Date.now())); } catch (e) {}
-        const badge = document.querySelector('.dash-tab[data-t="courses"] .dash-tab__badge');
-        if (badge) badge.hidden = true;
-    }
-    // Същото за „График": кръгче с броя НОВИ онлайн часове (записани от клиенти
-    // през сайта) след последното отваряне на графика. Ръчно въведените не се броят.
-    const CAL_SEEN = 'bh_calendar_seen';
-    function markCalSeen() {
-        try { localStorage.setItem(CAL_SEEN, String(Date.now())); } catch (e) {}
-        const badge = document.querySelector('.dash-tab[data-t="calendar"] .dash-tab__badge');
-        if (badge) badge.hidden = true;
-    }
-    async function refreshCalBadge() {
-        const badge = document.querySelector('.dash-tab[data-t="calendar"] .dash-tab__badge');
-        if (!badge) return;
-        if (document.querySelector('.dash-tab[data-t="calendar"].active')) { badge.hidden = true; return; }
-        let since = 0;
-        try { since = +localStorage.getItem(CAL_SEEN) || 0; } catch (e) {}
-        // Първо отваряне на това устройство: броим от сега нататък, не цялата история.
-        if (!since) { markCalSeen(); return; }
-        try {
-            const r = await API.get(`/reports/new-bookings?since=${since}`);
-            const n = (r && r.count) || 0;
-            badge.textContent = n > 9 ? '9+' : String(n);
-            badge.hidden = n === 0;
-        } catch (e) { badge.hidden = true; }
-    }
-    async function refreshCourseBadge() {
-        const badge = document.querySelector('.dash-tab[data-t="courses"] .dash-tab__badge');
-        if (!badge) return;
-        // Докато гледаш таба, няма какво да се брои.
-        if (document.querySelector('.dash-tab[data-t="courses"].active')) { badge.hidden = true; return; }
-        try {
-            const rows = await API.get('/courses/enrollments');
-            const since = seenAt();
-            const n = (rows || []).filter(r => new Date(r.createdAt).getTime() > since).length;
-            badge.textContent = n > 9 ? '9+' : String(n);
-            badge.hidden = n === 0;
-        } catch (e) { badge.hidden = true; }
-    }
-
-    // ---- Раздел КУРСОВЕ: заявки от сайта ----
-    const CE_STATUS = {
-        new:       { label: 'Нова',           cls: 'ce-st--new' },
-        contacted: { label: 'Свързах се',     cls: 'ce-st--contacted' },
-        enrolled:  { label: 'Записан(а)',     cls: 'ce-st--enrolled' },
-        cancelled: { label: 'Отказал(а) се',  cls: 'ce-st--cancelled' }
-    };
-    // „Курс по миглопластика" -> „Миглопластика" (за филтрите).
-    const shortTitle = t => { const x = t.replace(/^Курс по /, '').split(' ')[0]; return x.charAt(0).toUpperCase() + x.slice(1); };
-    async function renderCourses(box) {
-        box.innerHTML = `
-            ${sectionTitle('Курсове', ACC.crs, '0 0 .3rem')}
-            <p class="hint" style="margin:0 0 1.2rem">Заявките от сайта. Всеки, който се запише, получава имейл потвърждение, а ти — известие. Обади се и смени статуса, за да знаеш докъде си стигнала.</p>
-            <div class="ce-body"><div class="spinner"></div></div>`;
-        const body = box.querySelector('.ce-body');
-        let stats = [], rows = [], filter = 'all', stFilter = 'active';
-
-        async function load() {
-            try {
-                [stats, rows] = await Promise.all([API.get('/courses/stats'), API.get('/courses/enrollments')]);
-                stats = stats || []; rows = rows || [];
-                paint();
-            } catch (err) {
-                body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
-            }
-        }
-
-        const fmtDate = iso => {
-            try { return new Date(iso).toLocaleString('bg-BG', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }); }
-            catch { return '—'; }
-        };
-
-        function paint() {
-            const totalActive = stats.reduce((a, c) => a + (c.total - c.cancelledCount), 0);
-            const totalNew = stats.reduce((a, c) => a + c.newCount, 0);
-            const cards = stats.map(c => {
-                const active = c.total - c.cancelledCount;
-                return `
-                <button class="ce-course${filter === c.slug ? ' is-on' : ''}" data-f="${esc(c.slug)}">
-                    <span class="ce-course__title">${esc(c.title)}</span>
-                    <span class="ce-course__num">${active}<small>${active === 1 ? 'записан' : 'записани'}</small></span>
-                    <span class="ce-course__chips">
-                        ${c.newCount ? `<i class="ce-st ce-st--new">${c.newCount} нови</i>` : ''}
-                        ${c.enrolledCount ? `<i class="ce-st ce-st--enrolled">${c.enrolledCount} потвърдени</i>` : ''}
-                        ${!c.newCount && !c.enrolledCount ? `<i class="ce-muted">${money(c.price)}</i>` : ''}
-                    </span>
-                </button>`;
-            }).join('');
-
-            const list = rows
-                .filter(r => filter === 'all' || r.courseSlug === filter)
-                .filter(r => stFilter === 'all' || (stFilter === 'active' ? r.status !== 'cancelled' : r.status === stFilter));
-
-            const items = list.map(r => {
-                const st = CE_STATUS[r.status] || CE_STATUS.new;
-                const initial = esc((r.fullName || '?').trim().charAt(0).toUpperCase());
-                const trash = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12a2 2 0 0 0 2 1.8h7a2 2 0 0 0 2-1.8l1-12M9 7V4.8A.8.8 0 0 1 9.8 4h4.4a.8.8 0 0 1 .8.8V7"/></svg>';
-                return `
-                <article class="ce-item ${r.status === 'new' ? 'is-new' : ''}" data-id="${r.id}">
-                    <div class="ce-item__head">
-                        <span class="ce-av">${initial}</span>
-                        <div class="ce-item__who">
-                            <b>${esc(r.fullName)}</b>
-                            <span>${esc(r.courseTitle)}</span>
-                        </div>
-                        <select class="ce-item__st ${st.cls}" aria-label="Статус">
-                            ${Object.entries(CE_STATUS).map(([k, v]) => `<option value="${k}"${k === r.status ? ' selected' : ''}>${v.label}</option>`).join('')}
-                        </select>
-                    </div>
-                    ${r.message ? `<p class="ce-item__msg">${esc(r.message)}</p>` : ''}
-                    <div class="ce-item__foot">
-                        <a class="ce-act ce-act--call" href="tel:${esc(r.phone)}">${Icon('phone', { size: 15 })}<span>${esc(r.phone)}</span></a>
-                        <a class="ce-act" href="mailto:${esc(r.email)}" title="${esc(r.email)}">${Icon('mail', { size: 15 })}<span>Имейл</span></a>
-                        <span class="ce-item__date">${fmtDate(r.createdAt)}</span>
-                        <button class="ce-item__del" title="Изтрий заявката" aria-label="Изтрий заявката">${trash}</button>
-                    </div>
-                </article>`;
-            }).join('');
-
-            body.innerHTML = `
-                <div class="ce-kpis">
-                    ${stat('Записали се общо', totalActive, 'без отказалите се', ACC.crs)}
-                    ${stat('Нови заявки', totalNew, totalNew ? 'чакат да им се обадиш' : 'всичко е обработено', totalNew ? ACC.alert : ACC.cal)}
-                </div>
-                <div class="ce-courses">${cards}</div>
-                <div class="ce-toolbar">
-                    <div class="ce-filter">
-                        <button class="ce-chip${filter === 'all' ? ' is-on' : ''}" data-f="all">Всички курсове</button>
-                        ${stats.map(c => `<button class="ce-chip${filter === c.slug ? ' is-on' : ''}" data-f="${esc(c.slug)}">${esc(shortTitle(c.title))}</button>`).join('')}
-                    </div>
-                    <select class="select ce-stf" aria-label="Филтър по статус">
-                        <option value="active"${stFilter === 'active' ? ' selected' : ''}>Без отказалите се</option>
-                        <option value="all"${stFilter === 'all' ? ' selected' : ''}>Всички статуси</option>
-                        ${Object.entries(CE_STATUS).map(([k, v]) => `<option value="${k}"${stFilter === k ? ' selected' : ''}>Само: ${v.label}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="ce-list">${items || `<div class="panel center"><p class="hint" style="margin:0">${rows.length ? 'Няма заявки по този филтър.' : 'Още няма заявки за курсове. Щом някой се запише от сайта, ще се появи тук.'}</p></div>`}</div>`;
-        }
-
-        body.addEventListener('click', async e => {
-            const f = e.target.closest('[data-f]');
-            if (f) { filter = (filter === f.dataset.f && f.classList.contains('ce-course')) ? 'all' : f.dataset.f; paint(); return; }
-            const del = e.target.closest('.ce-item__del');
-            if (del) {
-                const id = +del.closest('.ce-item').dataset.id;
-                if (!confirm('Да изтрия ли тази заявка? Това не може да се върне.')) return;
-                try { await API.del(`/courses/enrollments/${id}`); rows = rows.filter(r => r.id !== id); await reloadStats(); paint(); }
-                catch (err) { alert(err.message); }
-            }
-        });
-        body.addEventListener('change', async e => {
-            if (e.target.classList.contains('ce-stf')) { stFilter = e.target.value; paint(); return; }
-            const sel = e.target.closest('.ce-item__st');
-            if (!sel) return;
-            const id = +sel.closest('.ce-item').dataset.id;
-            const r = rows.find(x => x.id === id);
-            const prev = r.status;
-            sel.disabled = true;
-            try {
-                await API.patch(`/courses/enrollments/${id}/status`, { status: sel.value });
-                r.status = sel.value;
-                await reloadStats();
-                paint();
-            } catch (err) { alert(err.message); sel.value = prev; sel.disabled = false; }
-        });
-        async function reloadStats() {
-            try { stats = (await API.get('/courses/stats')) || stats; } catch (e) {}
-            refreshCourseBadge();
-        }
-        load();
     }
 
     // Компактна KPI карта: етикетът е ОТГОРЕ (ясно кое за какво е), стойността под него.
