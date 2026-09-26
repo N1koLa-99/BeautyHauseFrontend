@@ -2440,27 +2440,6 @@ textarea.input { resize: vertical; min-height: 110px; }
 .crs-dots { display: none; }
 
 /* ---- Страница „Курсове" ---- */
-.crs-hero--list .crs-hero__visual { width: min(100%, 460px); }
-.crs-collage { position: relative; aspect-ratio: 1 / 1.08; }
-.crs-collage figure { position: absolute; margin: 0; overflow: hidden; box-shadow: 0 26px 50px -22px rgba(60,40,30,.4); }
-.crs-collage img { width: 100%; height: 100%; object-fit: cover; }
-.crs-collage__a { left: 0; top: 0; width: 64%; height: 88%; border-radius: 999px 999px 20px 20px; }
-.crs-collage__a img { animation: crsKen 14s var(--ease-out) both; }
-.crs-collage__b { right: 0; bottom: 0; width: 48%; height: 52%; border-radius: 20px; border: 6px solid #F3EEE7; animation: crsFloat 7s ease-in-out infinite; }
-.crs-collage__badge {
-    position: absolute; right: 4%; top: 8%; z-index: 2; text-align: center;
-    width: 124px; height: 124px; border-radius: 50%; display: grid; place-content: center; gap: .2rem;
-    background: var(--ink); color: #fff; box-shadow: var(--sh-lg);
-    animation: crsFloat 6s ease-in-out infinite; animation-delay: -2s;
-}
-.crs-collage__badge b { font-family: var(--font-display); font-size: 2.1rem; font-weight: 500; line-height: 1; }
-.crs-collage__badge span { font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.7); }
-.crs-hero__btns { display: flex; flex-wrap: wrap; gap: .8rem; margin: 2rem 0 0; }
-.crs-stats { display: flex; flex-wrap: wrap; gap: 1.6rem 2.4rem; margin-top: 2.4rem; padding-top: 1.6rem; border-top: 1px solid rgba(125,107,95,.22); }
-.crs-stats div { display: flex; flex-direction: column; gap: .2rem; }
-.crs-stats b { font-family: var(--font-display); font-size: 1.6rem; font-weight: 500; color: var(--ink); line-height: 1; }
-.crs-stats span { font-size: .76rem; color: var(--muted); }
-
 .crs-why { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 88px); align-items: center; }
 .crs-why__photo { position: relative; margin: 0; aspect-ratio: 4 / 5; border-radius: 26px; overflow: hidden; box-shadow: var(--sh-lg); }
 .crs-why__photo img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
@@ -2521,7 +2500,6 @@ textarea.input { resize: vertical; min-height: 110px; }
     .crs-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; width: calc(50% - 14px); justify-self: center; }
     .crs-hero__panel { grid-template-columns: 1fr; }
     .crs-hero__visual { order: -1; width: min(78%, 360px); margin-top: 8px; }
-    .crs-hero--list .crs-hero__visual { width: min(88%, 420px); }
     .crs-program__grid { grid-template-columns: 1fr; }
     .crs-trainer { position: static; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 1.2rem; align-items: center; }
     .crs-trainer__photo { border-radius: 18px; }
@@ -2535,7 +2513,6 @@ textarea.input { resize: vertical; min-height: 110px; }
     .crs-hero .container { padding-inline: 10px; }
     .crs-hero__panel { padding: 28px 20px 30px; border-radius: 22px; gap: 26px; }
     .crs-hero__visual { width: min(74%, 300px); }
-    .crs-hero--list .crs-hero__visual { width: 92%; }
     .crs-float--trainer { left: -10%; bottom: 8%; padding: .5rem .8rem .5rem .5rem; }
     .crs-float--trainer img { width: 36px; height: 36px; }
     .crs-float--doc { right: -10%; font-size: .72rem; }
@@ -2584,9 +2561,6 @@ textarea.input { resize: vertical; min-height: 110px; }
     .crs-form__grid { grid-template-columns: 1fr; }
     .crs-callcard b { font-size: 1.3rem; }
     .home-courses__head { flex-direction: column; align-items: flex-start; gap: 1.2rem; }
-    .crs-collage__badge { width: 96px; height: 96px; }
-    .crs-collage__badge b { font-size: 1.7rem; }
-    .crs-stats { gap: 1.2rem 1.8rem; }
 
     .crs-sticky {
         display: flex; align-items: center; justify-content: space-between; gap: 1rem;
@@ -2621,11 +2595,6 @@ textarea.input { resize: vertical; min-height: 110px; }
     .crs-float--trainer { left: -6%; }
     .crs-float--trainer b { font-size: .8rem; }
     .crs-float--doc { right: -6%; padding: .5rem .75rem; }
-    .crs-collage__badge { width: 78px; height: 78px; right: 0; top: 4%; }
-    .crs-collage__badge b { font-size: 1.35rem; }
-    .crs-collage__badge span { font-size: .48rem; letter-spacing: .06em; }
-    .crs-stats { gap: 1rem 1.6rem; }
-    .crs-stats b { font-size: 1.4rem; }
 
     /* карта на курс: чиповете стават списък, бутонът — на цяла ширина */
     .crs-card__body { padding: 1.2rem 1.1rem 1.15rem; gap: .9rem; }
@@ -2656,7 +2625,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 
 @media (prefers-reduced-motion: reduce) {
     .crs-hero .anim, .crs-hero__visual, .crs-success { animation: none; opacity: 1; transform: none; }
-    .crs-hero__arch img, .crs-collage__a img, .crs-hero__ring, .crs-float, .crs-collage__b, .crs-collage__badge, .crs-callcard__ic { animation: none; }
+    .crs-hero__arch img, .crs-hero__ring, .crs-float, .crs-callcard__ic { animation: none; }
     .crs-card, .crs-card__media img, .crs-faq__a { transition: none; }
 }
 
@@ -2783,3 +2752,128 @@ textarea.input { resize: vertical; min-height: 110px; }
     .crs-grid, .crs-grid--2 { margin-inline: -14px; padding-inline: 14px; scroll-padding-inline: 14px; }
     .crs-grid > .crs-card { flex-basis: 86%; }
 }
+
+/* =====================================================================
+   Страница „Курсове" — hero с 3D сцена
+   ===================================================================== */
+/* Нормални (изправени) цифри навсякъде в курсовете — Playfair иначе ги „пуска" надолу. */
+[class*="crs-"] { font-variant-numeric: lining-nums; }
+
+.crs-hero--list .crs-hero__title { font-size: clamp(2.5rem, 5vw, 4.3rem); line-height: 1.02; }
+.crs-hero--list .crs-hero__lead { max-width: 470px; }
+.crs-hero__btns { display: flex; flex-wrap: wrap; gap: .8rem; margin: 2rem 0 0; }
+
+/* Числата — четлив шрифт, броят се при появяване */
+.crs-kpis { display: flex; gap: 0; margin-top: 2.4rem; padding-top: 1.6rem; border-top: 1px solid rgba(125,107,95,.2); }
+.crs-kpi { flex: 1 1 0; min-width: 0; padding-right: 1.2rem; }
+.crs-kpi + .crs-kpi { padding-left: 1.4rem; border-left: 1px solid rgba(125,107,95,.2); }
+.crs-kpi b {
+    display: flex; align-items: baseline; gap: .25rem; line-height: 1;
+    font-family: var(--font-dash); font-weight: 600; font-size: clamp(1.9rem, 3vw, 2.5rem);
+    letter-spacing: -.02em; color: var(--ink); font-variant-numeric: lining-nums tabular-nums;
+}
+.crs-kpi b i { font-style: normal; font-size: .5em; font-weight: 600; color: var(--rose-deep); letter-spacing: 0; }
+.crs-kpi small { display: block; margin-top: .45rem; font-size: .76rem; color: var(--muted); line-height: 1.35; }
+
+/* 3D сцена: слоевете са на различна дълбочина и се накланят след мишката */
+.crs-hero--list .crs-hero__visual { width: min(100%, 500px); justify-self: end; }
+.crs-scene { position: relative; aspect-ratio: 1 / 1.02; perspective: 1400px; }
+.crs-scene__inner {
+    position: absolute; inset: 0; transform-style: preserve-3d;
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition: transform .7s var(--ease-out);
+}
+.crs-scene.is-idle .crs-scene__inner { animation: crsSway 9s ease-in-out infinite; }
+@keyframes crsSway {
+    0%, 100% { transform: rotateX(4deg) rotateY(-7deg); }
+    50% { transform: rotateX(-3deg) rotateY(7deg); }
+}
+.crs-scene__glow {
+    position: absolute; left: 20%; top: 18%; width: 70%; aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(196,169,138,.55), rgba(196,169,138,0));
+    transform: translateZ(-80px); filter: blur(6px);
+}
+
+.crs-hero--list .crs-hero__visual { animation: none; }
+
+@media (max-width: 980px) {
+    .crs-hero--list .crs-hero__visual { justify-self: center; width: min(92%, 440px); }
+}
+@media (max-width: 720px) {
+    .crs-hero--list .crs-hero__title { font-size: clamp(2.2rem, 10vw, 2.9rem); }
+    .crs-hero--list .crs-hero__visual { width: 86%; margin-inline: auto; }
+    .crs-scene { aspect-ratio: 1 / .98; }
+    .crs-kpis { margin-top: 2rem; }
+    .crs-kpi { padding-right: .8rem; }
+    .crs-kpi + .crs-kpi { padding-left: .9rem; }
+    .crs-kpi b { font-size: 1.75rem; }
+    .crs-kpi small { font-size: .7rem; }
+}
+@media (max-width: 400px) {
+    .crs-kpi b { font-size: 1.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .crs-scene.is-idle .crs-scene__inner { animation: none; }
+}
+
+/* ---- 3D ветрило от трите курса ---- */
+@keyframes crsSpin { to { transform: rotate(360deg); } }
+.crs-scene--fan { aspect-ratio: 1 / 1; }
+.crs-fan__card {
+    position: absolute; top: 12%; width: 46%; aspect-ratio: 4 / 5.4; overflow: hidden; display: block;
+    border-radius: 999px 999px 22px 22px; border: 5px solid #F6F1EA;
+    box-shadow: 0 34px 60px -26px rgba(50,35,25,.55);
+    transition: transform .6s var(--ease-out), box-shadow .6s var(--ease-out);
+    animation: crsFanIn 1.1s var(--ease-out) both;
+}
+.crs-fan__card img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 1s var(--ease-out); }
+.crs-fan__card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(24,18,14,.72)); pointer-events: none; }
+.crs-fan__cap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: .9rem 1rem 1rem; text-align: center; color: #fff; }
+.crs-fan__cap b { display: block; font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; line-height: 1.2; }
+.crs-fan__cap small { display: inline-block; margin-top: .35rem; padding: .18rem .6rem; border-radius: 999px; background: rgba(255,255,255,.2); font-family: var(--font-dash); font-size: .74rem; font-weight: 600; }
+.crs-fan__card--l { left: 2%; transform: translateZ(-40px) rotate(-9deg); transform-origin: bottom center; animation-delay: .25s; }
+.crs-fan__card--r { right: 2%; transform: translateZ(-40px) rotate(9deg); transform-origin: bottom center; animation-delay: .4s; }
+.crs-fan__card--c { left: 27%; top: 4%; width: 46%; transform: translateZ(60px); z-index: 2; animation-delay: .1s; box-shadow: 0 44px 70px -26px rgba(50,35,25,.65); }
+.crs-fan__card--c .crs-fan__cap b { font-size: 1.25rem; }
+@keyframes crsFanIn { from { opacity: 0; translate: 0 50px; } to { opacity: 1; translate: 0 0; } }
+@media (hover: hover) {
+    .crs-fan__card:hover img { transform: scale(1.07); }
+    .crs-fan__card--l:hover { transform: translateZ(-10px) rotate(-12deg) translateY(-10px); }
+    .crs-fan__card--r:hover { transform: translateZ(-10px) rotate(12deg) translateY(-10px); }
+    .crs-fan__card--c:hover { transform: translateZ(80px) translateY(-8px); }
+}
+@media (max-width: 720px) {
+    .crs-fan__card { border-width: 4px; }
+    .crs-fan__cap { padding: .6rem .5rem .7rem; }
+    .crs-fan__cap b { font-size: .8rem; }
+    .crs-fan__card--c .crs-fan__cap b { font-size: .95rem; }
+    .crs-fan__cap small { font-size: .64rem; }
+}
+/* страничните карти: надписът е във видимата (външната) половина */
+.crs-fan__card--l .crs-fan__cap, .crs-fan__card--r .crs-fan__cap { width: 52%; padding-bottom: .9rem; }
+.crs-fan__card--l .crs-fan__cap { left: 0; right: auto; text-align: left; padding-left: 1rem; }
+.crs-fan__card--r .crs-fan__cap { left: auto; right: 0; text-align: right; padding-right: 1rem; }
+.crs-fan__card--l .crs-fan__cap b, .crs-fan__card--r .crs-fan__cap b { display: none; }
+.crs-fan__card--l .crs-fan__cap small, .crs-fan__card--r .crs-fan__cap small { font-size: .9rem; padding: .3rem .8rem; background: rgba(255,255,255,.9); color: var(--ink); }
+@media (max-width: 720px) {
+    .crs-fan__card--l .crs-fan__cap { padding-left: .6rem; }
+    .crs-fan__card--r .crs-fan__cap { padding-right: .6rem; }
+    .crs-fan__card--l .crs-fan__cap small, .crs-fan__card--r .crs-fan__cap small { font-size: .72rem; padding: .22rem .6rem; }
+}
+.crs-scene--fan { aspect-ratio: 1 / .92; }
+.crs-fan__cap b { white-space: nowrap; }
+.crs-fan__card--c .crs-fan__cap b { white-space: normal; text-wrap: balance; }
+@media (max-width: 400px) { .crs-fan__card--c .crs-fan__cap b { font-size: .85rem; } }
+/* по-големи снимки във ветрилото */
+.crs-hero--list .crs-hero__visual { width: min(100%, 610px); }
+.crs-scene--fan { aspect-ratio: 1 / 1; }
+.crs-fan__card { width: 54%; top: 11%; }
+.crs-fan__card--c { width: 54%; left: 23%; top: 1%; }
+.crs-fan__card--l { left: -1%; }
+.crs-fan__card--r { right: -1%; }
+@media (max-width: 980px) { .crs-hero--list .crs-hero__visual { width: min(100%, 540px); } }
+@media (max-width: 720px) {
+    .crs-hero--list .crs-hero__visual { width: 106%; margin-inline: -3%; }
+    .crs-scene--fan { aspect-ratio: 1 / 1.05; }
+}
+@media (prefers-reduced-motion: reduce) { .crs-fan__card { animation: none; } }

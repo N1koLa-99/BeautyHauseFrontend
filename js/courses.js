@@ -437,5 +437,32 @@
         }));
     });
 
+    /* ---------------- 3D сцена в hero-то (накланя се след мишката) ---------------- */
+    document.querySelectorAll('[data-tilt3d]').forEach(scene => {
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) return;
+        scene.classList.add('is-idle');                     // бавно полюшване, докато никой не я пипа
+        if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return; // телефон — само полюшване
+        const area = scene.closest('[data-tilt-area]') || scene;
+        let raf = 0;
+        area.addEventListener('pointermove', e => {
+            const r = scene.getBoundingClientRect();
+            const x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 1.2)));
+            const y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 1.2)));
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+                scene.classList.remove('is-idle');
+                scene.style.setProperty('--ry', (x * 12).toFixed(2) + 'deg');
+                scene.style.setProperty('--rx', (-y * 9).toFixed(2) + 'deg');
+            });
+        });
+        area.addEventListener('pointerleave', () => {
+            cancelAnimationFrame(raf);
+            scene.style.setProperty('--ry', '0deg');
+            scene.style.setProperty('--rx', '0deg');
+            setTimeout(() => { if (!area.matches(':hover')) scene.classList.add('is-idle'); }, 700);
+        });
+    });
+
     window.BH_CourseCard = card;
 })();
