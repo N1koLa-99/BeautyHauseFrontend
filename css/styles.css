@@ -2351,10 +2351,6 @@ textarea.input { resize: vertical; min-height: 110px; }
 .crs-cert__line--s { width: 72%; }
 .crs-cert__sign { display: block; width: 38%; height: 1px; background: var(--muted); margin-top: auto; }
 
-/* ---- Галерия ---- */
-.crs-gallery__track { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; scrollbar-width: thin; }
-.crs-gallery__track figure { flex: 0 0 min(260px, 70%); aspect-ratio: 3 / 4; border-radius: 18px; overflow: hidden; scroll-snap-align: start; margin: 0; }
-.crs-gallery__track img { width: 100%; height: 100%; object-fit: cover; }
 
 /* ---- Записване ---- */
 .crs-enroll { background: linear-gradient(180deg, var(--cream), #F1ECE5); }
@@ -2878,3 +2874,58 @@ textarea.input { resize: vertical; min-height: 110px; }
     .crs-scene--fan { aspect-ratio: 1 / 1.05; }
 }
 @media (prefers-reduced-motion: reduce) { .crs-fan__card { animation: none; } }
+
+/* ---- Галерия „От нашите обучения" ---- */
+.crs-gallery { background: var(--ivory); }
+.crs-gal { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.crs-gal__item {
+    position: relative; display: block; padding: 0; border: 0; cursor: zoom-in; overflow: hidden;
+    aspect-ratio: 3 / 4; border-radius: 20px; background: var(--blush-soft);
+    box-shadow: 0 20px 40px -24px rgba(50,35,25,.45);
+    transition: opacity .7s var(--ease-out), transform .6s var(--ease-out), box-shadow .5s;
+}
+.crs-gal__item:nth-child(even) { margin-top: 36px; }
+.crs-gal__item img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; transition: transform 1s var(--ease-out); }
+.crs-gal__item::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(34,31,28,.35)); opacity: 0; transition: opacity .4s; }
+.crs-gal__zoom {
+    position: absolute; right: 12px; bottom: 12px; z-index: 1; width: 38px; height: 38px; border-radius: 50%;
+    display: grid; place-items: center; background: rgba(255,255,255,.9); color: var(--ink);
+    opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s var(--ease-out);
+}
+@media (hover: hover) {
+    .crs-gal__item:hover { transform: translateY(-6px); box-shadow: 0 30px 50px -24px rgba(50,35,25,.55); }
+    .crs-gal__item:hover img { transform: scale(1.06); }
+    .crs-gal__item:hover::after, .crs-gal__item:hover .crs-gal__zoom { opacity: 1; transform: none; }
+}
+@media (max-width: 720px) {
+    .crs-gal {
+        display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+        margin-inline: -18px; padding: 4px 18px 14px; scroll-padding-inline: 18px; scrollbar-width: none;
+    }
+    .crs-gal::-webkit-scrollbar { display: none; }
+    .crs-gal__item { flex: 0 0 64%; scroll-snap-align: start; border-radius: 16px; }
+    .crs-gal__item:nth-child(even) { margin-top: 0; }
+}
+
+/* преглед на цял екран */
+.crs-lb {
+    position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 60px 16px;
+    background: rgba(20,16,13,.92); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    opacity: 0; visibility: hidden; transition: opacity .3s, visibility 0s linear .3s;
+}
+.crs-lb.is-open { opacity: 1; visibility: visible; transition: opacity .3s; }
+.crs-lb img { max-width: min(92vw, 720px); max-height: 82vh; border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.crs-lb img.is-in { animation: crsLbIn .45s var(--ease-out); }
+@keyframes crsLbIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+.crs-lb__x, .crs-lb__nav {
+    position: absolute; display: grid; place-items: center; border: 0; cursor: pointer; color: #fff;
+    background: rgba(255,255,255,.12); border-radius: 50%; font-size: 1.8rem; line-height: 1; transition: background .2s;
+}
+.crs-lb__x { top: 16px; right: 16px; width: 46px; height: 46px; }
+.crs-lb__nav { top: 50%; width: 52px; height: 52px; translate: 0 -50%; font-size: 2.2rem; }
+.crs-lb__nav--prev { left: 16px; } .crs-lb__nav--next { right: 16px; }
+.crs-lb__x:hover, .crs-lb__nav:hover { background: rgba(255,255,255,.25); }
+.crs-lb__count { position: absolute; bottom: 20px; left: 50%; translate: -50% 0; color: rgba(255,255,255,.7); font-family: var(--font-dash); font-size: .85rem; letter-spacing: .08em; }
+@media (max-width: 720px) {
+    .crs-lb__nav { top: auto; bottom: 10px; translate: 0 0; width: 46px; height: 46px; }
+}

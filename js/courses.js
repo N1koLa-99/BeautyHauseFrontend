@@ -206,6 +206,62 @@
     }
     document.querySelectorAll('[data-faq="common"]').forEach(el => el.innerHTML = faqHTML(D.COMMON_FAQ));
 
+    /* ---------------- Галерия от обучения + преглед на цял екран ---------------- */
+    function galleryHTML(list) {
+        return `<div class="crs-gal reveal reveal-stagger">${list.map((src, i) => `
+            <button type="button" class="crs-gal__item" data-gal="${i}" aria-label="Отвори снимка ${i + 1}">
+                <img src="${src}" alt="Курсистка от обучение в Beauty House" loading="lazy">
+                <span class="crs-gal__zoom" aria-hidden="true">${ic('sparkle', 16)}</span>
+            </button>`).join('')}</div>`;
+    }
+    document.querySelectorAll('[data-gallery="courses"]').forEach(el => {
+        const g = (D.list.find(c => c.gallery && c.gallery.length) || {}).gallery || [];
+        if (g.length) el.innerHTML = galleryHTML(g); else el.closest('section') && el.closest('section').remove();
+    });
+    let lb = null, lbList = [], lbIdx = 0;
+    function lbShow(i) {
+        lbIdx = (i + lbList.length) % lbList.length;
+        const img = lb.querySelector('img');
+        img.classList.remove('is-in'); void img.offsetWidth;
+        img.src = lbList[lbIdx]; img.classList.add('is-in');
+        lb.querySelector('.crs-lb__count').textContent = `${lbIdx + 1} / ${lbList.length}`;
+    }
+    function lbOpen(list, i) {
+        lbList = list;
+        if (!lb) {
+            lb = document.createElement('div');
+            lb.className = 'crs-lb';
+            lb.innerHTML = `<button class="crs-lb__x" aria-label="Затвори">×</button>
+                <button class="crs-lb__nav crs-lb__nav--prev" aria-label="Предишна">‹</button>
+                <img alt="Снимка от обучение">
+                <button class="crs-lb__nav crs-lb__nav--next" aria-label="Следваща">›</button>
+                <span class="crs-lb__count"></span>`;
+            document.body.appendChild(lb);
+            lb.addEventListener('click', e => { if (e.target === lb || e.target.closest('.crs-lb__x')) lbClose(); });
+            lb.querySelector('.crs-lb__nav--prev').addEventListener('click', () => lbShow(lbIdx - 1));
+            lb.querySelector('.crs-lb__nav--next').addEventListener('click', () => lbShow(lbIdx + 1));
+            let x0 = null;
+            lb.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+            lb.addEventListener('touchend', e => { if (x0 == null) return; const d = e.changedTouches[0].clientX - x0; if (Math.abs(d) > 40) lbShow(lbIdx + (d < 0 ? 1 : -1)); x0 = null; });
+            document.addEventListener('keydown', e => {
+                if (!lb.classList.contains('is-open')) return;
+                if (e.key === 'Escape') lbClose();
+                if (e.key === 'ArrowRight') lbShow(lbIdx + 1);
+                if (e.key === 'ArrowLeft') lbShow(lbIdx - 1);
+            });
+        }
+        lbShow(i);
+        lb.classList.add('is-open');
+        document.documentElement.style.overflow = 'hidden';
+    }
+    function lbClose() { lb.classList.remove('is-open'); document.documentElement.style.overflow = ''; }
+    document.addEventListener('click', e => {
+        const it = e.target.closest('.crs-gal__item');
+        if (!it) return;
+        const all = [...it.parentElement.querySelectorAll('.crs-gal__item img')].map(i => i.getAttribute('src'));
+        lbOpen(all, +it.dataset.gal);
+    });
+
     /* ---------------- Страница на курс ---------------- */
     const root = document.getElementById('course-root');
     const course = root && D.bySlug(root.dataset.course);
@@ -344,10 +400,14 @@
         </section>` : ''}
 
         ${c.gallery && c.gallery.length ? `
-        <section class="section section--tight crs-gallery">
+        <section class="section crs-gallery">
             <div class="container">
-                <div class="crs-head center reveal"><span class="crs-eyebrow">Галерия</span><h2>От нашите обучения</h2></div>
-                <div class="crs-gallery__track reveal">${c.gallery.map(src => `<figure><img src="${src}" alt="Курсистка от обучение в Beauty House" loading="lazy"></figure>`).join('')}</div>
+                <div class="crs-head center reveal">
+                    <span class="crs-eyebrow">Галерия</span>
+                    <h2>От нашите обучения</h2>
+                    <p>Курсистки на Радина в деня, в който получават сертификата си.</p>
+                </div>
+                ${galleryHTML(c.gallery)}
             </div>
         </section>` : ''}
 

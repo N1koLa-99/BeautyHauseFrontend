@@ -82,7 +82,7 @@ window.BH_COURSES = (function () {
                 { q: 'Има ли продължение след основния курс?', a: 'Да — когато натрупаш практика, можеш да продължиш с Надграждащото обучение по миглопластика.' }
             ],
             certificate: null,
-            gallery: []
+            gallery: ['img/courses/graduate-1.webp', 'img/courses/graduate-2.webp', 'img/courses/graduate-3.webp', 'img/courses/graduate-4.webp']
         },
         {
             slug: 'nadgrazhdashto-obuchenie',
@@ -132,7 +132,7 @@ window.BH_COURSES = (function () {
                 { q: 'Мога ли да се запиша без основен курс?', a: 'Обучението е за хора с базови познания. Ако започваш от нулата, по-подходящ е Курсът по миглопластика.' }
             ],
             certificate: null,
-            gallery: []
+            gallery: ['img/courses/graduate-1.webp', 'img/courses/graduate-2.webp', 'img/courses/graduate-3.webp', 'img/courses/graduate-4.webp']
         },
         {
             slug: 'laminirane-na-migli',
@@ -186,7 +186,7 @@ window.BH_COURSES = (function () {
                 title: 'Удостоверение от МОН',
                 text: 'Курсът завършва с удостоверение от Министерството на образованието и науката — официален документ за придобитата квалификация.'
             },
-            gallery: []
+            gallery: ['img/courses/graduate-1.webp', 'img/courses/graduate-2.webp', 'img/courses/graduate-3.webp', 'img/courses/graduate-4.webp']
         }
     ];
 
