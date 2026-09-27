@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /_backup-pochivki-2026-09-25/
+Disallow: /_to_delete/
+
+Sitemap: https://beautyhousebg.com/sitemap.xml
