@@ -1,5 +1,5 @@
 /* =====================================================================
-   Каталог с услуги (Studio24 стил, темата на Beauty House).
+   Каталог с услуги (темата на Beauty House).
    Подредбата (категории/групи/имена) е в js/catalog-data.js, а ЦЕНИТЕ и
    ВРЕМЕТРАЕНЕТО се взимат от базата: GET /employees/{id}/services.
    Процедура, която я няма в базата, не се показва; услуга от базата, която
@@ -66,7 +66,7 @@ function mount(box, opts = {}) {
                 let rows;
                 if (it.options) {
                     rows = it.options.flatMap((o, oi) => rowsFor(o.db, o.name).map(r => ({ ...r, oi })));
-                    // Варианти на няколко специалисти: първо всички на единия, после на другия (като в Studio 24).
+                    // Варианти на няколко специалисти: първо всички на единия, после на другия.
                     if (rows.some(r => r.multi)) rows.sort((a, b) => empOrder(a) - empOrder(b) || a.oi - b.oi);
                 } else rows = rowsFor(it.db || it.name, '');
                 return rows.length ? { name: it.name, rows } : null;
@@ -100,7 +100,7 @@ function mount(box, opts = {}) {
     const tabsEl = box.querySelector('.cat__tabs');
     const panelEl = box.querySelector('.cat__panel');
 
-    const count = g => g.items.length;   // брой процедури (като в Studio 24), не варианти
+    const count = g => g.items.length;   // брой процедури, не варианти
     const curTab = () => tabs.find(t => t.key === tabKey);
 
     // Форматира цена: „от 20 €" -> малкото „от" над числото за по-чист вид.

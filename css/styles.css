@@ -276,7 +276,7 @@ em, .italic { font-style: italic; }
 .ad-lbl small { font-size: inherit; font-weight: 400; color: var(--muted); }
 /* „Готово в 09:45 · следващ час от 10:00" до „Почивка след" */
 .ad-sum { display: flex; flex-direction: column; justify-content: flex-end; gap: .1rem; padding-bottom: .55rem; font-size: .8rem; color: var(--ink-soft); line-height: 1.35; }
-/* Времетраене: едно поле с два избора — „1 ч | 30 мин" (като в Studio24) */
+/* Времетраене: едно поле с два избора — „1 ч | 30 мин" */
 .ad-hm {
     display: flex; align-items: stretch; width: 100%;
     background: var(--ivory); border: 1px solid var(--line); border-radius: var(--r-md);
@@ -358,7 +358,7 @@ em, .italic { font-style: italic; }
 @keyframes calFadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes calPop { from { opacity: 0; transform: scale(.94) translateY(10px); } to { opacity: 1; transform: none; } }
 
-/* ===== Каталог с услуги (Studio24 стил) ===== */
+/* ===== Каталог с услуги ===== */
 .cat { border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: #fff; box-shadow: var(--sh-sm); }
 
 /* Категории с икони (винаги видими; съдържанието идва след избор) */
@@ -1211,7 +1211,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 @media (max-width: 860px) { .contact-grid { grid-template-columns: 1fr; gap: 18px; } }
 
 /* =====================================================================
-   ГРАФИК — стил Studio 24 (js/calendar.js)
+   ГРАФИК (js/calendar.js)
    Размерите идват от JS: --hh = пиксели за 1 час, --cw = ширина на колона.
    Цветът на лентата е в --sc-accent (смени го тук, ако трябва).
    ===================================================================== */
@@ -1230,7 +1230,7 @@ textarea.input { resize: vertical; min-height: 110px; }
     border: 1px solid var(--sc-line); border-radius: 16px;
     overflow: hidden;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-feature-settings: "locl" 0;   /* стандартни кирилски форми (както в Studio 24) */
+    font-feature-settings: "locl" 0;   /* стандартни кирилски форми */
     color: var(--sc-text);
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
