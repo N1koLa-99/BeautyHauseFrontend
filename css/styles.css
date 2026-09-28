@@ -227,6 +227,14 @@ em, .italic { font-style: italic; }
 }
 .brand b { font-weight: 500; }
 .brand span { color: var(--rose-deep); }
+/* Име + фин подзаглавен ред „Aesthetic & Beauty“ точно под него */
+.brand__text { display: inline-block; line-height: 1; white-space: nowrap; }
+.brand__tag {
+    display: block; margin-top: .75em;
+    font-family: var(--font-body); font-size: .4em; font-weight: 400;
+    letter-spacing: .235em; text-transform: uppercase;   /* ширина ≈ „Beauty House“ */
+    color: var(--rose-deep); opacity: .72;
+}
 /* Лого-изображение в кръглата значка на бранда */
 .brand__mark--logo { background: none; overflow: hidden; }
 .brand__mark--logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1566,6 +1574,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 .footer { background: var(--ink); color: #D8D2CB; padding-top: clamp(60px, 8vw, 110px); }
 .footer__grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.2fr; gap: 40px; padding-bottom: 3rem; }
 .footer .brand, .footer .brand span { color: #F5F1EB; }
+.footer .brand__tag { color: #C9BFB3; opacity: 1; }
 .footer h4 { font-family: var(--font-body); font-size: .78rem; letter-spacing: .16em; text-transform: uppercase; color: #A79A8C; margin-bottom: 1.2rem; }
 .footer__links a { display: block; color: #D8D2CB; font-size: .92rem; padding: .3rem 0; transition: color .2s, transform .2s var(--ease-out); }
 .footer__links a:hover { color: var(--gold); transform: translateX(4px); }
