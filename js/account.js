@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <nav class="dash-nav" aria-label="Навигация на таблото">
                 <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
                 <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">График</span></button>
-                <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('alert', { size: 20 })}</span><span class="dash-tab__lb">Некоректни</span></button>
+                <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('users', { size: 20 })}</span><span class="dash-tab__lb">Клиенти</span></button>
                 <button class="dash-tab" data-t="courses"><span class="dash-tab__ic">${Icon('book', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">Курсове</span></button>
                 <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
             </nav>`;
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const panels = {};
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
-        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderNoShow, courses: renderCourses, settings: renderSettings };
+        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderClients, clients: renderClients, courses: renderCourses, settings: renderSettings };
         // Фонът на цялото табло се оцветява леко според отворения раздел — веднага личи къде си.
         const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-alert-soft)', courses: 'var(--acc-crs-soft)', settings: 'var(--acc-set-soft)' };
 
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.t)));
         // ?tab=calendar (от менюто „График") отваря директно съответния раздел.
         const wanted = new URLSearchParams(location.search).get('tab');
-        show(loaders[wanted] ? wanted : 'stats');
+        show(wanted === 'clients' ? 'noshow' : (loaders[wanted] ? wanted : 'stats'));
         refreshCourseBadge();
         refreshCalBadge();
         // нови заявки и часове, докато таблото е отворено
@@ -593,6 +593,160 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ---- Раздел КЛИЕНТИ (за Радина, Анелия и Ирина) ----
+    // Всички клиенти: записали се онлайн + добавени ръчно от персонала (по телефон).
+    // Филтър Всички / Коректни / Некоректни + търсене по име, телефон или имейл.
+    // Клик върху клиент -> всичките му минали и предстоящи часове (при всички специалисти).
+    // Цените на чужди часове идват празни от сървъра — служителката вижда само своите пари.
+    async function renderClients(box) {
+        box.innerHTML = `
+            ${sectionTitle('Клиенти', ACC.alert, '0 0 .3rem')}
+            <p class="hint" style="margin:0 0 1rem">Всички клиенти — записали се онлайн и добавени ръчно от вас (разпознават се по телефона). Натисни клиент, за да видиш всичките му часове.</p>
+            <div class="cl-bar">
+                <div class="cl-seg" role="tablist">
+                    <button class="cl-f is-on" data-f="all">Всички</button>
+                    <button class="cl-f" data-f="ok">Коректни</button>
+                    <button class="cl-f" data-f="noshow">Некоректни</button>
+                </div>
+                <input class="input cl-q" type="search" placeholder="Търси по име, телефон или имейл…" autocomplete="off">
+            </div>
+            <div class="cl-count hint"></div>
+            <div class="cl-body"><div class="spinner"></div></div>`;
+        const body = box.querySelector('.cl-body'), countEl = box.querySelector('.cl-count');
+        const qEl = box.querySelector('.cl-q');
+        let filter = 'all', seq = 0, timer = null;
+        const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return '—'; } };
+        const phoneSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
+        const mailSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>';
+
+        function card(c) {
+            const bad = c.noShow > 0;
+            const meta = [
+                c.phone ? `<span class="ns-meta-row">${phoneSvg}<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></span>` : `<span class="ns-meta-row">${phoneSvg}<span>без телефон</span></span>`,
+                c.email ? `<span class="ns-meta-row">${mailSvg}<span>${esc(c.email)}</span></span>` : ''
+            ].join('');
+            const stats = [
+                `<span>${c.total} ${c.total === 1 ? 'час' : 'часа'}</span>`,
+                c.completed ? `<span>${c.completed} проведени</span>` : '',
+                c.upcoming ? `<span class="cl-up">${c.upcoming} предстоящ${c.upcoming === 1 ? '' : 'и'}</span>` : '',
+                c.lastVisit ? `<span>последно: ${fmtDate(c.lastVisit)}</span>` : ''
+            ].filter(Boolean).join('<i>·</i>');
+            return `
+            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
+                <button type="button" class="cl-head">
+                    <span class="cl-av">${bad ? '⚠' : esc((c.name || '?').trim().charAt(0).toUpperCase())}</span>
+                    <span class="cl-main">
+                        <span class="cl-top">
+                            <span class="cl-name">${esc(c.name || 'Клиент')}</span>
+                            ${bad ? `<span class="ns-count">${c.noShow}× не се яви</span>` : ''}
+                            <span class="cl-tag${c.hasAccount ? ' is-acc' : ''}">${c.hasAccount ? 'с профил' : 'добавен ръчно'}</span>
+                        </span>
+                        <span class="ns-meta">${meta}</span>
+                        <span class="cl-stats">${stats}</span>
+                    </span>
+                    <span class="cl-chev">${Icon('chevron-down', { size: 18 })}</span>
+                </button>
+                <div class="cl-hist" hidden></div>
+            </div>`;
+        }
+
+        async function load() {
+            const my = ++seq;
+            body.innerHTML = `<div class="spinner"></div>`;
+            try {
+                const q = qEl.value.trim();
+                const rows = await API.get(`/clients?filter=${filter}${q ? '&q=' + encodeURIComponent(q) : ''}`) || [];
+                if (my !== seq) return;
+                countEl.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? 'клиент' : 'клиента'}` : '';
+                body.innerHTML = rows.length ? rows.map(card).join('')
+                    : `<div class="panel center"><p class="hint" style="margin:0">${q ? 'Няма клиент, който да отговаря на търсенето.' : (filter === 'noshow' ? 'Няма некоректни клиенти. 🎉' : 'Още няма клиенти.')}</p></div>`;
+            } catch (err) {
+                if (my === seq) body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            }
+        }
+
+        async function toggleHistory(cardEl) {
+            const hist = cardEl.querySelector('.cl-hist');
+            const open = hist.hidden;
+            cardEl.classList.toggle('is-open', open);
+            hist.hidden = !open;
+            if (!open || hist.dataset.loaded) return;
+            hist.innerHTML = `<div class="spinner"></div>`;
+            try {
+                const h = await API.get(`/clients/history?key=${encodeURIComponent(cardEl.dataset.key)}`);
+                const items = (h && h.bookings) || [];
+                hist.dataset.loaded = '1';
+                // Ръчно добавен клиент -> покана да си направи профил (линк, който пращаш от своя телефон).
+                const inviteBar = cardEl.dataset.acc === '1' ? '' : `
+                    <div class="cl-inv">
+                        <span>Няма профил в сайта. Прати ѝ покана — като се регистрира през линка, тези часове ще са в профила ѝ.</span>
+                        <button type="button" class="btn btn--gold cl-inv-btn" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Покани за профил</button>
+                        <div class="cl-inv-out" hidden></div>
+                    </div>`;
+                if (!items.length) { hist.innerHTML = inviteBar + `<p class="hint" style="margin:.4rem 0 0">Няма записани часове.</p>`; return; }
+                const now = Date.now();
+                hist.innerHTML = inviteBar + items.map(b => {
+                    const st = STATUS[b.status] || { label: b.status, cls: 'alert--info' };
+                    const future = b.status === 'booked' && new Date(b.startAt).getTime() > now;
+                    const price = b.price != null
+                        ? `<b class="cl-price">${money(b.price * (100 - (b.discountPercent || 0)) / 100)}${b.discountPercent ? ` <small>−${b.discountPercent}%</small>` : ''}</b>` : '';
+                    return `<div class="cl-row${future ? ' is-future' : ''}">
+                        <div class="cl-row__when">${fmtDate(b.startAt)}<small>${b.startAt.slice(11, 16)}</small></div>
+                        <div class="cl-row__what"><span>${esc(b.serviceName)}</span><small>при ${esc(b.employeeName)}${b.source === 'staff' ? ' · записан ръчно' : ' · онлайн'}</small>
+                            ${b.cancelReason ? `<small class="cl-row__why">Причина: ${esc(b.cancelReason)}</small>` : ''}</div>
+                        <div class="cl-row__st"><span class="cl-st ${st.cls}">${future ? 'Предстоящ' : st.label}</span>${price}</div>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                hist.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            }
+        }
+
+        box.querySelectorAll('.cl-f').forEach(b => b.addEventListener('click', () => {
+            filter = b.dataset.f;
+            box.querySelectorAll('.cl-f').forEach(x => x.classList.toggle('is-on', x === b));
+            load();
+        }));
+        qEl.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 280); });
+        body.addEventListener('click', async e => {
+            const invBtn = e.target.closest('.cl-inv-btn');
+            if (invBtn) {
+                const cardEl = invBtn.closest('.cl-card'), out = cardEl.querySelector('.cl-inv-out');
+                invBtn.disabled = true;
+                try {
+                    const inv = await API.post('/clients/invite', { key: cardEl.dataset.key });
+                    const url = `${location.origin}/auth.html?invite=${inv.token}`;
+                    const first = (cardEl.dataset.name || '').trim().split(/\s+/)[0];
+                    const text = `Здравей${first ? ', ' + first : ''}! Направи си профил в Beauty House — ще виждаш всичките си часове при нас и ще се записваш онлайн: ${url}`;
+                    const phone = (cardEl.dataset.phone || '').replace(/[^\d+]/g, '');
+                    const until = new Date(inv.expiresAt).toLocaleDateString('bg-BG', { day: 'numeric', month: 'long' });
+                    out.innerHTML = `
+                        <input class="input cl-inv-url" readonly value="${esc(url)}">
+                        <div class="cl-inv-acts">
+                            <button type="button" class="btn btn--primary cl-inv-copy" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Копирай съобщението</button>
+                            <a class="btn btn--ghost" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem" href="viber://forward?text=${encodeURIComponent(text)}">Viber</a>
+                            ${phone ? `<a class="btn btn--ghost" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem" href="sms:${esc(phone)}?body=${encodeURIComponent(text)}">SMS</a>` : ''}
+                        </div>
+                        <small class="hint">Линкът е само за нея, важи до ${until} и се ползва веднъж.</small>`;
+                    out.hidden = false;
+                    invBtn.hidden = true;
+                    out.querySelector('.cl-inv-copy').addEventListener('click', async ev => {
+                        try { await navigator.clipboard.writeText(text); ev.target.textContent = 'Копирано ✓'; }
+                        catch (_) { const i = out.querySelector('.cl-inv-url'); i.select(); document.execCommand('copy'); ev.target.textContent = 'Копирано ✓'; }
+                    });
+                } catch (err) {
+                    out.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; out.hidden = false;
+                    invBtn.disabled = false;
+                }
+                return;
+            }
+            const head = e.target.closest('.cl-head');
+            if (!head || e.target.closest('a')) return;
+            toggleHistory(head.closest('.cl-card'));
+        });
+        load();
+    }
+
     // ---- Раздел НАСТРОЙКИ (комисионни) ----
     async function renderSettings(box) {
         box.innerHTML = `
@@ -683,14 +837,45 @@ document.addEventListener('DOMContentLoaded', () => {
     if (role === 'employee') {
         title.textContent = 'Моят график';
         sub.textContent = '';
-        // Собствена печалба за период (вижда само своята) + календар отдолу.
-        const earnBox = document.createElement('div');
-        earnBox.style.marginBottom = '2rem';
-        const calBox = document.createElement('div');
-        list.appendChild(earnBox);
-        list.appendChild(calBox);
+        // Служителката (Анелия, Ирина) вижда: своя график, своите пари и клиентите
+        // (коректни/некоректни + история). Чужди пари и статистики — не.
+        list.classList.add('dash-body');
+        list.innerHTML = `
+            <div class="dash-panel" data-p="calendar"></div>
+            <div class="dash-panel" data-p="earn" hidden></div>
+            <div class="dash-panel" data-p="clients" hidden></div>
+            <nav class="dash-nav dash-nav--3" aria-label="Навигация">
+                <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
+                <button class="dash-tab" data-t="earn"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Моите пари</span></button>
+                <button class="dash-tab" data-t="clients"><span class="dash-tab__ic">${Icon('users', { size: 20 })}</span><span class="dash-tab__lb">Клиенти</span></button>
+            </nav>`;
+        document.querySelectorAll('body > .dash-nav').forEach(n => n.remove());
+        const eNav = list.querySelector('.dash-nav');
+        document.body.appendChild(eNav);
+        document.body.classList.add('has-dashnav');
+        const eTabs = [...eNav.querySelectorAll('.dash-tab')];
+        const ePanels = {};
+        list.querySelectorAll('.dash-panel').forEach(p => ePanels[p.dataset.p] = p);
+        const eLoaded = {};
+        const eLoaders = { calendar: mountMyCalendar, earn: renderMyEarnings, clients: renderClients };
+        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-alert-soft)' };
+        const eShow = name => {
+            eTabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
+            Object.entries(ePanels).forEach(([k, el]) => el.hidden = k !== name);
+            if (!eLoaded[name]) { eLoaded[name] = true; eLoaders[name](ePanels[name]); }
+            list.style.background = eBg[name] || '';
+            document.body.classList.toggle('dash-on-cal', name === 'calendar');
+        };
+        eTabs.forEach(t => t.addEventListener('click', () => eShow(t.dataset.t)));
+        const eWanted = new URLSearchParams(location.search).get('tab');
+        eShow(eLoaders[eWanted] ? eWanted : (eWanted === 'noshow' ? 'clients' : 'calendar'));
+        return;
+    }
 
-        periodBar(earnBox, async (body, from, to, all) => {
+    // Собствена печалба за период (служителката вижда само своята).
+    function renderMyEarnings(earnBox) {
+        earnBox.innerHTML = sectionTitle('Моите пари', ACC.stats, '0 0 .8rem') + '<div class="my-earn"></div>';
+        periodBar(earnBox.querySelector('.my-earn'), async (body, from, to, all) => {
             body.innerHTML = `<div class="spinner"></div>`;
             try {
                 const m = await API.get(`/me/earnings?from=${from}&to=${to}&all=${all}`);
@@ -705,14 +890,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
             }
         });
-
-        mountMyCalendar(calBox);
-        return;
     }
 
     // ---- Клиент: предстоящи + минали часове ----
     title.textContent = 'Моите часове';
     sub.textContent = 'Твоите предстоящи и минали часове.';
+    // Дошла е през линк-покана от салона и вече е с профил -> старите часове са свързани.
+    const linkedN = +new URLSearchParams(location.search).get('linked') || 0;
+    if (linkedN > 0) sub.textContent = `Свързахме ${linkedN} ${linkedN === 1 ? 'час' : 'часа'} от салона с профила ти. ` + sub.textContent;
 
     const isUpcoming = b => b.status === 'booked' && new Date(b.startAt) >= new Date();
     let reviewedIds = new Set(); // часове, за които клиентът вече е оставил отзив

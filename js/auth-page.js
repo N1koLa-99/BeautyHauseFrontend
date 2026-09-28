@@ -6,8 +6,22 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Връщане само към страница от сайта (не към чужд адрес през ?next=).
     const safeNext = v => (v && /^[\w-]+(\.html)?(\?[^#]*)?$/.test(v)) ? v : 'account.html';
-    // Ако вече е влязъл, няма смисъл да е тук -> направо където е тръгнал.
-    if (Session.isIn()) { location.href = safeNext(new URLSearchParams(location.search).get('next')); return; }
+    // Линк-покана от салона (?invite=...): старите часове на клиента минават към профила ѝ.
+    const invite = new URLSearchParams(location.search).get('invite');
+    let inviteOk = false;
+    async function claimInvite() {
+        try {
+            const r = await API.post('/me/claim-invite', { token: invite });
+            return `account.html?linked=${(r && r.linked) || 0}`;
+        } catch (err) { alert(err.message); return 'account.html'; }
+    }
+    // Ако вече е влязъл, няма смисъл да е тук -> направо където е тръгнал
+    // (с покана -> първо свързваме часовете с профила).
+    if (Session.isIn()) {
+        if (invite && Session.role() === 'client') claimInvite().then(u => location.href = u);
+        else location.href = safeNext(new URLSearchParams(location.search).get('next'));
+        return;
+    }
 
     const tabs   = document.getElementById('auth-tabs');
     const thumb  = document.getElementById('tabs-thumb');
@@ -75,6 +89,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ако линкът е ?tab=register
     if (params.get('tab') === 'register') activate('register');
 
+    // Покана: попълваме името и телефона, които салонът има за нея.
+    if (invite) {
+        activate('register');
+        API.get(`/auth/invite/${encodeURIComponent(invite)}`).then(inv => {
+            inviteOk = true;
+            if (inv.name && !regF.fullName.value) regF.fullName.value = inv.name;
+            if (inv.phone && !regF.phone.value) regF.phone.value = inv.phone;
+            note.innerHTML = `<div class="alert alert--info">Покана от Beauty House 💛 Създай профил и всичките ти часове в салона ще се появят в него. Ако вече имаш профил — влез в него през „Вход“.</div>`;
+        }).catch(err => { note.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; });
+    }
+
     // Ако сесията е изтекла и потребителят е върнат тук.
     if (Session.takeExpiredFlag() || params.get('expired')) note.innerHTML = `<div class="alert alert--info">Сесията изтече. Влез отново, за да продължиш.</div>`;
 
@@ -95,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const email = fd.get('email');
             const auth = await API.post('/auth/login', { email, password: fd.get('password') });
             Session.save(auth);
-            location.href = next;
+            location.href = (invite && inviteOk && Session.role() === 'client') ? await claimInvite() : next;
         } catch (err) {
             // Непотвърден профил -> праща нови кодове и показва потвърждението.
             if (err.status === 403 && /потвърд/i.test(err.message || '')) {
@@ -128,7 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 email,
                 phone: fd.get('phone'),
                 password: fd.get('password'),
-                termsAccepted: true
+                termsAccepted: true,
+                inviteToken: inviteOk ? invite : null
             });
             showVerify(email);
             note.innerHTML = `<div class="alert alert--ok">Профилът е създаден! Потвърди имейла си с изпратения код, за да влезеш.</div>`;

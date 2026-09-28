@@ -637,6 +637,8 @@ em, .italic { font-style: italic; }
 .dash-tab[data-t="stats"].active    { color: var(--acc-stats-deep); }
 .dash-tab[data-t="calendar"].active { color: var(--acc-cal-deep); }
 .dash-tab[data-t="noshow"].active   { color: var(--acc-alert-deep); }
+.dash-tab[data-t="clients"].active  { color: var(--acc-alert-deep); }
+.dash-tab[data-t="earn"].active     { color: var(--acc-stats-deep); }
 .dash-tab[data-t="settings"].active { color: var(--acc-set-deep); }
 .dash-tab[data-t="courses"].active  { color: var(--acc-crs-deep); }
 .dash-tab__ic { position: relative; }
@@ -1188,6 +1190,67 @@ textarea.input { resize: vertical; min-height: 110px; }
 .ns-badge-up { display: inline-flex; align-items: center; gap: .35rem; background: #D9534F; color: #fff; border-radius: 999px; padding: .26rem .65rem; font-size: .74rem; font-weight: 700; }
 .ns-badge-none { display: inline-flex; align-items: center; gap: .35rem; color: var(--muted); font-size: .78rem; }
 
+/* ---- Клиенти: филтър + търсене + история ---- */
+.cl-bar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: .6rem; }
+.cl-seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.cl-f {
+    border: 0; background: transparent; cursor: pointer; font: inherit; font-size: .85rem; font-weight: 600;
+    color: var(--ink-soft); padding: .42rem .9rem; border-radius: 999px; white-space: nowrap;
+}
+.cl-f.is-on { background: var(--ink, #2A2226); color: #fff; }
+.cl-f[data-f="noshow"].is-on { background: #D9534F; }
+.cl-f[data-f="ok"].is-on { background: #3D8B5E; }
+.cl-q { flex: 1 1 220px; min-width: 0; }
+.cl-count { margin: 0 0 .6rem; font-size: .82rem; }
+.cl-card {
+    background: #fff; border: 1px solid var(--line); border-left: 6px solid #CFC6BE;
+    border-radius: 16px; margin-bottom: .65rem; overflow: hidden;
+}
+.cl-card.is-bad { border-color: rgba(217,83,79,.28); border-left-color: #D9534F; background: #FFF8F8; }
+.cl-head {
+    display: flex; gap: .85rem; align-items: flex-start; width: 100%;
+    padding: .9rem 1rem; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.cl-av {
+    flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center;
+    background: #EFE8E2; color: var(--ink-soft); font-weight: 800; font-size: 1.05rem;
+}
+.cl-card.is-bad .cl-av { background: #D9534F; color: #fff; }
+.cl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cl-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; }
+.cl-name { font-weight: 700; font-size: 1.02rem; line-height: 1.25; margin-right: auto; }
+.cl-tag { font-size: .7rem; font-weight: 700; color: var(--muted); background: #F3EEEA; border-radius: 999px; padding: .18rem .55rem; white-space: nowrap; }
+.cl-tag.is-acc { color: #2F6BB0; background: #EAF1F8; }
+.cl-stats { margin-top: .45rem; display: flex; flex-wrap: wrap; gap: .15rem .4rem; font-size: .78rem; color: var(--muted); }
+.cl-stats i { font-style: normal; opacity: .5; }
+.cl-up { color: #357A5C; font-weight: 700; }
+.cl-chev { flex: none; color: var(--muted); transition: transform .2s; margin-top: .5rem; }
+.cl-card.is-open .cl-chev { transform: rotate(180deg); }
+.cl-hist { padding: 0 1rem .8rem; border-top: 1px dashed var(--line); }
+.cl-inv { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .8rem 0 .4rem; padding: .75rem .85rem; background: #FBF6EE; border: 1px solid #EFE2CC; border-radius: 12px; font-size: .84rem; color: var(--ink-soft); }
+.cl-inv > span { flex: 1 1 220px; }
+.cl-inv-out { flex-basis: 100%; display: flex; flex-direction: column; gap: .5rem; }
+.cl-inv-acts { display: flex; flex-wrap: wrap; gap: .45rem; }
+.cl-inv-url { font-size: .8rem; }
+.cl-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: .7rem; align-items: start; padding: .65rem 0; border-bottom: 1px solid #F1ECE8; }
+.cl-row:last-child { border-bottom: 0; }
+.cl-row.is-future { background: linear-gradient(90deg, #E9F5EF, transparent); margin: 0 -1rem; padding-left: 1rem; padding-right: 1rem; }
+.cl-row__when { font-size: .82rem; font-weight: 700; display: flex; flex-direction: column; }
+.cl-row__when small, .cl-row__what small { font-weight: 500; color: var(--muted); font-size: .76rem; }
+.cl-row__what { display: flex; flex-direction: column; font-size: .88rem; min-width: 0; }
+.cl-row__why { font-style: italic; }
+.cl-row__st { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; }
+.cl-st { font-size: .7rem; font-weight: 700; padding: .16rem .5rem; border-radius: 999px; white-space: nowrap; }
+.cl-st.alert--ok { background: #E6F4EC; color: #2F7A50; }
+.cl-st.alert--err { background: #FBEAEA; color: #B7413D; }
+.cl-st.alert--info { background: #EAF1F8; color: #3E6E97; }
+.cl-price { font-size: .85rem; white-space: nowrap; }
+.cl-price small { color: var(--muted); font-weight: 600; }
+@media (max-width: 520px) {
+    .cl-row { grid-template-columns: 74px minmax(0, 1fr); }
+    .cl-row__st { grid-column: 2; flex-direction: row; align-items: center; justify-content: flex-start; }
+}
+
 /* ---- Настройки (прагове + комисионни): професионален вид ---- */
 .set-card { padding: 1.25rem 1.35rem; border-top: 3px solid var(--acc-set); }
 .set-thresh { display: flex; flex-direction: column; }
@@ -1471,6 +1534,17 @@ textarea.input { resize: vertical; min-height: 110px; }
 }
 .sc-sel span { font-size: .8rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sc-sel small { font-size: .72rem; font-weight: 600; opacity: .85; }
+/* Маркирано и чака потвърждение: ✓ = „Запазено", докосване = пълния попъп */
+.sc-sel.is-pend { pointer-events: auto; cursor: pointer; border-style: dashed; }
+.sc-sel em { font-style: normal; font-size: .66rem; font-weight: 600; opacity: .8; line-height: 1.2; margin-top: 2px; }
+
+/* „Запазено" — зает час без клиент/процедура: плътен, в цвета на специалистката */
+.sc-bk.sc-resv {
+    background: var(--bc);
+    color: #fff; box-shadow: none;
+}
+.sc-bk.sc-resv .sc-bk__t, .sc-bk.sc-resv .sc-bk__s, .sc-bk.sc-resv .sc-bk__c { color: #fff; }
+.sc-bk.sc-resv .sc-bk__s { font-weight: 700; letter-spacing: .02em; }
 @keyframes scSel { from { transform: scale(.96); opacity: .4; } to { transform: none; opacity: 1; } }
 
 /* ---- Месец ---- */
@@ -1527,6 +1601,13 @@ textarea.input { resize: vertical; min-height: 110px; }
 .sc-fab__all { color: var(--sc-accent-deep); display: grid; place-items: center; }
 .sc-fab__all svg { width: 24px; height: 24px; }
 .sc-fab--add svg { width: 24px; height: 24px; }
+/* Зеленото ✓ — вляво от „+", появява се след маркиране на период */
+.sc-fab--ok {
+    position: absolute; right: 74px; bottom: 16px; z-index: 21;
+    background: #3DAA4E; color: #fff; animation: scSel .15s var(--ease-out);
+}
+.sc-fab--ok svg { width: 26px; height: 26px; }
+.sc-fab--ok:disabled { opacity: .6; }
 
 .sc-av { display: inline-grid; place-items: center; flex: none; border-radius: 50%; object-fit: cover; }
 .sc-av--i { color: #fff; font-weight: 700; }

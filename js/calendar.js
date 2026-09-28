@@ -135,7 +135,7 @@ window.Calendar = (function () {
                 const m = o.text.match(/^(.*) · (\d+) мин$/);
                 const name = m ? m[1] : o.text;
                 if (o.value.startsWith('__'))
-                    return { v: o.value, name, dur: null, cat: 'Почивка', group: 'Почивка', order: -1, hay: toLat(`${name} почивка почивен ден`) };
+                    return { v: o.value, name, dur: null, cat: 'Без клиент', group: 'Без клиент', order: -1, hay: toLat(`${name} почивка почивен ден запазено зает блокирай`) };
                 const c = idx.get(svcNorm(name));
                 return { v: o.value, name, dur: m ? +m[2] : null, cat: c ? c.cat : 'Други', group: c ? c.group : 'Други', order: c ? c.order : 1e6,
                     hay: toLat(`${name} ${c ? c.cat + ' ' + c.group : ''}`) };
@@ -258,6 +258,7 @@ window.Calendar = (function () {
                 <div class="sc-pop sc-pop--date" hidden></div>
                 <div class="sc-pop sc-pop--menu" hidden></div>
                 <div class="sc-scroll"></div>
+                <button type="button" class="sc-fab sc-fab--ok" aria-label="Запази времето (без клиент)" title="Запази времето (без клиент)" hidden>${ICO.check}</button>
                 <div class="sc-fabs">
                     <button type="button" class="sc-fab sc-fab--who" aria-label="Чий график" hidden></button>
                     <button type="button" class="sc-fab sc-fab--add" aria-label="Нов час" hidden>
@@ -277,6 +278,8 @@ window.Calendar = (function () {
         const sheet = root.querySelector('.sc-sheet');
         const fabWho = root.querySelector('.sc-fab--who');
         const fabAdd = root.querySelector('.sc-fab--add');
+        const fabOk = root.querySelector('.sc-fab--ok');
+        let pend = null;   // маркиран, но още непотвърден период (виж finishSelect)
         const loadingEl = root.querySelector('.sc-loading');
         const below = container.querySelector('.sc-below');
 
@@ -309,7 +312,7 @@ window.Calendar = (function () {
         const offsFor = k => { const a = offs[k] || []; return empFilter != null ? a.filter(o => o.employeeId === empFilter) : a; };
         // Почивки/почивни дни: за служител (собствения график) и шефа (чужд / целия салон).
         const canRest = () => !!(cfg.editable && (cfg.staffId || hasEmps()));
-        const ITEM_SEL = '.sc-bk, .sc-dayoff, .sc-offtag';
+        const ITEM_SEL = '.sc-bk, .sc-dayoff, .sc-offtag, .sc-sel.is-pend';
 
         function visibleDays() {
             const sd = parseK(selKey);
@@ -381,6 +384,7 @@ window.Calendar = (function () {
         // ================= Рисуване =================
         let lastLayout = '', pendingScroll = 'start';
         function render() {
+            clearPend();
             paintBar();
             paintFabs();
             if (view === 'month') renderMonth(); else renderGrid();
@@ -431,12 +435,12 @@ window.Calendar = (function () {
                 const { s, e } = x, w = 100 / lanes, left = laneOf[i] * w;
                 const pos = `top:${pct(s)};height:calc(${pctD(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px)`;
                 if (x.r) {
-                    // Почивка — щрихована, в цвета на специалистката.
-                    const r = x.r;
+                    // Почивка — щрихована; „Запазено" (зает час без клиент) — плътна, в цвета на специалистката.
+                    const r = x.r, resv = r.blockType === 'reserved';
                     const who = cfg.showEmployee && empFilter == null ? esc(firstName(r.employeeName)) : '';
-                    return `<button type="button" class="sc-bk sc-rest" data-l="${dl}" data-rest="${r.id}" data-k="${r.startAt.slice(0, 10)}" style="${pos};--bc:${empColor(r.employeeId)}">
+                    return `<button type="button" class="sc-bk ${resv ? 'sc-resv' : 'sc-rest'}" data-l="${dl}" data-rest="${r.id}" data-k="${r.startAt.slice(0, 10)}" style="${pos};--bc:${empColor(r.employeeId)}">
                     <span class="sc-bk__t">${r.startAt.slice(11, 16)}–${minToHHMM(e)}</span>
-                    <span class="sc-bk__s">Почивка</span>
+                    <span class="sc-bk__s">${resv ? 'Запазено' : 'Почивка'}</span>
                     ${who ? `<span class="sc-bk__c">${who}</span>` : ''}
                 </button>`;
                 }
@@ -764,6 +768,7 @@ window.Calendar = (function () {
             if (e.target.closest('.sc-sh__back')) sheet.hidden = true;
         });
         fabAdd.addEventListener('click', () => {
+            if (pend) { openPend(); return; }
             const wh = workHours[parseK(selKey).getDay()];
             let m = wh ? wh[0] : 9 * 60;
             if (selKey === todayKey()) m = Math.max(m, Math.ceil(nowMin() / SNAP) * SNAP);
@@ -776,6 +781,7 @@ window.Calendar = (function () {
         let suppressClickUntil = 0;
         scroll.addEventListener('click', (e) => {
             if (Date.now() < suppressClickUntil) return;
+            if (e.target.closest('.sc-sel.is-pend')) { openPend(); return; }
             const rs = e.target.closest('[data-rest]');
             if (rs) { openRestModal((offs[rs.dataset.k] || []).find(x => x.kind === 'rest' && x.id === +rs.dataset.rest)); return; }
             const od = e.target.closest('[data-off]');
@@ -795,6 +801,7 @@ window.Calendar = (function () {
         // Маркиране на период: задържане + плъзгане (телефон) / влачене (мишка).
         let sel = null;
         function beginSelect(col, clientY) {
+            clearPend();
             const a = Math.max(BOOK_S, Math.min(BOOK_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
             const el = document.createElement('div');
             el.className = 'sc-sel';
@@ -826,8 +833,41 @@ window.Calendar = (function () {
             cancelAnimationFrame(asRaf); asRaf = null;
             suppressClickUntil = Date.now() + 450;
             const el = sel.el; sel = null;
-            openAddModal(minToHHMM(s), { dayKey: col.dataset.k, dur: e - s, empId: col.dataset.emp ? +col.dataset.emp : undefined, onClose: () => el.remove() });
+            // Маркираното остава на екрана: зеленото ✓ го запазва като „Запазено"
+            // (зает час без клиент/процедура); докосване върху него или „+" -> пълния попъп.
+            pend = { el, k: col.dataset.k, s, e, empId: col.dataset.emp ? +col.dataset.emp : undefined };
+            el.classList.add('is-pend');
+            el.insertAdjacentHTML('beforeend', `<em>✓ = запази · докосни за клиент</em>`);
+            fabOk.hidden = false;
         }
+        function clearPend() {
+            if (pend) { pend.el.remove(); pend = null; }
+            if (fabOk) fabOk.hidden = true;
+        }
+        // За кого е: колоната (Ден + всички) -> филтъра -> собствения график.
+        const pendEmp = p => p.empId != null ? p.empId : (empFilter != null ? empFilter : (hasEmps() ? null : cfg.staffId));
+        function openPend(preset) {
+            if (!pend) return;
+            const p = pend; pend = null; fabOk.hidden = true;
+            p.el.classList.remove('is-pend');
+            const em = p.el.querySelector('em'); if (em) em.remove();
+            openAddModal(minToHHMM(p.s), { dayKey: p.k, dur: p.e - p.s, empId: p.empId, preset, onClose: () => p.el.remove() });
+        }
+        fabOk.addEventListener('click', async () => {
+            if (!pend) return;
+            const p = pend, emp = pendEmp(p);
+            if (emp == null) { openPend('__resv'); return; }   // целият салон, седмица -> първо избор на специалист
+            fabOk.disabled = true;
+            try {
+                await window.API.post('/schedule/block', {
+                    employeeId: emp, blockType: 'reserved',
+                    startAt: `${p.k}T${minToHHMM(p.s)}:00`, endAt: `${p.k}T${minToHHMM(p.e)}:00`
+                });
+                clearPend();
+                await load();
+            } catch (err) { alert(err.message); }
+            finally { fabOk.disabled = false; }
+        });
         // Автоматичен скрол, докато пръстът е до ръба (за да се маркира и отвъд екрана).
         let asRaf = null, lastY = 0;
         function autoScroll() {
@@ -843,6 +883,7 @@ window.Calendar = (function () {
             asRaf = requestAnimationFrame(autoScroll);
         }
         function tapAdd(col, clientY) {
+            if (pend) { clearPend(); return; }   // докосване встрани -> отказ от маркираното
             const m = Math.max(BOOK_S, Math.min(BOOK_E - SNAP, Math.floor(minAt(col, clientY) / SNAP) * SNAP));
             openAddModal(minToHHMM(m), { dayKey: col.dataset.k, empId: col.dataset.emp ? +col.dataset.emp : undefined });
         }
@@ -988,10 +1029,12 @@ window.Calendar = (function () {
             const dayKey = opts.dayKey || selKey;
             const dd = parseK(dayKey);
             const presetEmp = opts.empId != null ? opts.empId : empFilter;
-            const SPECIAL = canRest() ? `<option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>` : '';
+            const ED = opts.edit || null;   // редакция на съществуващ ръчен час
+            const SPECIAL = (canRest() && !ED) ? `<option value="__resv">Запазено (без клиент)</option><option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>` : '';
 
             let timeOpts = '';
             for (let mm = BOOK_S; mm < BOOK_E; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
+            if (!timeOpts.includes(`value="${hhmm}"`)) timeOpts = `<option value="${hhmm}" selected>${hhmm}</option>` + timeOpts;
             const empOpts = pickEmp ? cfg.employees.map(e => `<option value="${e.id}"${presetEmp === e.id ? ' selected' : ''}>${esc(e.name)}</option>`).join('') : '';
             const staticSvc = pickEmp ? '' : (cfg.services || []).map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('');
             const REST_OPTS = [0, 5, 10, 15, 20, 30, 45, 60];
@@ -1001,13 +1044,15 @@ window.Calendar = (function () {
             backdrop.innerHTML = `
                 <div class="cal-modal cal-modal--add">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
-                    <div class="ad-title" style="font-weight:800;font-size:1.15rem">Нов час</div>
+                    <div class="ad-title" style="font-weight:800;font-size:1.15rem">${ED ? 'Редактирай час' : 'Нов час'}</div>
                     <div class="hint ad-sub" style="margin:.15rem 0 .85rem">${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()}${opts.dur ? ` · ${hhmm}–${minToHHMM(Math.min(24 * 60, hhmmToMin(hhmm) + opts.dur))}` : ''}</div>
                     <div class="ad-form">
                         ${pickEmp ? `<label class="field"><span class="ad-lbl">Специалист</span>
                             <select class="select ad-emp">${empOpts}</select></label>` : ''}
                         <label class="field"><span class="ad-lbl">Услуга</span>
                             <select class="select ad-svc">${pickEmp ? '<option value="">Избери специалист…</option>' : (staticSvc || '<option value="">Няма зададени услуги</option>') + SPECIAL}</select></label>
+                        ${ED ? `<label class="field"><span class="ad-lbl">Дата</span>
+                            <input class="input ad-date" type="date" value="${dayKey}"></label>` : ''}
                         <div class="ad-pair ad-pair--time ad-row-time">
                             <label class="field"><span class="ad-lbl">Начален час</span>
                                 <select class="select ad-time">${timeOpts}</select></label>
@@ -1028,7 +1073,8 @@ window.Calendar = (function () {
                             <label class="field"><span class="ad-lbl">Телефон <small>(по избор)</small></span>
                                 <input class="input ad-phone" type="tel" placeholder="+359…"></label>
                         </div>
-                        <button class="btn btn--primary ad-save">Запиши часа</button>
+                        <div class="ad-known hint" hidden></div>
+                        <button class="btn btn--primary ad-save">${ED ? 'Запази промените' : 'Запиши часа'}</button>
                         <div class="ad-msg"></div>
                     </div>
                 </div>`;
@@ -1043,11 +1089,21 @@ window.Calendar = (function () {
             const durSel = $('.ad-dur'), hSel = $('.ad-h'), mSel = $('.ad-m'), sumEl = $('.ad-sum');
             const saveBtn = $('.ad-save'), msg = $('.ad-msg');
             const show = (sel, on) => { $(sel).style.display = on ? '' : 'none'; };
-            const mode = () => svcSel.value === '__rest' ? 'rest' : (svcSel.value === '__off' ? 'off' : 'svc');
+            const mode = () => svcSel.value === '__rest' ? 'rest' : (svcSel.value === '__resv' ? 'resv' : (svcSel.value === '__off' ? 'off' : 'svc'));
+            const isBlk = md => md === 'rest' || md === 'resv';
             const whEnd = () => { const wh = workHours[dd.getDay()]; return wh ? wh[1] : 1110; };
             const numOpts = (vals, def, label) => [...new Set(vals)].sort((a, b) => a - b)
                 .map(m => `<option value="${m}"${m === def ? ' selected' : ''}>${label(m)}</option>`).join('');
 
+            let edDurUsed = false;
+            // Редакция: избира услугата на часа (ако вече я няма в списъка — добавя я, за да не се загуби).
+            function pickEditSvc() {
+                const id = String(ED.serviceId);
+                if (![...svcSel.options].some(o => o.value === id)) {
+                    svcSel.insertAdjacentHTML('afterbegin', `<option value="${id}">${esc(ED.serviceName)}</option>`);
+                }
+                svcSel.value = id;
+            }
             // Карта service_id -> времетраене на процедурата.
             let svcDur = {};
             (cfg.services || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; });
@@ -1064,7 +1120,7 @@ window.Calendar = (function () {
 
             function fillDur() {
                 const md = mode();
-                if (md === 'rest') {
+                if (isBlk(md)) {
                     const def = opts.dur || 60;
                     durSel.innerHTML = numOpts([15, 30, 45, 60, 90, 120, 180, 240, def], def,
                         m => durLabel(m) + (m === opts.dur ? ' · маркирано' : '')) + `<option value="end">до края на деня</option>`;
@@ -1074,7 +1130,9 @@ window.Calendar = (function () {
                     // По подразбиране: времето на процедурата. Ако в графика е маркиран
                     // по-дълъг период (напр. с почивка) — остава маркираното.
                     const std = svcDur[+svcSel.value] || 30;
-                    setHM(Math.max(std, opts.dur || 0));
+                    // Редакция: първия път — текущото времетраене на часа; при смяна на услугата — нейното.
+                    if (ED && !edDurUsed) { edDurUsed = true; setHM(opts.dur || std); }
+                    else setHM(ED ? std : Math.max(std, opts.dur || 0));
                 }
                 paintMode();
             }
@@ -1082,13 +1140,14 @@ window.Calendar = (function () {
                 const md = mode();
                 show('.ad-row-time', md !== 'off');
                 show('.ad-row-rest', md === 'svc');
-                show('.ad-f-dur', md === 'rest');
+                show('.ad-f-dur', isBlk(md));
                 show('.ad-f-hm', md === 'svc');
                 show('.ad-row-client', md === 'svc');
+                if (md !== 'svc') $('.ad-known').hidden = true;
                 show('.ad-off-note', md === 'off');
-                $('.ad-dur-lbl').textContent = md === 'rest' ? 'Продължителност' : 'Процедура';
-                $('.ad-title').textContent = md === 'svc' ? 'Нов час' : (md === 'rest' ? 'Почивка' : 'Почивен ден');
-                saveBtn.textContent = md === 'svc' ? 'Запиши часа' : (md === 'rest' ? 'Запази почивката' : 'Маркирай почивен ден');
+                $('.ad-dur-lbl').textContent = isBlk(md) ? 'Продължителност' : 'Процедура';
+                $('.ad-title').textContent = md === 'svc' ? (ED ? 'Редактирай час' : 'Нов час') : (md === 'rest' ? 'Почивка' : (md === 'resv' ? 'Запазено време' : 'Почивен ден'));
+                saveBtn.textContent = md === 'svc' ? (ED ? 'Запази промените' : 'Запиши часа') : (md === 'rest' ? 'Запази почивката' : (md === 'resv' ? 'Запази времето' : 'Маркирай почивен ден'));
                 paintSum();
             }
             // „Готово в 09:45 · следващ час от 10:00"
@@ -1115,29 +1174,53 @@ window.Calendar = (function () {
                     svcSel.innerHTML = ((list && list.length)
                         ? list.map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('')
                         : `<option value="">Няма зададени услуги</option>`) + SPECIAL;
+                    if (opts.preset && SPECIAL) svcSel.value = opts.preset;
+                    if (ED && (!empSel || +empSel.value === ED.employeeId)) pickEditSvc();
                     fillDur();
                 } catch (e) { svcSel.innerHTML = `<option value="">Грешка при зареждане</option>` + SPECIAL; fillDur(); }
             }
+            // Познат клиент по телефона -> подсказка + попълва името (ако е празно).
+            const phoneEl = $('.ad-phone'), nameEl = $('.ad-name'), knownEl = $('.ad-known');
+            let lkT = null, lkSeq = 0;
+            phoneEl.addEventListener('input', () => {
+                clearTimeout(lkT);
+                const v = phoneEl.value.replace(/\D/g, '');
+                if (v.length < 9) { knownEl.hidden = true; return; }
+                lkT = setTimeout(async () => {
+                    const my = ++lkSeq;
+                    try {
+                        const r = await window.API.get(`/clients/lookup?phone=${encodeURIComponent(phoneEl.value.trim())}`);
+                        if (my !== lkSeq) return;
+                        if (!r) { knownEl.hidden = true; return; }
+                        if (!nameEl.value.trim()) nameEl.value = r.name;
+                        knownEl.innerHTML = `<b>${esc(r.name)}</b> · ${r.hasAccount ? 'има профил — часът ще се появи и при нея' : 'познат клиент'} · ${r.total} ${r.total === 1 ? 'час' : 'часа'}`
+                            + (r.noShow ? ` · <span style="color:#D9534F;font-weight:700">⚠ ${r.noShow}× не се яви</span>` : '');
+                        knownEl.hidden = false;
+                    } catch (e) { knownEl.hidden = true; }
+                }, 350);
+            });
             svcSel.addEventListener('change', fillDur);
             [timeSel, durSel, hSel, mSel].forEach(x => x.addEventListener('change', paintSum));
             svcPicker(svcSel, () => (empSel ? empSel.value : cfg.staffId));
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
-            else fillDur(); // единичен специалист: услугите вече са налични
+            else { if (opts.preset && SPECIAL) svcSel.value = opts.preset; if (ED) pickEditSvc(); fillDur(); } // единичен специалист: услугите вече са налични
+            if (ED) { nameEl.value = ED.clientName || ''; phoneEl.value = ED.clientPhone || ''; }
 
             saveBtn.addEventListener('click', async () => {
                 const employeeId = empSel ? +empSel.value : cfg.staffId;
                 const md = mode();
-                const startAt = `${dayKey}T${timeSel.value}:00`;
+                const dateVal = ED ? ($('.ad-date').value || dayKey) : dayKey;
+                const startAt = `${dateVal}T${timeSel.value}:00`;
                 const err = t => { msg.innerHTML = `<div class="alert alert--err">${esc(t)}</div>`; };
                 if (pickEmp && !employeeId) return err('Избери специалист.');
 
                 let run;
                 if (md === 'off') {
                     run = () => window.API.put('/schedule/override', { employeeId, date: dayKey, isOff: true });
-                } else if (md === 'rest') {
+                } else if (isBlk(md)) {
                     const dur = durSel.value === 'end' ? whEnd() - hhmmToMin(timeSel.value) : +durSel.value;
                     if (!(dur > 0)) return err('Началният час е след края на работния ден.');
-                    run = () => window.API.post('/schedule/block', { employeeId, startAt, endAt: addMinIso(startAt, Math.min(dur, 1440 - hhmmToMin(timeSel.value))) });
+                    run = () => window.API.post('/schedule/block', { employeeId, blockType: md === 'resv' ? 'reserved' : 'rest', startAt, endAt: addMinIso(startAt, Math.min(dur, 1440 - hhmmToMin(timeSel.value))) });
                 } else {
                     const dto = {
                         employeeId,
@@ -1152,7 +1235,28 @@ window.Calendar = (function () {
                     if (!dto.serviceId) return err('Избери услуга.');
                     if (dto.procedureMinutes < 5) return err('Времетраенето трябва да е поне 5 минути.');
                     if (!dto.guestName) return err('Въведи име на клиента.');
-                    run = () => cfg.createBooking(dto);
+                    if (ED) {
+                        const body = { serviceId: dto.serviceId, startAt, procedureMinutes: dto.procedureMinutes, guestName: dto.guestName, guestPhone: dto.guestPhone };
+                        if (empSel) body.employeeId = employeeId;
+                        run = () => window.API.put(`/bookings/${ED.id}/edit`, body);
+                        saveBtn.disabled = true; saveBtn.style.opacity = .7;
+                        try { await run(); close(); await load(); }
+                        catch (e) { err(e.message); saveBtn.disabled = false; saveBtn.style.opacity = 1; }
+                        return;
+                    }
+                    // Час върху „Запазено": първо се освобождава блокът, после се записва клиентът
+                    // (ако записът не мине — блокът се връща обратно).
+                    run = opts.replaceBlock
+                        ? async () => {
+                            const rb = opts.replaceBlock;
+                            await window.API.del(`/schedule/block/${rb.id}?employeeId=${rb.employeeId}`);
+                            try { await cfg.createBooking(dto); }
+                            catch (e) {
+                                try { await window.API.post('/schedule/block', { employeeId: rb.employeeId, blockType: 'reserved', startAt: rb.startAt, endAt: rb.endAt }); } catch (_) {}
+                                throw e;
+                            }
+                        }
+                        : () => cfg.createBooking(dto);
                 }
                 saveBtn.disabled = true; saveBtn.style.opacity = .7;
                 try { await run(); close(); await load(); }
@@ -1164,7 +1268,7 @@ window.Calendar = (function () {
         function openRestModal(o) {
             if (!o) return;
             document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
-            const isOff = o.kind === 'off';
+            const isOff = o.kind === 'off', resv = !isOff && o.blockType === 'reserved';
             const d = parseK(isOff ? o.k : o.startAt.slice(0, 10));
             const time = isOff ? 'цял ден' : `${o.startAt.slice(11, 16)}–${o.endAt.slice(11, 16)}`;
             const backdrop = document.createElement('div');
@@ -1172,16 +1276,22 @@ window.Calendar = (function () {
             backdrop.innerHTML = `
                 <div class="cal-modal">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
-                    <div class="cal-modal__title">${isOff ? 'Почивен ден' : 'Почивка'}</div>
+                    <div class="cal-modal__title">${isOff ? 'Почивен ден' : (resv ? 'Запазено време' : 'Почивка')}</div>
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
-                    <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : 'В това време никой не може да си запише час.'}</div>
-                    ${cfg.editable ? `<div class="cal-modal__actions"><button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : 'Премахни почивката'}</button></div>` : ''}
+                    <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
+                    ${cfg.editable ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
             document.body.appendChild(backdrop);
             const close = () => backdrop.remove();
             backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
+            const fill = backdrop.querySelector('.rm-fill');
+            if (fill) fill.addEventListener('click', () => {
+                close();
+                const s = toMin(o.startAt), e = o.endAt.slice(0, 10) > o.startAt.slice(0, 10) ? 1440 : toMin(o.endAt);
+                openAddModal(minToHHMM(s), { dayKey: o.startAt.slice(0, 10), dur: e - s, empId: o.employeeId, replaceBlock: o });
+            });
             const del = backdrop.querySelector('.rm-del');
             if (del) del.addEventListener('click', async () => {
                 del.disabled = true;
@@ -1243,7 +1353,9 @@ window.Calendar = (function () {
             const canCancelWithReason = cfg.editable && cfg.cancelBooking && b.status === 'booked';
             let actions = '';
             if (cfg.editable) {
+                const canEdit = b.status === 'booked' && !b.isOnline && canAdd();
                 actions = `<div class="cal-modal__actions">
+                    ${canEdit ? `<button class="btn btn--primary md-edit">Редактирай часа</button>` : ''}
                     <button class="btn btn--gold md-present">Присъства (проведен)</button>
                     <button class="btn btn--ghost md-absent">Не присъства</button>
                     ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">Отмени часа на клиента</button>` : ''}
@@ -1304,6 +1416,11 @@ window.Calendar = (function () {
                 }
             };
 
+            const editBtn = backdrop.querySelector('.md-edit');
+            if (editBtn) editBtn.addEventListener('click', () => {
+                close();
+                openAddModal(b.startAt.slice(11, 16), { dayKey: b.startAt.slice(0, 10), dur, empId: b.employeeId, edit: b });
+            });
             const present = backdrop.querySelector('.md-present');
             if (present) present.addEventListener('click', () => run(async () => { await saveDiscount(); await cfg.setStatus(b.id, 'completed'); }));
             const absent = backdrop.querySelector('.md-absent');
