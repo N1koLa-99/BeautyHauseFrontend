@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
             services: (services || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes, price: s.price })),
             fetchMonth: (f, t) => API.get(`/me/calendar?from=${f}&to=${t}`),
             createBooking: (dto) => API.post('/me/bookings', dto),
-            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            setStatus: (id, st, price) => API.patch(`/bookings/${id}/status`, price != null ? { status: st, price } : { status: st }),
             cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason })
         });
     }
@@ -66,13 +66,50 @@ document.addEventListener('DOMContentLoaded', () => {
             services: (services || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes, price: s.price })),
             fetchMonth: (f, t) => API.get(`/reports/employee-calendar?employeeId=${staffId}&from=${f}&to=${t}`),
             createBooking: (dto) => API.post(`/reports/bookings?employeeId=${staffId}`, dto),
-            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            setStatus: (id, st, price) => API.patch(`/bookings/${id}/status`, price != null ? { status: st, price } : { status: st }),
             cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
             setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
             setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
             deleteBk: (id) => API.del(`/reports/bookings/${id}`)
         });
     }
+    // Чужд график с достъп (напр. Анелия -> Радина): вижда часовете и записва нови,
+    // без цени, без почивки/„Запазено“ и без „присъства/не присъства“.
+    async function mountSharedCalendar(container, ownerId) {
+        const [svc, wh] = await Promise.all([API.get(`/employees/${ownerId}/services`).catch(() => []), workHoursFor(ownerId)]);
+        Calendar.mount(container, {
+            editable: true, shared: true, hidePrices: true, staffId: ownerId, workHours: wh,
+            services: (svc || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes })),
+            fetchMonth: (f, t) => API.get(`/me/shared-calendar?ownerId=${ownerId}&from=${f}&to=${t}`),
+            createBooking: (dto) => API.post(`/me/shared-bookings?ownerId=${ownerId}`, dto)
+        });
+    }
+
+    // Служителка: своя график + (ако има достъп) превключвател към чужд — напр. Анелия -> Радина.
+    // Ирина няма достъп до чужди графици -> вижда само своя, както досега.
+    async function mountEmployeeCalendars(container) {
+        let shared = [];
+        try { shared = (await API.get('/me/shared-calendars')) || []; } catch (e) {}
+        if (!shared.length) return mountMyCalendar(container);
+        const me = Session.userId();
+        try { Calendar.learnEmp(me, Session.name()); } catch (e) {}
+        const list = [{ id: 0, name: 'Моят график', color: Calendar.empColor(me) }]
+            .concat(shared.map(s => ({ id: s.id, name: s.name.split(' ')[0], color: (Calendar.learnEmp(s.id, s.name), Calendar.empColor(s.id)) })));
+        container.innerHTML = `<div class="cal-switch">${list.map(x =>
+            `<button type="button" class="cal-switch__b" data-id="${x.id}" style="--c:${x.color}"><i></i>${esc(x.name)}</button>`).join('')}</div><div class="cal-host"></div>`;
+        const host = container.querySelector('.cal-host');
+        const btns = [...container.querySelectorAll('.cal-switch__b')];
+        function open(id) {
+            btns.forEach(b => b.classList.toggle('is-on', +b.dataset.id === id));
+            host.innerHTML = '';
+            const box = document.createElement('div');
+            host.appendChild(box);
+            if (id) mountSharedCalendar(box, id); else mountMyCalendar(box);
+        }
+        btns.forEach(b => b.addEventListener('click', () => { if (!b.classList.contains('is-on')) open(+b.dataset.id); }));
+        open(0);
+    }
+
     async function mountAllCalendar(container) {
         let employees = [];
         try { employees = (await API.get('/employees')) || []; } catch (e) {}
@@ -82,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             servicesFor: (empId) => API.get(`/employees/${empId}/services`),
             fetchMonth: (f, t) => API.get(`/reports/calendar?from=${f}&to=${t}`),
             createBooking: (dto) => API.post(`/reports/bookings?employeeId=${dto.employeeId}`, dto),
-            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            setStatus: (id, st, price) => API.patch(`/bookings/${id}/status`, price != null ? { status: st, price } : { status: st }),
             cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
             setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
             setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
@@ -889,7 +926,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ePanels = {};
         list.querySelectorAll('.dash-panel').forEach(p => ePanels[p.dataset.p] = p);
         const eLoaded = {};
-        const eLoaders = { calendar: mountMyCalendar, earn: renderMyEarnings, clients: renderClients };
+        const eLoaders = { calendar: mountEmployeeCalendars, earn: renderMyEarnings, clients: renderClients };
         const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-alert-soft)' };
         const eShow = name => {
             eTabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));

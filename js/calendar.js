@@ -2,6 +2,9 @@
    График за служител/шеф.
    Calendar.mount(container, cfg):
      cfg.editable     – true => може ръчно добавяне на час + маркиране
+     cfg.shared       – чужд график с достъп (напр. Анелия -> Радина): само часове,
+                        без почивки/„Запазено“/почивни дни и без статуси
+     cfg.hidePrices   – не показва цени (чужди пари)
      cfg.staffId      – id-то на служителя (за свободни часове)
      cfg.services     – [{serviceId, serviceName, durationMinutes}] (за формата)
      cfg.showEmployee – графикът на целия салон (колона за всяка специалистка)
@@ -26,7 +29,7 @@ window.Calendar = (function () {
     const WD_MON = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'нд'];          // седмица от понеделник
     const STATUS = {
         booked:    { label: 'Запазен',   cls: 'alert--info' },
-        completed: { label: 'Проведен',  cls: 'alert--ok' },
+        completed: { label: 'Приключен', cls: 'alert--ok' },
         cancelled: { label: 'Отменен',   cls: 'alert--err' },
         no_show:   { label: 'Не се яви', cls: 'alert--err' }
     };
@@ -331,7 +334,7 @@ window.Calendar = (function () {
         const listFor = k => { const a = data[k] || []; return empFilter != null ? a.filter(b => b.employeeId === empFilter) : a; };
         const offsFor = k => { const a = offs[k] || []; return empFilter != null ? a.filter(o => o.employeeId === empFilter) : a; };
         // Почивки/почивни дни: за служител (собствения график) и шефа (чужд / целия салон).
-        const canRest = () => !!(cfg.editable && (cfg.staffId || hasEmps()));
+        const canRest = () => !!(cfg.editable && !cfg.shared && (cfg.staffId || hasEmps()));
         const ITEM_SEL = '.sc-bk, .sc-dayoff, .sc-offtag, .sc-sel.is-pend';
 
         function visibleDays() {
@@ -362,7 +365,7 @@ window.Calendar = (function () {
             const [items, rng] = await Promise.all([
                 cfg.fetchMonth(from, to),
                 // Почивките не са задължителни за графика -> грешка тук не спира зареждането.
-                canRest() ? window.API.get(`/schedule/range?${rangeQ}&from=${from}&to=${to}`).catch(() => null) : null
+                (canRest() || cfg.shared) ? window.API.get(`/schedule/range?${rangeQ}&from=${from}&to=${to}`).catch(() => null) : null
             ]);
             const inMonth = dk => { const dt = parseK(dk); return dt.getFullYear() === Y && dt.getMonth() === M0; };
             for (const dk of Object.keys(data)) if (inMonth(dk)) delete data[dk];
@@ -703,7 +706,7 @@ window.Calendar = (function () {
         // Панел „Работно време" под графика (само собствен график, изглед Ден).
         let belowKey = '';
         function renderBelow() {
-            const want = (cfg.editable && cfg.staffId && view === 'day') ? selKey : '';
+            const want = (cfg.editable && !cfg.shared && cfg.staffId && view === 'day') ? selKey : '';
             if (want === belowKey) return;
             belowKey = want;
             if (!want) { below.innerHTML = ''; return; }
@@ -863,6 +866,7 @@ window.Calendar = (function () {
             // (зает час без клиент/процедура); докосване върху него или „+" -> пълния попъп.
             pend = { el, k: col.dataset.k, s, e, empId: col.dataset.emp ? +col.dataset.emp : undefined };
             el.classList.add('is-pend');
+            if (cfg.shared) { openPend(); return; }   // чужд график -> направо нов час (без „Запазено“)
             el.insertAdjacentHTML('beforeend', `<em>✓ = запази · докосни за клиент</em>`);
             fabOk.hidden = false;
         }
@@ -1187,6 +1191,7 @@ window.Calendar = (function () {
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
 
             const $ = sel => backdrop.querySelector(sel);
+            if (cfg.hidePrices) backdrop.classList.add('is-noprice');
             const subOrig = ($('.ad-sub') || {}).textContent || '';
             const empSel = $('.ad-emp'), svcSel = $('.ad-svc'), timeSel = $('.ad-time');
             const durSel = $('.ad-dur'), hSel = $('.ad-h'), mSel = $('.ad-m'), sumEl = $('.ad-sum');
@@ -1279,7 +1284,7 @@ window.Calendar = (function () {
                 show('.ad-f-dur', isBlk(md));
                 show('.ad-f-hm', md === 'svc');
                 show('.ad-row-client', md === 'svc');
-                show('.ad-row-price', md === 'svc');
+                show('.ad-row-price', md === 'svc' && !cfg.hidePrices);
                 show('.ad-extras', md === 'svc');
                 if (addXBtn) addXBtn.style.display = md === 'svc' ? '' : 'none';
                 show('.ad-row-note', isBlk(md));
@@ -1492,7 +1497,7 @@ window.Calendar = (function () {
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
                     ${!isOff && o.note ? `<div class="rm-note">${esc(o.note)}</div>` : ''}
                     <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
-                    ${cfg.editable ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
+                    ${cfg.editable && !cfg.shared ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
             document.body.appendChild(backdrop);
@@ -1560,15 +1565,19 @@ window.Calendar = (function () {
             const warn = flagged
                 ? `<div style="background:#D9534F;color:#fff;font-weight:800;font-size:.78rem;padding:.5rem .8rem;border-radius:12px;margin-bottom:1rem">⚠ Некоректен клиент · ${b.noShowCount}× не се е явявал(а)</div>` : '';
 
-            const priceBlock = canManage
+            // Цена, която може да се поправи при затваряне на часа („Присъства“) —
+            // напр. клиентът е платил друга сума. Важи и за минали часове.
+            const canFixPrice = !!(cfg.editable && cfg.setStatus && (b.status === 'booked' || b.status === 'completed'));
+            const r2 = v => Math.round(v * 100) / 100;
+            const priceBlock = canFixPrice
                 ? `<div class="cal-modal__price">
-                       <label style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;font-size:.9rem;margin-bottom:.9rem">Отстъпка (лоялен клиент)
-                           <span style="white-space:nowrap"><input class="input md-disc" type="number" min="0" max="100" value="${curDisc}" style="width:74px;text-align:center"> %</span></label>
-                       <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:1.05rem">
-                           <span class="hint">Цена</span>
-                           <span><span class="md-orig" style="text-decoration:${curDisc ? 'line-through' : 'none'};color:var(--muted);font-size:.9rem">${orig.toFixed(0)} €</span>
-                           <b class="md-final" style="color:var(--rose-deep);margin-left:.5rem;font-family:var(--font-display);font-size:1.4rem">${(orig * (100 - curDisc) / 100).toFixed(0)} €</b></span>
-                       </div>
+                       ${canManage ? `<label style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;font-size:.9rem;margin-bottom:.8rem">Отстъпка (лоялен клиент)
+                           <span style="white-space:nowrap"><input class="input md-disc" type="number" min="0" max="100" value="${curDisc}" style="width:74px;text-align:center"> %</span></label>` : ''}
+                       <label class="md-pricefix">
+                           <span>Цена за плащане${curDisc ? ` <small class="md-orig">${r2(orig)} € −${curDisc}%</small>` : ''}</span>
+                           <span class="ad-eur"><input class="input md-price" type="number" min="0" step="0.5" inputmode="decimal" value="${r2(finalPrice)}"><i>€</i></span>
+                       </label>
+                       <div class="hint" style="font-size:.76rem;margin-top:.45rem">Ако клиентът е платил друга сума — поправи я и натисни „Приключи часа“.</div>
                    </div>`
                 : `<div class="cal-modal__price" style="display:flex;justify-content:space-between;align-items:baseline;font-size:1.05rem">
                        <span class="hint">Цена</span><b style="color:var(--rose-deep);font-family:var(--font-display);font-size:1.4rem">${Number(finalPrice).toFixed(0)} €</b></div>`;
@@ -1579,9 +1588,9 @@ window.Calendar = (function () {
                 const canEdit = b.status === 'booked' && !b.isOnline && canAdd();
                 actions = `<div class="cal-modal__actions">
                     ${canEdit ? `<button class="btn btn--primary md-edit">Редактирай часа</button>` : ''}
-                    <button class="btn btn--gold md-present">Присъства (проведен)</button>
-                    <button class="btn btn--ghost md-absent">Не присъства</button>
-                    ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">Отмени часа на клиента</button>` : ''}
+                    ${cfg.setStatus ? `<button class="btn btn--gold md-present">Приключи часа</button>
+                    <button class="btn btn--ghost md-absent">Не присъства</button>` : ''}
+                    ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">${b.isOnline ? 'Отмени часа на клиента' : 'Отмени часа'}</button>` : ''}
                     ${canManage ? `
                     <div class="hint" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.4rem">Времетраене
                         <span class="ad-hm">
@@ -1607,7 +1616,7 @@ window.Calendar = (function () {
                             ? `<span style="display:inline-flex;align-items:center;gap:.35rem;background:var(--blush-soft);color:var(--rose-deep);border-radius:999px;padding:.22rem .65rem;font-size:.76rem;font-weight:700"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg> Онлайн през сайта</span>`
                             : `<span style="display:inline-flex;align-items:center;gap:.35rem;background:var(--line);color:var(--ink-soft);border-radius:999px;padding:.22rem .65rem;font-size:.76rem;font-weight:700">Въведен ръчно</span>`}</div>
                     </div>
-                    ${priceBlock}
+                    ${cfg.hidePrices ? '' : priceBlock}
                     ${actions}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
@@ -1618,12 +1627,12 @@ window.Calendar = (function () {
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
 
             const discInp = backdrop.querySelector('.md-disc');
-            if (discInp) {
-                const finalEl = backdrop.querySelector('.md-final'), origEl = backdrop.querySelector('.md-orig');
+            const priceInp = backdrop.querySelector('.md-price');
+            if (discInp && priceInp) {
+                // Смяна на отстъпката -> преизчислява цената за плащане.
                 discInp.addEventListener('input', () => {
                     const d = Math.max(0, Math.min(100, +discInp.value || 0));
-                    finalEl.textContent = (orig * (100 - d) / 100).toFixed(0) + ' €';
-                    origEl.style.textDecoration = d ? 'line-through' : 'none';
+                    priceInp.value = r2(orig * (100 - d) / 100);
                 });
             }
 
@@ -1645,11 +1654,30 @@ window.Calendar = (function () {
                 openAddModal(b.startAt.slice(11, 16), { dayKey: b.startAt.slice(0, 10), dur, empId: b.employeeId, edit: b });
             });
             const present = backdrop.querySelector('.md-present');
-            if (present) present.addEventListener('click', () => run(async () => { await saveDiscount(); await cfg.setStatus(b.id, 'completed'); }));
+            if (present) present.addEventListener('click', () => {
+                // Ръчно поправена цена -> записва се тя (отстъпката се нулира); иначе — отстъпката както досега.
+                let fixed = null;
+                if (priceInp) {
+                    const raw = String(priceInp.value).trim().replace(',', '.');
+                    const pv = raw === '' ? null : +raw;
+                    if (pv != null && !(pv >= 0 && pv <= 10000)) { msg.innerHTML = `<div class="alert alert--err">Невалидна цена.</div>`; return; }
+                    const d = discInp ? Math.max(0, Math.min(100, +discInp.value || 0)) : curDisc;
+                    if (pv != null && Math.abs(pv - r2(orig * (100 - d) / 100)) > 0.004) fixed = pv;
+                }
+                run(async () => {
+                    if (fixed != null) await cfg.setStatus(b.id, 'completed', fixed);
+                    else { await saveDiscount(); await cfg.setStatus(b.id, 'completed'); }
+                });
+            });
             const absent = backdrop.querySelector('.md-absent');
             if (absent) absent.addEventListener('click', () => run(() => cfg.setStatus(b.id, 'no_show')));
             const cancelWithReason = backdrop.querySelector('.md-cancel');
             if (cancelWithReason) cancelWithReason.addEventListener('click', () => {
+                // Ръчно въведен час -> без причина и без имейл, само потвърждение.
+                if (!b.isOnline) {
+                    if (confirm('Да отменя ли този час?')) run(() => cfg.cancelBooking(b.id, ''));
+                    return;
+                }
                 const reason = window.prompt('Причина за отмяната — клиентът ще я види в имейла/SMS-а:');
                 if (reason === null) return; // отказ
                 if (!reason.trim()) { msg.innerHTML = `<div class="alert alert--err">Трябва да въведеш причина.</div>`; return; }

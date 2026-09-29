@@ -3114,3 +3114,24 @@ textarea.input { resize: vertical; min-height: 110px; }
     .sc-zoom__v { min-width: 3.4rem; height: 36px; font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; border-left: 1px solid #eee !important; border-right: 1px solid #eee !important; }
     .sc-zoom button:hover { background: #F2F7F7; color: var(--sc-accent-deep); }
 }
+
+/* Чужд график без цени (напр. Анелия в графика на Радина) */
+.is-noprice .ad-x__price, .is-noprice .ad-sum__tot { display: none !important; }
+/* Превключвател „Моят график / Радина“ */
+.cal-switch { display: flex; gap: .4rem; flex-wrap: wrap; margin: 0 0 .8rem; }
+.cal-switch__b { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: .45rem .95rem .45rem .5rem; font: inherit; font-size: .88rem; font-weight: 700; cursor: pointer; }
+.cal-switch__b i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
+.cal-switch__b.is-on { background: var(--c); border-color: var(--c); color: #fff; }
+.cal-switch__b.is-on i { background: #fff; }
+
+@media (max-width: 1023px) {
+    body.dash-on-cal .cal-switch { margin: 0; padding: .5rem .75rem; gap: .35rem; background: #fff; border-bottom: 1px solid var(--line); }
+    body.dash-on-cal .cal-switch__b { padding: .35rem .8rem .35rem .45rem; font-size: .82rem; }
+    body.dash-on-cal .cal-switch + .cal-host .sc { height: calc(100svh - var(--nav-h) - var(--dash-h) - 50px); }
+}
+
+/* Поправка на цената при „Присъства“ */
+.md-pricefix { display: flex; align-items: center; justify-content: space-between; gap: .8rem; font-size: .95rem; font-weight: 600; }
+.md-pricefix small { display: block; font-weight: 400; font-size: .74rem; color: var(--muted); }
+.md-pricefix .ad-eur { width: 8.5rem; flex: none; }
+.md-pricefix .input { font-size: 1.15rem; font-weight: 700; color: var(--rose-deep); text-align: right; padding-top: .5rem; padding-bottom: .5rem; }
