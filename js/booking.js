@@ -248,11 +248,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const MON = ['яну', 'фев', 'мар', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
 
     function todayIso() { return isoDate(new Date()); }
+    // Часове се запазват най-много 6 месеца напред (същото правило е и в backend-а).
+    const MAX_MONTHS = 6;
+    function maxIso() { const d = new Date(); d.setMonth(d.getMonth() + MAX_MONTHS); return isoDate(d); }
 
     function initDate() {
         const inp = $('bk-date');
         const iso = todayIso();
         inp.min = iso;
+        inp.max = maxIso();
         if (!state.date || state.date < iso) state.date = iso;
         inp.value = state.date;
         renderDays();
@@ -282,6 +286,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function pickDate(k, preselect) {
+        if (k > maxIso()) {
+            $('bk-date').value = state.date || todayIso();
+            $('bk-slots-wrap').innerHTML = `<div class="alert alert--info">Часове се запазват най-много ${MAX_MONTHS} месеца напред.</div>`;
+            return;
+        }
         state.date = k;
         state.slot = preselect || null;
         $('bk-date').value = k;
@@ -332,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 1; i <= 45; i++) {
             const d = new Date(base); d.setDate(base.getDate() + i);
             const k = isoDate(d);
+            if (k > maxIso()) break;
             let slots = [];
             try { slots = await API.get(`/availability?employeeId=${state.emp.id}&serviceId=${state.srv.serviceId}&date=${k}`); }
             catch (e) { slots = []; }

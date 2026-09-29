@@ -1,53 +1,79 @@
 /* =====================================================================
-   Леки диаграми с вградено SVG (без външни библиотеки).
+   Диаграми за таблото (HTML + CSS, без външни библиотеки).
    Charts.bars / Charts.hbars / Charts.doughnut връщат готов HTML.
-   Големи и четими; при нужда се скролват настрани САМО самите диаграми.
+   Стълбовете и лентите са в %, текстът е истински текст (не SVG) —
+   еднакво четими на телефон и на компютър.
    ===================================================================== */
 window.Charts = (function () {
     const C = ['#A59079', '#C4A98A', '#BFAEA2', '#7D6B5F', '#DBCFBE', '#8FB0A0', '#9A8B7E'];
     const money = v => Math.round(v || 0).toLocaleString('bg-BG');
     const esc = window.esc || (s => String(s ?? ''));
 
-    // Обвивка: диаграмата пази естествения си размер и се скролва вътрешно.
-    const scrollWrap = (svg) =>
-        `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;padding-bottom:.35rem">${svg}</div>`;
-
-    // Вертикални стълбове: data = [{label, value}]
-    function bars(data, opts) {
-        const o = opts || {};
-        const color = o.color || '#A59079';
-        const h = o.height || 250;
-        const n = Math.max(1, data.length);
-        const w = Math.max(360, n * 58);
-        const step = (w - 24) / n;
-        const bw = Math.min(40, step - 14);
-        const max = Math.max(1, ...data.map(d => d.value));
-        const body = data.map((d, i) => {
-            const x = 12 + i * step + (step - bw) / 2;
-            const bh = (h - 58) * (d.value / max);
-            const y = h - 32 - bh;
-            return `
-                <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${Math.max(0, bh).toFixed(1)}" rx="6" fill="${color}"/>
-                <text x="${(x + bw / 2).toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="#5F5A53">${d.value ? money(d.value) : ''}</text>
-                <text x="${(x + bw / 2).toFixed(1)}" y="${h - 10}" text-anchor="middle" font-size="12" fill="#9A8B7E">${esc(d.label)}</text>`;
-        }).join('');
-        return scrollWrap(`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;min-width:${w}px">${body}</svg>`);
+    // „Хубав“ таван на скалата: 87 -> 100, 430 -> 500, 13 -> 15.
+    function niceMax(v) {
+        if (v <= 0) return 1;
+        const p = Math.pow(10, Math.floor(Math.log10(v)));
+        const f = v / p;
+        const n = f <= 1 ? 1 : f <= 1.5 ? 1.5 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 3 ? 3 : f <= 4 ? 4 : f <= 5 ? 5 : f <= 6 ? 6 : f <= 8 ? 8 : 10;
+        return n * p;
     }
 
-    // Хоризонтални барове: data = [{label, value}]
-    function hbars(data) {
+    // Вертикални стълбове: data = [{label, value, muted?}]
+    // opts: { color, unit ('€' | ''), labelEvery (число), showValues ('all' | 'max' | 'auto'), highlightMax }
+    function bars(data, opts) {
+        const o = opts || {};
         if (!data.length) return `<p class="hint">Няма данни.</p>`;
-        const w = 560, rowH = 42, lblW = 180, h = data.length * rowH + 6;
-        const max = Math.max(1, ...data.map(d => d.value));
-        const body = data.map((d, i) => {
-            const y = i * rowH + 6;
-            const bw = (w - lblW - 86) * (d.value / max);
-            return `
-                <text x="0" y="${y + 20}" font-size="13" font-weight="500" fill="#221F1C">${esc(d.label)}</text>
-                <rect x="${lblW}" y="${y + 7}" width="${bw.toFixed(1)}" height="20" rx="10" fill="${C[i % C.length]}"/>
-                <text x="${(lblW + bw + 8).toFixed(1)}" y="${y + 21}" font-size="12" font-weight="600" fill="#5F5A53">${money(d.value)} €</text>`;
+        const color = o.color || '#A59079';
+        const unit = o.unit || '';
+        const fmt = v => money(v) + (unit ? ' ' + unit : '');
+        const rawMax = Math.max(0, ...data.map(d => d.value || 0));
+        const top = niceMax(rawMax);
+        const many = data.length > 12;
+        const show = o.showValues || (many ? 'max' : 'all');
+        const every = o.labelEvery || 1;
+        const maxIdx = data.findIndex(d => (d.value || 0) === rawMax && rawMax > 0);
+        const ticks = [top, top / 2, 0];
+
+        const cols = data.map((d, i) => {
+            const v = d.value || 0;
+            const h = v > 0 ? Math.max(1.5, v / top * 100) : 0;
+            const isMax = i === maxIdx;
+            const val = v > 0 && (show === 'all' || (show === 'max' && isMax));
+            const lbl = (i % every === 0 || d.forceLabel) ? esc(d.label) : '';
+            const cls = `ch-col${d.muted ? ' is-muted' : ''}${o.highlightMax && isMax ? ' is-max' : ''}${o.highlightMax && !isMax ? ' is-dim' : ''}`;
+            return `<div class="${cls}" title="${esc(d.title || d.label)}: ${fmt(v)}">
+                <div class="ch-col__bar-wrap">${val ? `<span class="ch-col__v" style="bottom:calc(${h}% + 4px)">${fmt(v)}</span>` : ''}
+                    <div class="ch-col__bar" style="height:${h}%"></div></div>
+                <span class="ch-col__x">${lbl}</span>
+            </div>`;
         }).join('');
-        return scrollWrap(`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block;min-width:${w}px">${body}</svg>`);
+
+        return `<div class="ch-bars${many ? ' ch-bars--many' : ''}" style="--c:${color}">
+            <div class="ch-bars__y">${ticks.map(t => `<span>${t.toLocaleString('bg-BG', { maximumFractionDigits: 1 })}</span>`).join('')}</div>
+            <div class="ch-bars__plot">
+                <div class="ch-bars__grid"><i></i><i></i><i></i></div>
+                <div class="ch-bars__cols">${cols}</div>
+            </div>
+        </div>`;
+    }
+
+    // Хоризонтални ленти (класация): data = [{label, value}]
+    function hbars(data, opts) {
+        const o = opts || {};
+        if (!data.length) return `<p class="hint">Няма данни.</p>`;
+        const unit = o.unit == null ? '€' : o.unit;
+        const max = Math.max(1, ...data.map(d => d.value));
+        const total = data.reduce((s, d) => s + d.value, 0) || 1;
+        return `<div class="ch-hb">${data.map((d, i) => `
+            <div class="ch-hb__row">
+                <div class="ch-hb__top">
+                    <span class="ch-hb__n">${i + 1}</span>
+                    <span class="ch-hb__lbl" title="${esc(d.label)}">${esc(d.label)}</span>
+                    <b class="ch-hb__v">${money(d.value)}${unit ? ' ' + unit : ''}</b>
+                    <span class="ch-hb__p">${Math.round(d.value / total * 100)}%</span>
+                </div>
+                <div class="ch-hb__track"><div class="ch-hb__fill" style="width:${(d.value / max * 100).toFixed(1)}%;background:${o.color || C[i % C.length]}"></div></div>
+            </div>`).join('')}</div>`;
     }
 
     // Поничка + легенда: data = [{label, value}]
@@ -74,7 +100,7 @@ window.Charts = (function () {
             </div>`;
         }).join('');
         return `<div style="display:flex;gap:1.8rem;align-items:center;flex-wrap:wrap">
-            <svg viewBox="0 0 220 220" width="220" height="220" style="flex:none">${paths}
+            <svg viewBox="0 0 220 220" width="220" height="220" style="flex:none;max-width:100%">${paths}
                 <text x="110" y="104" text-anchor="middle" font-size="14" fill="#9A8B7E">Общо</text>
                 <text x="110" y="126" text-anchor="middle" font-size="19" font-weight="700" fill="#7D6B5F">${money(total)} €</text>
             </svg>

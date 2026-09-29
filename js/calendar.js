@@ -55,8 +55,23 @@ window.Calendar = (function () {
     // лилаво · маслина), за да се различава от пръв поглед чий е часът. Всички са
     // достатъчно тъмни за четим бял текст (контраст ≥ 4.8:1).
     // Червеното е запазено за некоректни клиенти — затова го няма в списъка.
-    const EMP_COLORS = ['#2F6BB0', '#9C6614', '#9B3E7D', '#1F7A6B', '#6B4BA8', '#5E7A1E'];
-    const empColor = id => EMP_COLORS[Math.abs(+id || 0) % EMP_COLORS.length];
+    // Фиксирани цветове по име: Анелия — синьо, Радина — розово.
+    // Останалите получават цвят от палитрата (без синьо и розово, за да не се бъркат).
+    const NAME_COLORS = [[/^анелия/i, '#2F6BB0'], [/^радина/i, '#C2185B']];
+    const EMP_COLORS = ['#9C6614', '#1F7A6B', '#6B4BA8', '#5E7A1E', '#8A5A44'];
+    const empNames = {};
+    const learnEmp = (id, name) => { if (id != null && name) empNames[+id] = String(name).trim(); };
+    const empColor = id => {
+        const n = empNames[+id];
+        const m = n && NAME_COLORS.find(([re]) => re.test(n));
+        return m ? m[1] : EMP_COLORS[Math.abs(+id || 0) % EMP_COLORS.length];
+    };
+    // Имената на специалистките (за цветовете) — веднъж при зареждане.
+    let empNamesReady = Promise.resolve();
+    try {
+        if (window.API) empNamesReady = window.API.get('/employees')
+            .then(l => (l || []).forEach(e => learnEmp(e.id, e.fullName))).catch(() => {});
+    } catch (e) {}
 
     // Бялата (работна) част на графика = работното време на салона: пн–пт 09:00–18:30,
     // сб 10:00–14:30. Извън него е сиво, но пак може да се записва ръчно — записването
@@ -265,6 +280,11 @@ window.Calendar = (function () {
                         <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
                     </button>
                 </div>
+                <div class="sc-zoom" role="group" aria-label="Мащаб">
+                    <button type="button" class="sc-zoom__b sc-zoom-out" aria-label="Намали" title="Намали (Ctrl −)">−</button>
+                    <button type="button" class="sc-zoom__v" title="Нормален мащаб (Ctrl 0)"></button>
+                    <button type="button" class="sc-zoom__b sc-zoom-in" aria-label="Увеличи" title="Увеличи (Ctrl +)">+</button>
+                </div>
                 <div class="sc-sheet" hidden></div>
                 <div class="sc-loading" hidden><div class="spinner"></div></div>
             </div>
@@ -332,6 +352,9 @@ window.Calendar = (function () {
 
         // ---- Данни (кеш по месеци) ----
         const loadedMonths = new Set();
+        (cfg.employees || []).forEach(e => learnEmp(e.id, e.name));
+        // Щом имената пристигнат -> пренарисува с правилните цветове.
+        empNamesReady.then(() => { if (loadedMonths.size && document.body.contains(root)) render(); });
         async function fetchMonthInto(Y, M0) {
             const from = key(Y, M0, 1);
             const to = `${M0 === 11 ? Y + 1 : Y}-${pad((M0 + 1) % 12 + 1)}-01`;
@@ -344,7 +367,8 @@ window.Calendar = (function () {
             const inMonth = dk => { const dt = parseK(dk); return dt.getFullYear() === Y && dt.getMonth() === M0; };
             for (const dk of Object.keys(data)) if (inMonth(dk)) delete data[dk];
             for (const dk of Object.keys(offs)) if (inMonth(dk)) delete offs[dk];
-            (items || []).forEach(b => { const k = b.startAt.slice(0, 10); (data[k] = data[k] || []).push(b); });
+            (items || []).forEach(b => { learnEmp(b.employeeId, b.employeeName); const k = b.startAt.slice(0, 10); (data[k] = data[k] || []).push(b); });
+            ((rng && rng.blocks) || []).forEach(r => learnEmp(r.employeeId, r.employeeName));
             if (rng) {
                 (rng.blocks || []).forEach(r => { const k = r.startAt.slice(0, 10); (offs[k] = offs[k] || []).push({ kind: 'rest', ...r }); });
                 (rng.offDays || []).forEach(o => { const k = String(o.date).slice(0, 10); (offs[k] = offs[k] || []).push({ kind: 'off', employeeId: o.employeeId, employeeName: o.employeeName, k }); });
@@ -387,6 +411,7 @@ window.Calendar = (function () {
             clearPend();
             paintBar();
             paintFabs();
+            { const zw = root.querySelector('.sc-zoom'); if (zw) zw.hidden = view === 'month'; }
             if (view === 'month') renderMonth(); else renderGrid();
             renderBelow();
         }
@@ -440,7 +465,7 @@ window.Calendar = (function () {
                     const who = cfg.showEmployee && empFilter == null ? esc(firstName(r.employeeName)) : '';
                     return `<button type="button" class="sc-bk ${resv ? 'sc-resv' : 'sc-rest'}" data-l="${dl}" data-rest="${r.id}" data-k="${r.startAt.slice(0, 10)}" style="${pos};--bc:${empColor(r.employeeId)}">
                     <span class="sc-bk__t">${r.startAt.slice(11, 16)}–${minToHHMM(e)}</span>
-                    <span class="sc-bk__s">${resv ? 'Запазено' : 'Почивка'}</span>
+                    <span class="sc-bk__s">${r.note ? esc(r.note) : (resv ? 'Запазено' : 'Почивка')}</span>
                     ${who ? `<span class="sc-bk__c">${who}</span>` : ''}
                 </button>`;
                 }
@@ -556,6 +581,7 @@ window.Calendar = (function () {
             return n <= 3 ? fit : Math.max(fit, CW0 * z);
         }
         function applyZoom(z) {
+            { const zv = root.querySelector('.sc-zoom__v'); if (zv) zv.textContent = Math.round(clampZoom(z) / Z_DEF * 100) + '%'; }
             zoom = clampZoom(z);
             const hh = HH0 * zoom;
             cw = cwFor(zoom);
@@ -857,16 +883,21 @@ window.Calendar = (function () {
             if (!pend) return;
             const p = pend, emp = pendEmp(p);
             if (emp == null) { openPend('__resv'); return; }   // целият салон, седмица -> първо избор на специалист
-            fabOk.disabled = true;
-            try {
-                await window.API.post('/schedule/block', {
-                    employeeId: emp, blockType: 'reserved',
-                    startAt: `${p.k}T${minToHHMM(p.s)}:00`, endAt: `${p.k}T${minToHHMM(p.e)}:00`
-                });
-                clearPend();
-                await load();
-            } catch (err) { alert(err.message); }
-            finally { fabOk.disabled = false; }
+            // Пояснение по избор (напр. „Почивам“) — вижда се върху блокчето в графика.
+            const dd = parseK(p.k);
+            noteModal({
+                title: 'Запазено време',
+                sub: `${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()} · ${minToHHMM(p.s)}–${minToHHMM(p.e)}`,
+                saveLabel: 'Запази времето',
+                onSave: async (note) => {
+                    await window.API.post('/schedule/block', {
+                        employeeId: emp, blockType: 'reserved', note,
+                        startAt: `${p.k}T${minToHHMM(p.s)}:00`, endAt: `${p.k}T${minToHHMM(p.e)}:00`
+                    });
+                    if (pend === p) clearPend();
+                    await load();
+                }
+            });
         });
         // Автоматичен скрол, докато пръстът е до ръба (за да се маркира и отвъд екрана).
         let asRaf = null, lastY = 0;
@@ -1003,12 +1034,35 @@ window.Calendar = (function () {
         });
 
         // Десктоп: Ctrl + колелце (и щипка на тъчпада) = мащаб.
+        // Колелцето на мишката дава ~100 на „щрак“ (преди = ×2.7 наведнъж), тъчпадът — малки
+        // стойности. Нормализираме и ограничаваме -> ~×1.3 на щрак, плавно при тъчпад.
         scroll.addEventListener('wheel', (e) => {
             if (!e.ctrlKey || view === 'month') return;
             e.preventDefault();
-            zoomAt(pendingZoom() * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
-            clearTimeout(scroll._wz); scroll._wz = setTimeout(saveZoom, 200);
+            let d = e.deltaY * (e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 400 : 1));
+            d = Math.max(-60, Math.min(60, d));
+            zoomAt(pendingZoom() * Math.exp(-d * 0.0045), e.clientX, e.clientY);
+            clearTimeout(scroll._wz); scroll._wz = setTimeout(() => { saveZoom(); paintZoomVal(); }, 200);
         }, { passive: false });
+
+        // Бутони − / + (компютър) и Ctrl + / Ctrl − / Ctrl 0 върху графика (вместо мащаба на браузъра).
+        const zoomVal = root.querySelector('.sc-zoom__v');
+        function paintZoomVal() { if (zoomVal) zoomVal.textContent = Math.round(zoom / Z_DEF * 100) + '%'; }
+        const zoomStep = f => { if (view !== 'month') tweenZoom(clampZoom(zoom * f), paintZoomVal); };
+        root.querySelector('.sc-zoom-in').addEventListener('click', () => zoomStep(1.2));
+        root.querySelector('.sc-zoom-out').addEventListener('click', () => zoomStep(1 / 1.2));
+        zoomVal.addEventListener('click', () => { if (view !== 'month') tweenZoom(Z_DEF, paintZoomVal); });
+        paintZoomVal();
+        const onKeyZoom = (e) => {
+            if (!document.body.contains(root)) { document.removeEventListener('keydown', onKeyZoom); return; }
+            if (!(e.ctrlKey || e.metaKey) || e.altKey || view === 'month' || !root.offsetParent) return;
+            if (document.querySelector('.cal-modal-backdrop')) return;
+            const k = e.key;
+            if (k === '+' || k === '=') { e.preventDefault(); zoomStep(1.2); }
+            else if (k === '-' || k === '_') { e.preventDefault(); zoomStep(1 / 1.2); }
+            else if (k === '0') { e.preventDefault(); tweenZoom(Z_DEF, paintZoomVal); }
+        };
+        document.addEventListener('keydown', onKeyZoom);
 
         // Червената линия „сега" се мести сама всяка минута.
         let dayAtMount = todayKey();
@@ -1017,6 +1071,44 @@ window.Calendar = (function () {
             if (todayKey() !== dayAtMount) { dayAtMount = todayKey(); render(); return; }
             root.querySelectorAll('.sc-now').forEach(el => { const m = nowMin(); el.style.top = pct(m); el.style.display = m >= DAY_S && m <= DAY_E ? '' : 'none'; });
         }, 60000);
+
+        // Бързи пояснения за „Запазено“ / почивка.
+        const NOTE_CHIPS = ['Почивам', 'Обедна почивка', 'Лични ангажименти', 'Лекар', 'Обучение'];
+        const chipsHtml = () => `<div class="ad-chips">${NOTE_CHIPS.map(t => `<button type="button" class="ad-chip">${esc(t)}</button>`).join('')}</div>`;
+        function wireChips(box, input) {
+            box.querySelectorAll('.ad-chip').forEach(c => c.addEventListener('click', () => { input.value = c.textContent; input.focus(); }));
+        }
+        // Попъп: пояснение по избор -> onSave(note | null).
+        function noteModal({ title, sub, value, saveLabel, onSave }) {
+            document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
+            const backdrop = document.createElement('div');
+            backdrop.className = 'cal-modal-backdrop';
+            backdrop.innerHTML = `
+                <div class="cal-modal">
+                    <button class="cal-modal__close" aria-label="Затвори">×</button>
+                    <div class="cal-modal__title">${esc(title)}</div>
+                    ${sub ? `<div class="cal-modal__meta hint">${esc(sub)}</div>` : ''}
+                    <label class="field" style="margin-top:.9rem"><span class="ad-lbl">Пояснение <small>(по избор)</small></span>
+                        <input class="input nm-note" type="text" maxlength="200" placeholder="напр. Почивам" value="${esc(value || '')}"></label>
+                    ${chipsHtml()}
+                    <div class="cal-modal__actions" style="margin-top:1rem"><button class="btn btn--primary nm-save">${esc(saveLabel || 'Запази')}</button></div>
+                    <div class="md-msg" style="margin-top:.8rem"></div>
+                </div>`;
+            document.body.appendChild(backdrop);
+            const close = () => backdrop.remove();
+            backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+            backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
+            const inp = backdrop.querySelector('.nm-note'), btn = backdrop.querySelector('.nm-save');
+            wireChips(backdrop, inp);
+            const save = async () => {
+                btn.disabled = true;
+                try { await onSave(inp.value.trim() || null); close(); }
+                catch (err) { backdrop.querySelector('.md-msg').innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; btn.disabled = false; }
+            };
+            btn.addEventListener('click', save);
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+            if (matchMedia('(hover: hover) and (pointer: fine)').matches) inp.focus();
+        }
 
         // Попъп за добавяне на час (клик на празно място / маркиран период в графика).
         // В „Целият салон" има и избор на специалист (за кого е часът).
@@ -1052,7 +1144,7 @@ window.Calendar = (function () {
                         <label class="field"><span class="ad-lbl">Услуга</span>
                             <select class="select ad-svc">${pickEmp ? '<option value="">Избери специалист…</option>' : (staticSvc || '<option value="">Няма зададени услуги</option>') + SPECIAL}</select></label>
                         ${ED ? `<label class="field"><span class="ad-lbl">Дата</span>
-                            <input class="input ad-date" type="date" value="${dayKey}"></label>` : ''}
+                            <input class="input ad-date" type="date" value="${dayKey}" max="${(() => { const m = new Date(); m.setMonth(m.getMonth() + 6); return `${m.getFullYear()}-${pad(m.getMonth() + 1)}-${pad(m.getDate())}`; })()}"></label>` : ''}
                         <div class="ad-pair ad-pair--time ad-row-time">
                             <label class="field"><span class="ad-lbl">Начален час</span>
                                 <select class="select ad-time">${timeOpts}</select></label>
@@ -1065,13 +1157,24 @@ window.Calendar = (function () {
                                     <select class="ad-m" aria-label="Минути"></select>
                                 </div></div>
                         </div>
+                        <div class="ad-row-price">
+                            <label class="field"><span class="ad-lbl">Цена</span>
+                                <span class="ad-eur"><input class="input ad-price" type="number" min="0" step="0.5" inputmode="decimal"><i>€</i></span></label>
+                        </div>
+                        <div class="ad-extras"></div>
+                        ${ED ? '' : `<button type="button" class="btn btn--ghost ad-add-x">+ Още процедура за същия клиент</button>`}
+                        <div class="ad-row-note">
+                            <label class="field"><span class="ad-lbl">Пояснение <small>(по избор)</small></span>
+                                <input class="input ad-bnote" type="text" maxlength="200" placeholder="напр. Почивам"></label>
+                            ${chipsHtml()}
+                        </div>
                         <div class="ad-row-rest"><div class="ad-sum"></div></div>
                         <div class="ad-off-note hint" style="display:none">Целият ден ще е почивен — никой няма да може да си запише час. Отменя се с клик върху деня в графика.</div>
                         <div class="ad-pair ad-row-client">
                             <label class="field"><span class="ad-lbl">Име на клиента</span>
-                                <input class="input ad-name" type="text" placeholder="напр. Мария"></label>
+                                <input class="input ad-name" type="text" placeholder="напр. Мария" autocomplete="off"></label>
                             <label class="field"><span class="ad-lbl">Телефон <small>(по избор)</small></span>
-                                <input class="input ad-phone" type="tel" placeholder="+359…"></label>
+                                <input class="input ad-phone" type="tel" placeholder="+359…" autocomplete="off"></label>
                         </div>
                         <div class="ad-known hint" hidden></div>
                         <button class="btn btn--primary ad-save">${ED ? 'Запази промените' : 'Запиши часа'}</button>
@@ -1105,8 +1208,41 @@ window.Calendar = (function () {
                 svcSel.value = id;
             }
             // Карта service_id -> времетраене на процедурата.
-            let svcDur = {};
-            (cfg.services || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; });
+            let svcDur = {}, svcPrice = {};
+            (cfg.services || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; svcPrice[s.serviceId] = s.price; });
+            const fmtP = v => (v == null || v === '' || isNaN(+v)) ? '' : String(Math.round(+v * 100) / 100);
+            const priceEl = $('.ad-price'), extrasEl = $('.ad-extras'), addXBtn = $('.ad-add-x');
+            wireChips(backdrop, $('.ad-bnote'));
+
+            // ---- Още процедури за същия клиент (записват се една след друга) ----
+            const svcOptsHtml = () => [...svcSel.options].filter(o => o.value && !o.value.startsWith('__'))
+                .map(o => `<option value="${o.value}">${esc(o.text)}</option>`).join('');
+            const xRows = () => [...extrasEl.querySelectorAll('.ad-x')];
+            const stdTotal = () => (svcDur[+svcSel.value] || 0) + xRows().reduce((s, r) => s + (svcDur[+r.querySelector('.ad-x-svc').value] || 0), 0);
+            const numP = el => { const v = String(el.value).trim().replace(',', '.'); return v === '' ? null : +v; };
+            function renumberX() { xRows().forEach((r, i) => { r.querySelector('.ad-x-n').textContent = `Процедура ${i + 2}`; }); }
+            function addExtra() {
+                const oh = svcOptsHtml();
+                if (!oh) return;
+                const row = document.createElement('div');
+                row.className = 'ad-x';
+                row.innerHTML = `<div class="ad-x__top"><span class="ad-lbl ad-x-n"></span><button type="button" class="ad-x__del" aria-label="Махни процедурата">×</button></div>
+                    <select class="select ad-x-svc"><option value="">Избери процедура…</option>${oh}</select>
+                    <label class="field ad-x__price"><span class="ad-lbl">Цена</span>
+                        <span class="ad-eur"><input class="input ad-x-price" type="number" min="0" step="0.5" inputmode="decimal"><i>€</i></span></label>`;
+                extrasEl.appendChild(row);
+                const sel = row.querySelector('.ad-x-svc'), pr = row.querySelector('.ad-x-price');
+                const onSvc = () => { pr.value = fmtP(svcPrice[+sel.value]); setHM(Math.max(stdTotal(), opts0())); paintSum(); };
+                sel.addEventListener('change', onSvc);
+                pr.addEventListener('input', paintSum);
+                row.querySelector('.ad-x__del').addEventListener('click', () => { row.remove(); renumberX(); setHM(Math.max(stdTotal(), opts0())); paintSum(); });
+                svcPicker(sel, () => (empSel ? empSel.value : cfg.staffId));
+                renumberX();
+                const b = row.querySelector('.svp-btn'); if (b) b.click();
+            }
+            const opts0 = () => (ED ? 0 : (opts.dur || 0));
+            if (addXBtn) addXBtn.addEventListener('click', addExtra);
+            priceEl.addEventListener('input', paintSum);
 
             // Часове 0–8, минути през 5.
             hSel.innerHTML = Array.from({ length: 9 }, (_, h) => `<option value="${h}">${h} ч</option>`).join('');
@@ -1129,10 +1265,10 @@ window.Calendar = (function () {
                     // Специалистът може да го промени свободно — така си прави и почивката.
                     // По подразбиране: времето на процедурата. Ако в графика е маркиран
                     // по-дълъг период (напр. с почивка) — остава маркираното.
-                    const std = svcDur[+svcSel.value] || 30;
-                    // Редакция: първия път — текущото времетраене на часа; при смяна на услугата — нейното.
-                    if (ED && !edDurUsed) { edDurUsed = true; setHM(opts.dur || std); }
-                    else setHM(ED ? std : Math.max(std, opts.dur || 0));
+                    const std = stdTotal() || 30;
+                    // Редакция: първия път — текущото времетраене и цена на часа; при смяна на услугата — нейните.
+                    if (ED && !edDurUsed) { edDurUsed = true; setHM(opts.dur || std); priceEl.value = fmtP(ED.priceSnapshot); }
+                    else { setHM(ED ? std : Math.max(std, opts.dur || 0)); priceEl.value = fmtP(svcPrice[+svcSel.value]); }
                 }
                 paintMode();
             }
@@ -1143,6 +1279,10 @@ window.Calendar = (function () {
                 show('.ad-f-dur', isBlk(md));
                 show('.ad-f-hm', md === 'svc');
                 show('.ad-row-client', md === 'svc');
+                show('.ad-row-price', md === 'svc');
+                show('.ad-extras', md === 'svc');
+                if (addXBtn) addXBtn.style.display = md === 'svc' ? '' : 'none';
+                show('.ad-row-note', isBlk(md));
                 if (md !== 'svc') $('.ad-known').hidden = true;
                 show('.ad-off-note', md === 'off');
                 $('.ad-dur-lbl').textContent = isBlk(md) ? 'Продължителност' : 'Процедура';
@@ -1155,11 +1295,14 @@ window.Calendar = (function () {
                 if (mode() !== 'svc') { sumEl.innerHTML = ''; const sb = $('.ad-sub'); if (sb) sb.textContent = subOrig; return; }
                 const st = hhmmToMin(timeSel.value), total = hmVal();
                 const end = minToHHMM(Math.min(1440, st + total));
-                const std = svcDur[+svcSel.value] || 0;
+                const std = stdTotal();
                 const diff = total - std;
                 const note = !std || diff === 0 ? 'стандартно'
                     : (diff > 0 ? `+${durLabel(diff)} почивка` : `−${durLabel(-diff)} от стандартното`);
-                sumEl.innerHTML = `<span>${timeSel.value} – <b>${end}</b></span><span>${durLabel(total)} · <i class="ad-sum__note${diff < 0 ? ' is-short' : ''}">${note}</i></span>`;
+                const nX = xRows().length;
+                const sumP = [priceEl, ...xRows().map(r => r.querySelector('.ad-x-price'))].reduce((s, el) => s + (numP(el) || 0), 0);
+                sumEl.innerHTML = `<span>${timeSel.value} – <b>${end}</b></span><span>${durLabel(total)} · <i class="ad-sum__note${diff < 0 ? ' is-short' : ''}">${note}</i></span>`
+                    + (nX ? `<span class="ad-sum__tot">${nX + 1} процедури · общо <b>${fmtP(sumP)} €</b></span>` : '');
                 // Подзаглавието горе следва реалния край на часа.
                 const sub = $('.ad-sub');
                 if (sub) sub.textContent = `${WDNAMES[dd.getDay()]}, ${dd.getDate()} ${MON[dd.getMonth()].toLowerCase()} · ${timeSel.value}–${end}`;
@@ -1169,8 +1312,9 @@ window.Calendar = (function () {
                 svcSel.innerHTML = `<option value="">Зареждане…</option>`;
                 try {
                     const list = await cfg.servicesFor(empId);
-                    svcDur = {};
-                    (list || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; });
+                    svcDur = {}; svcPrice = {};
+                    (list || []).forEach(s => { svcDur[s.serviceId] = s.durationMinutes; svcPrice[s.serviceId] = s.price; });
+                    extrasEl.innerHTML = '';   // друга специалистка -> добавените процедури не важат
                     svcSel.innerHTML = ((list && list.length)
                         ? list.map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('')
                         : `<option value="">Няма зададени услуги</option>`) + SPECIAL;
@@ -1199,6 +1343,66 @@ window.Calendar = (function () {
                     } catch (e) { knownEl.hidden = true; }
                 }, 350);
             });
+            // ---- Подсказки за клиент: пишеш „Мар“ или част от телефона -> „Мария Димитрова · 0888…“ ----
+            const acEl = document.createElement('div');
+            acEl.className = 'ad-ac'; acEl.hidden = true;
+            $('.ad-row-client').appendChild(acEl);
+            let acT = null, acSeq = 0, acList = [], acAct = -1, acMute = false;
+            const acHide = () => { acEl.hidden = true; acList = []; acAct = -1; };
+            // Първо тези, чието име започва с написаното, после — някоя дума от името.
+            const acRank = (c, q) => {
+                const n = String(c.name || '').toLowerCase(), ql = q.toLowerCase();
+                if (n.startsWith(ql)) return 0;
+                return n.split(/\s+/).some(w => w.startsWith(ql)) ? 1 : 2;
+            };
+            function acPaint() {
+                if (!acList.length) { acHide(); return; }
+                acEl.innerHTML = acList.map((c, i) => `<button type="button" class="ad-ac__it${i === acAct ? ' is-act' : ''}" data-i="${i}">
+                    <b>${esc(c.name)}</b><span>${esc(c.phone || 'без телефон')}${c.hasAccount ? ' · профил' : ''}${c.noShow ? ` · <em>⚠ ${c.noShow}× не се яви</em>` : ''}</span></button>`).join('');
+                acEl.hidden = false;
+                acEl.scrollIntoView({ block: 'nearest' });
+            }
+            function acQuery(src) {
+                if (acMute) return;
+                clearTimeout(acT);
+                const q = src.value.trim(), digits = q.replace(/\D/g, '');
+                if (src === phoneEl ? digits.length < 3 : q.length < 2) { acHide(); return; }
+                acT = setTimeout(async () => {
+                    const my = ++acSeq;
+                    try {
+                        const r = await window.API.get(`/clients?q=${encodeURIComponent(q)}`);
+                        if (my !== acSeq) return;
+                        acList = (r || []).filter(c => c.name).sort((a, b) => acRank(a, q) - acRank(b, q)).slice(0, 6);
+                        acAct = -1; acPaint();
+                    } catch (e) { acHide(); }
+                }, 250);
+            }
+            function acPick(c) {
+                if (!c) return;
+                nameEl.value = c.name;
+                acHide();
+                if (c.phone) {
+                    phoneEl.value = c.phone;
+                    acMute = true; phoneEl.dispatchEvent(new Event('input')); acMute = false;   // -> „познат клиент“ отдолу
+                }
+            }
+            acEl.addEventListener('pointerdown', e => {
+                const b = e.target.closest('.ad-ac__it'); if (!b) return;
+                e.preventDefault(); acPick(acList[+b.dataset.i]);
+            });
+            [nameEl, phoneEl].forEach(el => {
+                el.addEventListener('input', () => acQuery(el));
+                el.addEventListener('blur', () => setTimeout(acHide, 150));
+                el.addEventListener('keydown', e => {
+                    if (acEl.hidden || !acList.length) return;
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        acAct = (acAct + (e.key === 'ArrowDown' ? 1 : -1) + acList.length) % acList.length; acPaint();
+                    } else if (e.key === 'Enter' && acAct >= 0) { e.preventDefault(); acPick(acList[acAct]); }
+                    else if (e.key === 'Escape') { e.stopPropagation(); acHide(); }
+                });
+            });
+
             svcSel.addEventListener('change', fillDur);
             [timeSel, durSel, hSel, mSel].forEach(x => x.addEventListener('change', paintSum));
             svcPicker(svcSel, () => (empSel ? empSel.value : cfg.staffId));
@@ -1220,7 +1424,8 @@ window.Calendar = (function () {
                 } else if (isBlk(md)) {
                     const dur = durSel.value === 'end' ? whEnd() - hhmmToMin(timeSel.value) : +durSel.value;
                     if (!(dur > 0)) return err('Началният час е след края на работния ден.');
-                    run = () => window.API.post('/schedule/block', { employeeId, blockType: md === 'resv' ? 'reserved' : 'rest', startAt, endAt: addMinIso(startAt, Math.min(dur, 1440 - hhmmToMin(timeSel.value))) });
+                    const note = $('.ad-bnote').value.trim() || null;
+                    run = () => window.API.post('/schedule/block', { employeeId, blockType: md === 'resv' ? 'reserved' : 'rest', note, startAt, endAt: addMinIso(startAt, Math.min(dur, 1440 - hhmmToMin(timeSel.value))) });
                 } else {
                     const dto = {
                         employeeId,
@@ -1233,10 +1438,17 @@ window.Calendar = (function () {
                         note: null
                     };
                     if (!dto.serviceId) return err('Избери услуга.');
-                    if (dto.procedureMinutes < 5) return err('Времетраенето трябва да е поне 5 минути.');
+                    const badP = v => v != null && !(v >= 0 && v <= 10000);
+                    dto.price = numP(priceEl);
+                    if (badP(dto.price)) return err('Невалидна цена.');
+                    const xs = xRows().map(r => ({ serviceId: +r.querySelector('.ad-x-svc').value, price: numP(r.querySelector('.ad-x-price')) }));
+                    if (xs.some(x => !x.serviceId)) return err('Избери услуга за всяка добавена процедура (или я махни с ×).');
+                    if (xs.some(x => badP(x.price))) return err('Невалидна цена при добавена процедура.');
+                    if (xs.length) dto.extras = xs;
+                    if (dto.procedureMinutes < 5 * (xs.length + 1)) return err('Времетраенето е твърде кратко за всички процедури.');
                     if (!dto.guestName) return err('Въведи име на клиента.');
                     if (ED) {
-                        const body = { serviceId: dto.serviceId, startAt, procedureMinutes: dto.procedureMinutes, guestName: dto.guestName, guestPhone: dto.guestPhone };
+                        const body = { serviceId: dto.serviceId, startAt, procedureMinutes: dto.procedureMinutes, price: dto.price, guestName: dto.guestName, guestPhone: dto.guestPhone };
                         if (empSel) body.employeeId = employeeId;
                         run = () => window.API.put(`/bookings/${ED.id}/edit`, body);
                         saveBtn.disabled = true; saveBtn.style.opacity = .7;
@@ -1252,7 +1464,7 @@ window.Calendar = (function () {
                             await window.API.del(`/schedule/block/${rb.id}?employeeId=${rb.employeeId}`);
                             try { await cfg.createBooking(dto); }
                             catch (e) {
-                                try { await window.API.post('/schedule/block', { employeeId: rb.employeeId, blockType: 'reserved', startAt: rb.startAt, endAt: rb.endAt }); } catch (_) {}
+                                try { await window.API.post('/schedule/block', { employeeId: rb.employeeId, blockType: 'reserved', note: rb.note || null, startAt: rb.startAt, endAt: rb.endAt }); } catch (_) {}
                                 throw e;
                             }
                         }
@@ -1278,14 +1490,25 @@ window.Calendar = (function () {
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
                     <div class="cal-modal__title">${isOff ? 'Почивен ден' : (resv ? 'Запазено време' : 'Почивка')}</div>
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
+                    ${!isOff && o.note ? `<div class="rm-note">${esc(o.note)}</div>` : ''}
                     <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
-                    ${cfg.editable ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
+                    ${cfg.editable ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
             document.body.appendChild(backdrop);
             const close = () => backdrop.remove();
             backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
+            const noteEdit = backdrop.querySelector('.rm-note-edit');
+            if (noteEdit) noteEdit.addEventListener('click', () => noteModal({
+                title: resv ? 'Запазено време' : 'Почивка',
+                sub: `${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}`,
+                value: o.note, saveLabel: 'Запази пояснението',
+                onSave: async (note) => {
+                    await window.API.put(`/schedule/block/${o.id}/note`, { employeeId: o.employeeId, note });
+                    await load();
+                }
+            }));
             const fill = backdrop.querySelector('.rm-fill');
             if (fill) fill.addEventListener('click', () => {
                 close();
@@ -1619,5 +1842,5 @@ window.Calendar = (function () {
         load();
     }
 
-    return { mount, empColor, EMP_COLORS };
+    return { mount, empColor, EMP_COLORS, learnEmp };
 })();
