@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         no_show:   { label: 'Не се яви', cls: 'alert--err' }
     };
     // Акцентни цветове на разделите в таблото — съвпадат с css/styles.css (--acc-*).
-    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', set: '#9B7FC2', crs: '#B07D52' };
+    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', cli: '#3A8C99', set: '#9B7FC2', crs: '#B07D52' };
     const pad = n => String(n).padStart(2, '0');
     const money = v => Math.round(Number(v) || 0).toLocaleString('bg-BG') + ' €';
     const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const loaded = {};
         const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderClients, clients: renderClients, courses: renderCourses, settings: renderSettings };
         // Фонът на цялото табло се оцветява леко според отворения раздел — веднага личи къде си.
-        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-alert-soft)', courses: 'var(--acc-crs-soft)', settings: 'var(--acc-set-soft)' };
+        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-cli-soft)', courses: 'var(--acc-crs-soft)', settings: 'var(--acc-set-soft)' };
 
         function show(name) {
             tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
@@ -674,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Цените на чужди часове идват празни от сървъра — служителката вижда само своите пари.
     async function renderClients(box) {
         box.innerHTML = `
-            ${sectionTitle('Клиенти', ACC.alert, '0 0 .3rem')}
+            ${sectionTitle('Клиенти', ACC.cli, '0 0 .3rem')}
             <p class="hint" style="margin:0 0 1rem">Всички клиенти — записали се онлайн и добавени ръчно от вас (разпознават се по телефона). Натисни клиент, за да видиш всичките му часове.</p>
             <div class="cl-bar">
                 <div class="cl-seg" role="tablist">
@@ -719,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 c.lastVisit ? `<span>последно: ${fmtDate(c.lastVisit)}</span>` : ''
             ].filter(Boolean).join('<i>·</i>');
             return `
-            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-added="${c.isAdded ? 1 : 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
+            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-added="${c.isAdded ? 1 : 0}" data-up="${c.upcoming || 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
                 <button type="button" class="cl-head">
                     <span class="cl-av">${bad ? '⚠' : esc((c.name || '?').trim().charAt(0).toUpperCase())}</span>
                     <span class="cl-main">
@@ -770,12 +770,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" class="btn btn--gold cl-inv-btn" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Покани за профил</button>
                         <div class="cl-inv-out" hidden></div>
                     </div>`;
-                // Ръчно добавен клиент без часове -> може да се изтрие (напр. грешно въведен).
-                const delBar = cardEl.dataset.added === '1'
-                    ? `<button type="button" class="btn btn--ghost cl-del-btn" style="--pad-y:.4rem;--pad-x:.9rem;font-size:.8rem;color:#D9534F;margin-top:.6rem">Изтрий клиента</button>` : '';
-                if (!items.length) { hist.innerHTML = inviteBar + `<p class="hint" style="margin:.4rem 0 0">Няма записани часове.</p>` + delBar; return; }
+                // Редакция (клиент без профил) + изтриване (добавен без часове — всички; с история — само Радина, без предстоящ час).
+                const isAcc = cardEl.dataset.acc === '1', isAdded = cardEl.dataset.added === '1';
+                const canDel = isAdded || (role === 'boss' && +cardEl.dataset.up === 0);
+                const actBar = `
+                    <div class="cl-acts">
+                        <button type="button" class="btn btn--ghost cl-edit-btn">Редактирай</button>
+                        ${canDel ? `<button type="button" class="btn btn--ghost cl-del-btn">Изтрий</button>` : ''}
+                    </div>
+                    <div class="cl-edit-box" hidden></div>`;
+                if (!items.length) { hist.innerHTML = actBar + inviteBar + `<p class="hint" style="margin:.4rem 0 0">Няма записани часове.</p>`; return; }
                 const now = Date.now();
-                hist.innerHTML = inviteBar + items.map(b => {
+                hist.innerHTML = actBar + inviteBar + items.map(b => {
                     const st = STATUS[b.status] || { label: b.status, cls: 'alert--info' };
                     const future = b.status === 'booked' && new Date(b.startAt).getTime() > now;
                     const price = b.price != null
@@ -829,12 +835,46 @@ document.addEventListener('DOMContentLoaded', () => {
             const delBtn = e.target.closest('.cl-del-btn');
             if (delBtn) {
                 const cardEl = delBtn.closest('.cl-card');
-                if (!confirm(`Да изтрия ли клиента ${cardEl.dataset.name || ''}?`)) return;
+                const nm = cardEl.dataset.name || 'клиента';
+                const q = cardEl.dataset.added === '1'
+                    ? `Да изтрия ли ${nm}?`
+                    : `Да изтрия ли ${nm} от списъка?\n\nМиналите часове и парите остават в статистиките. Ако пак си запише час, ще се появи отново.`;
+                if (!confirm(q)) return;
                 delBtn.disabled = true;
                 try { await API.del(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`); await load(); }
                 catch (err) { alert(err.message); delBtn.disabled = false; }
                 return;
             }
+            const editBtn = e.target.closest('.cl-edit-btn');
+            if (editBtn) {
+                const cardEl = editBtn.closest('.cl-card'), eb = cardEl.querySelector('.cl-edit-box');
+                if (!eb.hidden) { eb.hidden = true; return; }
+                const byPhone = cardEl.dataset.key.charAt(0) === 'p';
+                eb.innerHTML = `
+                    <div class="cl-add__fields">
+                        <label>Имена<input class="input cl-e-name" type="text" maxlength="200" autocomplete="off" value="${esc(cardEl.dataset.name || '')}"></label>
+                        <label>Телефон<input class="input cl-e-phone" type="tel" maxlength="30" inputmode="tel" autocomplete="off" value="${esc(cardEl.dataset.phone || '')}"${byPhone ? '' : ' placeholder="по желание"'}></label>
+                    </div>
+                    ${cardEl.dataset.acc === '1' ? `<small class="hint">Клиентът има профил — сменят се името и телефонът в профила ѝ. Имейлът и паролата не се пипат.</small>` : ''}
+                    <div class="cl-add__msg"></div>
+                    <div class="cl-add__acts">
+                        <button type="button" class="btn btn--primary cl-e-save">Запази</button>
+                        <button type="button" class="btn btn--ghost cl-e-cancel">Отказ</button>
+                    </div>`;
+                eb.hidden = false;
+                eb.querySelector('.cl-e-name').focus();
+                eb.querySelector('.cl-e-cancel').addEventListener('click', () => { eb.hidden = true; });
+                eb.querySelector('.cl-e-save').addEventListener('click', async ev => {
+                    const name = eb.querySelector('.cl-e-name').value.trim(), phone = eb.querySelector('.cl-e-phone').value.trim();
+                    const m = eb.querySelector('.cl-add__msg');
+                    if (name.length < 2) { m.innerHTML = `<div class="alert alert--err">Въведи имената.</div>`; return; }
+                    ev.target.disabled = true;
+                    try { await API.put(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`, { name, phone }); await load(); }
+                    catch (err) { m.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; ev.target.disabled = false; }
+                });
+                return;
+            }
+            if (e.target.closest('.cl-edit-box')) return;
             const invBtn = e.target.closest('.cl-inv-btn');
             if (invBtn) {
                 const cardEl = invBtn.closest('.cl-card'), out = cardEl.querySelector('.cl-inv-out');
@@ -984,7 +1024,7 @@ document.addEventListener('DOMContentLoaded', () => {
         list.querySelectorAll('.dash-panel').forEach(p => ePanels[p.dataset.p] = p);
         const eLoaded = {};
         const eLoaders = { calendar: mountEmployeeCalendars, earn: renderMyEarnings, clients: renderClients };
-        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-alert-soft)' };
+        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-cli-soft)' };
         const eShow = name => {
             eTabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
             Object.entries(ePanels).forEach(([k, el]) => el.hidden = k !== name);

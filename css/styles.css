@@ -52,6 +52,9 @@
     --acc-alert:      #D9534F;
     --acc-alert-deep: #B7413D;
     --acc-alert-soft: #FBEAEA;
+    --acc-cli:        #3A8C99;   /* Клиенти (некоректните остават в червено) */
+    --acc-cli-deep:   #276C77;
+    --acc-cli-soft:   #E8F3F5;
     --acc-set:        #9B7FC2;
     --acc-set-deep:   #7358A0;
     --acc-set-soft:   #F2EDF9;
@@ -636,8 +639,8 @@ em, .italic { font-style: italic; }
 /* Всеки раздел на таблото със свой ясен цвят. */
 .dash-tab[data-t="stats"].active    { color: var(--acc-stats-deep); }
 .dash-tab[data-t="calendar"].active { color: var(--acc-cal-deep); }
-.dash-tab[data-t="noshow"].active   { color: var(--acc-alert-deep); }
-.dash-tab[data-t="clients"].active  { color: var(--acc-alert-deep); }
+.dash-tab[data-t="noshow"].active   { color: var(--acc-cli-deep); }
+.dash-tab[data-t="clients"].active  { color: var(--acc-cli-deep); }
 .dash-tab[data-t="earn"].active     { color: var(--acc-stats-deep); }
 .dash-tab[data-t="settings"].active { color: var(--acc-set-deep); }
 .dash-tab[data-t="courses"].active  { color: var(--acc-crs-deep); }
@@ -688,12 +691,14 @@ em, .italic { font-style: italic; }
     .dash-nav .dash-tab.active .dash-tab__ic { color: #fff; }
     .dash-tab[data-t="stats"].active .dash-tab__ic    { background: linear-gradient(135deg, var(--acc-stats), var(--acc-stats-deep)); }
     .dash-tab[data-t="calendar"].active .dash-tab__ic { background: linear-gradient(135deg, var(--acc-cal), var(--acc-cal-deep)); }
-    .dash-tab[data-t="noshow"].active .dash-tab__ic   { background: linear-gradient(135deg, var(--acc-alert), var(--acc-alert-deep)); }
+    .dash-tab[data-t="noshow"].active .dash-tab__ic,
+    .dash-tab[data-t="clients"].active .dash-tab__ic  { background: linear-gradient(135deg, var(--acc-cli), var(--acc-cli-deep)); }
     .dash-tab[data-t="settings"].active .dash-tab__ic { background: linear-gradient(135deg, var(--acc-set), var(--acc-set-deep)); }
     .dash-tab[data-t="courses"].active .dash-tab__ic  { background: linear-gradient(135deg, var(--acc-crs), var(--acc-crs-deep)); }
     .dash-nav .dash-tab[data-t="stats"].active   { background: var(--acc-stats-soft); }
     .dash-nav .dash-tab[data-t="calendar"].active{ background: var(--acc-cal-soft); }
-    .dash-nav .dash-tab[data-t="noshow"].active  { background: var(--acc-alert-soft); }
+    .dash-nav .dash-tab[data-t="noshow"].active,
+    .dash-nav .dash-tab[data-t="clients"].active { background: var(--acc-cli-soft); }
     .dash-nav .dash-tab[data-t="settings"].active{ background: var(--acc-set-soft); }
     .dash-nav .dash-tab[data-t="courses"].active { background: var(--acc-crs-soft); }
 
@@ -1215,7 +1220,7 @@ textarea.input { resize: vertical; min-height: 110px; }
     .cl-add-btn { width: 100%; }
 }
 .cl-card {
-    background: #fff; border: 1px solid var(--line); border-left: 6px solid #CFC6BE;
+    background: #fff; border: 1px solid var(--line); border-left: 6px solid var(--acc-cli);
     border-radius: 16px; margin-bottom: .65rem; overflow: hidden;
 }
 .cl-card.is-bad { border-color: rgba(217,83,79,.28); border-left-color: #D9534F; background: #FFF8F8; }
@@ -1225,7 +1230,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 }
 .cl-av {
     flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center;
-    background: #EFE8E2; color: var(--ink-soft); font-weight: 800; font-size: 1.05rem;
+    background: var(--acc-cli-soft); color: var(--acc-cli-deep); font-weight: 800; font-size: 1.05rem;
 }
 .cl-card.is-bad .cl-av { background: #D9534F; color: #fff; }
 .cl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -3147,3 +3152,10 @@ textarea.input { resize: vertical; min-height: 110px; }
 .md-pricefix small { display: block; font-weight: 400; font-size: .74rem; color: var(--muted); }
 .md-pricefix .ad-eur { width: 8.5rem; flex: none; }
 .md-pricefix .input { font-size: 1.15rem; font-weight: 700; color: var(--rose-deep); text-align: right; padding-top: .5rem; padding-bottom: .5rem; }
+
+/* Клиенти — редакция / изтриване */
+.cl-acts { display: flex; gap: .5rem; flex-wrap: wrap; margin: .2rem 0 .6rem; }
+.cl-acts .btn { --pad-y: .4rem; --pad-x: .95rem; font-size: .8rem; }
+.cl-acts .cl-del-btn { color: #D9534F; }
+.cl-edit-box { display: grid; gap: .7rem; padding: .85rem; margin: 0 0 .8rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.cl-edit-box[hidden] { display: none; }
