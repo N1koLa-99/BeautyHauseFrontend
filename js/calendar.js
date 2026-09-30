@@ -1487,6 +1487,82 @@ window.Calendar = (function () {
             });
         }
 
+        // Попъп: смяна на времето (дата / от / до) на „Запазено“ или почивка —
+        // без да се освобождава и прави наново. PUT /schedule/block/{id}.
+        function blockTimeModal(o, resv) {
+            document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
+            const dayKey = o.startAt.slice(0, 10);
+            const s0 = toMin(o.startAt);
+            const e0 = o.endAt.slice(0, 10) > dayKey ? 1440 : toMin(o.endAt);
+            const opts = (from, to, sel) => {
+                const list = [];
+                for (let m = from; m <= to; m += 15) list.push(m);
+                if (!list.includes(sel)) { list.push(sel); list.sort((a, b) => a - b); }
+                return list.map(m => `<option value="${m}"${m === sel ? ' selected' : ''}>${m === 1440 ? '24:00' : minToHHMM(m)}</option>`).join('');
+            };
+            const maxDate = (() => { const m = new Date(); m.setMonth(m.getMonth() + 6); return `${m.getFullYear()}-${pad(m.getMonth() + 1)}-${pad(m.getDate())}`; })();
+            const backdrop = document.createElement('div');
+            backdrop.className = 'cal-modal-backdrop';
+            backdrop.innerHTML = `
+                <div class="cal-modal">
+                    <button class="cal-modal__close" aria-label="Затвори">×</button>
+                    <div class="cal-modal__title">${resv ? 'Запазено време' : 'Почивка'} — смени времето</div>
+                    ${cfg.showEmployee && o.employeeName ? `<div class="cal-modal__meta hint">${esc(o.employeeName)}</div>` : ''}
+                    <label class="field" style="margin-top:.9rem"><span class="ad-lbl">Дата</span>
+                        <input class="input bt-date" type="date" value="${dayKey}" max="${maxDate}"></label>
+                    <div class="ad-pair" style="margin-top:.6rem">
+                        <label class="field"><span class="ad-lbl">От</span>
+                            <select class="select bt-from">${opts(BOOK_S, BOOK_E - 15, s0)}</select></label>
+                        <label class="field"><span class="ad-lbl">До</span>
+                            <select class="select bt-to">${opts(BOOK_S + 15, BOOK_E, e0)}</select></label>
+                    </div>
+                    <div class="hint bt-sum" style="margin-top:.5rem"></div>
+                    <label class="field" style="margin-top:.8rem"><span class="ad-lbl">Пояснение <small>(по избор)</small></span>
+                        <input class="input bt-note" type="text" maxlength="200" placeholder="напр. Почивам" value="${esc(o.note || '')}"></label>
+                    ${chipsHtml()}
+                    <div class="cal-modal__actions" style="margin-top:1rem"><button class="btn btn--primary bt-save">Запази промените</button></div>
+                    <div class="md-msg" style="margin-top:.8rem"></div>
+                </div>`;
+            document.body.appendChild(backdrop);
+            const $ = sel => backdrop.querySelector(sel);
+            const close = () => backdrop.remove();
+            backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+            $('.cal-modal__close').addEventListener('click', close);
+            wireChips(backdrop, $('.bt-note'));
+            const fromSel = $('.bt-from'), toSel = $('.bt-to'), btn = $('.bt-save');
+            const msg = t => { $('.md-msg').innerHTML = t ? `<div class="alert alert--err">${esc(t)}</div>` : ''; };
+            const paint = () => {
+                const d = +toSel.value - +fromSel.value;
+                const parts = [];
+                if (d >= 60) parts.push(Math.floor(d / 60) + ' ч');
+                if (d % 60) parts.push((d % 60) + ' мин');
+                $('.bt-sum').textContent = d > 0 ? `Времетраене: ${parts.join(' ')}` : 'Краят трябва да е след началото.';
+            };
+            // Смяна на „От“ -> „До“ се мести със същото времетраене.
+            let lastFrom = +fromSel.value;
+            fromSel.addEventListener('change', () => {
+                const dur = +toSel.value - lastFrom, nf = +fromSel.value;
+                const want = Math.min(BOOK_E, nf + (dur > 0 ? dur : 60));
+                if (![...toSel.options].some(x => +x.value === want)) toSel.insertAdjacentHTML('beforeend', `<option value="${want}">${minToHHMM(want)}</option>`);
+                toSel.value = String(want);
+                lastFrom = nf; paint();
+            });
+            toSel.addEventListener('change', paint);
+            paint();
+            btn.addEventListener('click', async () => {
+                const date = $('.bt-date').value || dayKey;
+                const f = +fromSel.value, t = +toSel.value;
+                if (t <= f) return msg('Краят трябва да е след началото.');
+                const startAt = `${date}T${minToHHMM(f)}:00`;
+                const endAt = addMinIso(startAt, t - f);
+                btn.disabled = true; msg('');
+                try {
+                    await window.API.put(`/schedule/block/${o.id}`, { employeeId: o.employeeId, startAt, endAt, note: $('.bt-note').value.trim() || null });
+                    close(); await load();
+                } catch (err) { msg(err.message); btn.disabled = false; }
+            });
+        }
+
         // Попъп за почивка / почивен ден: детайли + премахване.
         function openRestModal(o) {
             if (!o) return;
@@ -1503,13 +1579,15 @@ window.Calendar = (function () {
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
                     ${!isOff && o.note ? `<div class="rm-note">${esc(o.note)}</div>` : ''}
                     <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
-                    ${cfg.editable && !cfg.shared ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
+                    ${cfg.editable && !cfg.shared ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-time-edit">Редактирай времето</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
             document.body.appendChild(backdrop);
             const close = () => backdrop.remove();
             backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
             backdrop.querySelector('.cal-modal__close').addEventListener('click', close);
+            const timeEdit = backdrop.querySelector('.rm-time-edit');
+            if (timeEdit) timeEdit.addEventListener('click', () => blockTimeModal(o, resv));
             const noteEdit = backdrop.querySelector('.rm-note-edit');
             if (noteEdit) noteEdit.addEventListener('click', () => noteModal({
                 title: resv ? 'Запазено време' : 'Почивка',
