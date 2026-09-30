@@ -678,7 +678,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="cl-f" data-f="noshow">Некоректни</button>
                 </div>
                 <input class="input cl-q" type="search" placeholder="Търси по име, телефон или имейл…" autocomplete="off">
+                <button type="button" class="btn btn--gold cl-add-btn">+ Добави клиент</button>
             </div>
+            <form class="cl-add card" hidden novalidate>
+                <div class="cl-add__title">Нов клиент</div>
+                <div class="cl-add__fields">
+                    <label>Имена<input class="input cl-add-name" type="text" maxlength="200" autocomplete="off" placeholder="напр. Мария Иванова"></label>
+                    <label>Телефон<input class="input cl-add-phone" type="tel" maxlength="30" inputmode="tel" autocomplete="off" placeholder="0888 123 456"></label>
+                </div>
+                <div class="cl-add__msg"></div>
+                <div class="cl-add__acts">
+                    <button type="submit" class="btn btn--primary cl-add-save">Запази</button>
+                    <button type="button" class="btn btn--ghost cl-add-cancel">Отказ</button>
+                </div>
+            </form>
             <div class="cl-count hint"></div>
             <div class="cl-body"><div class="spinner"></div></div>`;
         const body = box.querySelector('.cl-body'), countEl = box.querySelector('.cl-count');
@@ -694,14 +707,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 c.phone ? `<span class="ns-meta-row">${phoneSvg}<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></span>` : `<span class="ns-meta-row">${phoneSvg}<span>без телефон</span></span>`,
                 c.email ? `<span class="ns-meta-row">${mailSvg}<span>${esc(c.email)}</span></span>` : ''
             ].join('');
-            const stats = [
+            const stats = c.isAdded ? '<span>още няма часове</span>' : [
                 `<span>${c.total} ${c.total === 1 ? 'час' : 'часа'}</span>`,
                 c.completed ? `<span>${c.completed} проведени</span>` : '',
                 c.upcoming ? `<span class="cl-up">${c.upcoming} предстоящ${c.upcoming === 1 ? '' : 'и'}</span>` : '',
                 c.lastVisit ? `<span>последно: ${fmtDate(c.lastVisit)}</span>` : ''
             ].filter(Boolean).join('<i>·</i>');
             return `
-            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
+            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-added="${c.isAdded ? 1 : 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
                 <button type="button" class="cl-head">
                     <span class="cl-av">${bad ? '⚠' : esc((c.name || '?').trim().charAt(0).toUpperCase())}</span>
                     <span class="cl-main">
@@ -752,7 +765,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" class="btn btn--gold cl-inv-btn" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Покани за профил</button>
                         <div class="cl-inv-out" hidden></div>
                     </div>`;
-                if (!items.length) { hist.innerHTML = inviteBar + `<p class="hint" style="margin:.4rem 0 0">Няма записани часове.</p>`; return; }
+                // Ръчно добавен клиент без часове -> може да се изтрие (напр. грешно въведен).
+                const delBar = cardEl.dataset.added === '1'
+                    ? `<button type="button" class="btn btn--ghost cl-del-btn" style="--pad-y:.4rem;--pad-x:.9rem;font-size:.8rem;color:#D9534F;margin-top:.6rem">Изтрий клиента</button>` : '';
+                if (!items.length) { hist.innerHTML = inviteBar + `<p class="hint" style="margin:.4rem 0 0">Няма записани часове.</p>` + delBar; return; }
                 const now = Date.now();
                 hist.innerHTML = inviteBar + items.map(b => {
                     const st = STATUS[b.status] || { label: b.status, cls: 'alert--info' };
@@ -777,7 +793,43 @@ document.addEventListener('DOMContentLoaded', () => {
             load();
         }));
         qEl.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 280); });
+
+        // ---- Добави клиент (имена + телефон, без час) ----
+        const addBtn = box.querySelector('.cl-add-btn'), addForm = box.querySelector('.cl-add');
+        const addName = addForm.querySelector('.cl-add-name'), addPhone = addForm.querySelector('.cl-add-phone');
+        const addMsg = addForm.querySelector('.cl-add__msg'), addSave = addForm.querySelector('.cl-add-save');
+        const closeAdd = () => { addForm.hidden = true; addBtn.hidden = false; addForm.reset(); addMsg.innerHTML = ''; };
+        addBtn.addEventListener('click', () => { addForm.hidden = false; addBtn.hidden = true; addName.focus(); });
+        addForm.querySelector('.cl-add-cancel').addEventListener('click', closeAdd);
+        addForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const name = addName.value.trim(), phone = addPhone.value.trim();
+            if (name.length < 2) { addMsg.innerHTML = `<div class="alert alert--err">Въведи имената.</div>`; addName.focus(); return; }
+            if ((phone.match(/\d/g) || []).length < 6) { addMsg.innerHTML = `<div class="alert alert--err">Въведи телефонен номер.</div>`; addPhone.focus(); return; }
+            addSave.disabled = true;
+            try {
+                const c = await API.post('/clients', { name, phone });
+                closeAdd();
+                // Показва новия клиент най-отгоре.
+                filter = 'all';
+                box.querySelectorAll('.cl-f').forEach(x => x.classList.toggle('is-on', x.dataset.f === 'all'));
+                qEl.value = (c && c.phone) || phone;
+                await load();
+            } catch (err) {
+                addMsg.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+            } finally { addSave.disabled = false; }
+        });
+
         body.addEventListener('click', async e => {
+            const delBtn = e.target.closest('.cl-del-btn');
+            if (delBtn) {
+                const cardEl = delBtn.closest('.cl-card');
+                if (!confirm(`Да изтрия ли клиента ${cardEl.dataset.name || ''}?`)) return;
+                delBtn.disabled = true;
+                try { await API.del(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`); await load(); }
+                catch (err) { alert(err.message); delBtn.disabled = false; }
+                return;
+            }
             const invBtn = e.target.closest('.cl-inv-btn');
             if (invBtn) {
                 const cardEl = invBtn.closest('.cl-card'), out = cardEl.querySelector('.cl-inv-out');

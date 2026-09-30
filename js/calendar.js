@@ -1577,7 +1577,9 @@ window.Calendar = (function () {
                            <span>Цена за плащане${curDisc ? ` <small class="md-orig">${r2(orig)} € −${curDisc}%</small>` : ''}</span>
                            <span class="ad-eur"><input class="input md-price" type="number" min="0" step="0.5" inputmode="decimal" value="${r2(finalPrice)}"><i>€</i></span>
                        </label>
-                       <div class="hint" style="font-size:.76rem;margin-top:.45rem">Ако клиентът е платил друга сума — поправи я и натисни „Приключи часа“.</div>
+                       <div class="hint" style="font-size:.76rem;margin-top:.45rem">${b.status === 'completed'
+                           ? 'Часът е приключен. Ако сумата е друга — поправи я и натисни „Запази цената“.'
+                           : 'Взе друга сума (напр. 15 € вместо 20 €)? Поправи я тук и натисни „Приключи часа“.'}</div>
                    </div>`
                 : `<div class="cal-modal__price" style="display:flex;justify-content:space-between;align-items:baseline;font-size:1.05rem">
                        <span class="hint">Цена</span><b style="color:var(--rose-deep);font-family:var(--font-display);font-size:1.4rem">${Number(finalPrice).toFixed(0)} €</b></div>`;
@@ -1588,7 +1590,7 @@ window.Calendar = (function () {
                 const canEdit = b.status === 'booked' && !b.isOnline && canAdd();
                 actions = `<div class="cal-modal__actions">
                     ${canEdit ? `<button class="btn btn--primary md-edit">Редактирай часа</button>` : ''}
-                    ${cfg.setStatus ? `<button class="btn btn--gold md-present">Приключи часа</button>
+                    ${cfg.setStatus ? `<button class="btn btn--gold md-present">${b.status === 'completed' ? 'Запази цената' : 'Приключи часа'}</button>
                     <button class="btn btn--ghost md-absent">Не присъства</button>` : ''}
                     ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">${b.isOnline ? 'Отмени часа на клиента' : 'Отмени часа'}</button>` : ''}
                     ${canManage ? `
