@@ -113,11 +113,16 @@ document.addEventListener('DOMContentLoaded', () => {
     async function mountAllCalendar(container) {
         let employees = [];
         try { employees = (await API.get('/employees')) || []; } catch (e) {}
+        // Радина отваря графика само със своите часове; „Всички“ / другите — от бутона с хората.
+        const me = BOSS_ID || Session.userId();
         Calendar.mount(container, {
             editable: true, showEmployee: true, canManage: role === 'boss',
             employees: employees.map(e => ({ id: e.id, name: e.fullName, photo: e.photoUrl })),
+            initialEmp: employees.some(e => e.id === me) ? me : null,
             servicesFor: (empId) => API.get(`/employees/${empId}/services`),
-            fetchMonth: (f, t) => API.get(`/reports/calendar?from=${f}&to=${t}`),
+            fetchMonth: (f, t, empId) => empId != null
+                ? API.get(`/reports/employee-calendar?employeeId=${empId}&from=${f}&to=${t}`)
+                : API.get(`/reports/calendar?from=${f}&to=${t}`),
             createBooking: (dto) => API.post(`/reports/bookings?employeeId=${dto.employeeId}`, dto),
             setStatus: (id, st, price) => API.patch(`/bookings/${id}/status`, price != null ? { status: st, price } : { status: st }),
             cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),

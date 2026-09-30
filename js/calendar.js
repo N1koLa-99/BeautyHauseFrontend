@@ -253,7 +253,9 @@ window.Calendar = (function () {
         let selKey = todayKey();
         let data = {};            // 'YYYY-MM-DD' -> [bookings]
         let offs = {};            // 'YYYY-MM-DD' -> [почивки {kind:'rest'} / почивен ден {kind:'off'}]
-        let empFilter = null;     // избрана специалистка (null = всички)
+        // избрана специалистка (null = всички). cfg.initialEmp -> графикът се отваря само с нейните часове
+        // (зарежда се по-малко от сървъра); „Всички“ се теглят чак като ги избере.
+        let empFilter = cfg.initialEmp != null ? cfg.initialEmp : null;
         let view = VIEWS.some(v => v[0] === lsGet('bh_sc_view')) ? lsGet('bh_sc_view') : 'week';
         const clampZoom = z => Math.min(Z_MAX, Math.max(Z_MIN, z));
         let zoom = clampZoom(parseFloat(lsGet('bh_sc_zoom')) || Z_DEF);
@@ -354,16 +356,20 @@ window.Calendar = (function () {
         }
 
         // ---- Данни (кеш по месеци) ----
-        const loadedMonths = new Set();
+        // Месец -> какво е заредено за него: 'all' (всички специалистки) или id на една.
+        const loadedMonths = new Map();
+        const scopeNow = () => (hasEmps() && empFilter != null) ? empFilter : 'all';
+        const monthOk = mk => { const s = loadedMonths.get(mk); return s === 'all' || (s != null && s === scopeNow()); };
         (cfg.employees || []).forEach(e => learnEmp(e.id, e.name));
         // Щом имената пристигнат -> пренарисува с правилните цветове.
         empNamesReady.then(() => { if (loadedMonths.size && document.body.contains(root)) render(); });
         async function fetchMonthInto(Y, M0) {
             const from = key(Y, M0, 1);
             const to = `${M0 === 11 ? Y + 1 : Y}-${pad((M0 + 1) % 12 + 1)}-01`;
-            const rangeQ = hasEmps() ? 'all=true' : `employeeId=${cfg.staffId}`;
+            const scope = scopeNow();
+            const rangeQ = !hasEmps() ? `employeeId=${cfg.staffId}` : (scope === 'all' ? 'all=true' : `employeeId=${scope}`);
             const [items, rng] = await Promise.all([
-                cfg.fetchMonth(from, to),
+                cfg.fetchMonth(from, to, scope === 'all' ? null : scope),
                 // Почивките не са задължителни за графика -> грешка тук не спира зареждането.
                 (canRest() || cfg.shared) ? window.API.get(`/schedule/range?${rangeQ}&from=${from}&to=${to}`).catch(() => null) : null
             ]);
@@ -376,11 +382,11 @@ window.Calendar = (function () {
                 (rng.blocks || []).forEach(r => { const k = r.startAt.slice(0, 10); (offs[k] = offs[k] || []).push({ kind: 'rest', ...r }); });
                 (rng.offDays || []).forEach(o => { const k = String(o.date).slice(0, 10); (offs[k] = offs[k] || []).push({ kind: 'off', employeeId: o.employeeId, employeeName: o.employeeName, k }); });
             }
-            loadedMonths.add(`${Y}-${M0}`);
+            loadedMonths.set(`${Y}-${M0}`, scope);
         }
         // Зарежда липсващите видими месеци (force = презарежда ги пак — след промяна).
         async function ensureVisible(force) {
-            const need = visibleMonths().filter(([Y, M0]) => force || !loadedMonths.has(`${Y}-${M0}`));
+            const need = visibleMonths().filter(([Y, M0]) => force || !monthOk(`${Y}-${M0}`));
             if (need.length) {
                 loadingEl.hidden = false;
                 try { for (const [Y, M0] of need) await fetchMonthInto(Y, M0); }
@@ -793,7 +799,7 @@ window.Calendar = (function () {
         });
         sheet.addEventListener('click', (e) => {
             const r = e.target.closest('.sc-sh__row');
-            if (r) { empFilter = r.dataset.emp === 'all' ? null : +r.dataset.emp; sheet.hidden = true; lastLayout = ''; render(); return; }
+            if (r) { empFilter = r.dataset.emp === 'all' ? null : +r.dataset.emp; sheet.hidden = true; lastLayout = ''; navigate(); return; }
             if (e.target.closest('.sc-sh__back')) sheet.hidden = true;
         });
         fabAdd.addEventListener('click', () => {
