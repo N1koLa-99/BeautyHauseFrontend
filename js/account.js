@@ -490,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="earn-card__avatar" style="background:${color}">${initials}</span>
                 <div class="earn-card__title"><strong>${esc(name)}</strong>${isBoss ? `<span class="earn-card__badge">${Icon('crown', { size: 13 })} Управител</span>` : ''}</div>
             </div>
-            ${rows.map(r => `<div class="earn-card__row${r.total ? ' earn-card__row--total' : ''}"><span>${r.label}</span><b>${money(r.value)}</b></div>`).join('')}
+            ${rows.map(r => `<div class="earn-card__row${r.total ? ' earn-card__row--total' : ''}"${r.after ? ' style="border-top:1px dashed var(--line);margin-top:.5rem;padding-top:.55rem"' : ''}><span>${r.label}</span><b>${money(r.value)}</b></div>`).join('')}
         </div>`;
     };
 
@@ -502,18 +502,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const boss = (rows || []).find(r => r.isBoss);
             const workers = (rows || []).filter(r => !r.isBoss);
             const fromOthers = workers.reduce((s, r) => s + (r.commissionToBoss || 0), 0);
+            const firstName = n => (n || '').trim().split(/\s+/)[0] || n;
             const bossTotal = (boss ? boss.take : 0) + fromOthers;
 
             const cards = [];
             if (boss) cards.push(earnCard(boss.name, true, [
                 { label: 'Твоят дял', value: boss.take },
-                { label: '+ от Анелия и Ирина', value: fromOthers },
+                // Делът от всяка служителка поотделно (едно под друго).
+                ...workers.map(w => ({ label: `+ от ${esc(firstName(w.name))}`, value: w.commissionToBoss || 0 })),
                 { label: 'Общо ще вземеш', value: bossTotal, total: true }
             ], earnColor(boss.employeeId, boss.name)));
             workers.forEach(w => cards.push(earnCard(w.name, false, [
                 { label: 'Изкарала', value: w.gross },
-                { label: `Удръжка (${deductLbl(w)})`, value: -(w.gross - w.take) },
-                { label: 'Ще вземе', value: w.take, total: true }
+                { label: 'Ще вземе', value: w.take, total: true },
+                { label: `За Радина (${deductLbl(w)})`, value: w.gross - w.take, after: true }
             ], earnColor(w.employeeId, w.name))));
 
             body.innerHTML = `<div class="earn-grid">${cards.join('')}</div>
@@ -1048,8 +1050,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!m) { body.innerHTML = `<div class="alert alert--info">Няма данни за периода.</div>`; return; }
                 body.innerHTML = `<div style="max-width:420px">${earnCard(m.name, false, [
                     { label: 'Изкарала', value: m.gross },
-                    { label: `Удръжка (${deductLbl(m)})`, value: -(m.gross - m.take) },
-                    { label: 'Ще вземеш', value: m.take, total: true }
+                    { label: 'Ще вземеш', value: m.take, total: true },
+                    { label: `За Радина (${deductLbl(m)})`, value: m.gross - m.take, after: true }
                 ], earnColor(m.employeeId, m.name))}</div>
                 <p class="hint" style="margin-top:.7rem">${all ? 'Включени са и предстоящите записани часове.' : 'Само проведените часове.'}</p>`;
             } catch (err) {
