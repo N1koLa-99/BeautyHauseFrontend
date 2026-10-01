@@ -1499,7 +1499,20 @@ textarea.input { resize: vertical; min-height: 110px; }
 .sc.is-tiny .sc-bk__s { display: none; }
 .sc.is-tiny .sc-bk__t { font-size: .66rem; }
 .sc-bk.is-flag { box-shadow: 0 0 0 2px #D9534F, 0 2px 8px rgba(217,83,79,.45); }
-.sc-bk.is-done { opacity: .72; }
+/* Предстоящ час — по-ярък; минал/завършен — по-блед */
+.sc-bk.is-next { background: color-mix(in srgb, var(--bc) 40%, #fff); }
+.sc-bk.is-next:not(.is-flag) { box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.sc-bk.is-past, .sc-bk.is-done { background: color-mix(in srgb, var(--bc) 9%, #fff); border-left-color: color-mix(in srgb, var(--bc) 45%, #fff); }
+.sc-bk.is-past:not(.is-flag), .sc-bk.is-done:not(.is-flag) { box-shadow: none; }
+.sc-bk.is-past > span, .sc-bk.is-done > span { opacity: .55; }
+/* Завършен час — ярко ✓ в ъгъла; не избледнява и се вижда и при най-малък мащаб */
+.sc-bk__ok {
+    position: absolute; right: 3px; bottom: 3px; width: 18px; height: 18px; border-radius: 50%;
+    display: grid; place-items: center; background: color-mix(in srgb, var(--bc) 72%, #fff); color: #fff;
+    font-style: normal; font-size: 12px; font-weight: 900; line-height: 1;
+    box-shadow: 0 0 0 2px #fff, 0 1px 2px rgba(0,0,0,.15);
+}
+.sc.is-tiny .sc-bk__ok { width: 14px; height: 14px; font-size: 10px; right: 2px; bottom: 2px; }
 .sc-bk.is-cancel { opacity: .45; }
 .sc-bk.is-cancel .sc-bk__s { text-decoration: line-through; }
 
