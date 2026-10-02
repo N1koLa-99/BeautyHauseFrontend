@@ -1502,9 +1502,9 @@ textarea.input { resize: vertical; min-height: 110px; }
 /* Предстоящ час — по-ярък; минал/завършен — по-блед */
 .sc-bk.is-next { background: color-mix(in srgb, var(--bc) 40%, #fff); }
 .sc-bk.is-next:not(.is-flag) { box-shadow: 0 1px 3px rgba(0,0,0,.18); }
-.sc-bk.is-past, .sc-bk.is-done { background: color-mix(in srgb, var(--bc) 9%, #fff); border-left-color: color-mix(in srgb, var(--bc) 45%, #fff); }
+.sc-bk.is-past, .sc-bk.is-done { background: color-mix(in srgb, var(--bc) 16%, #fff); border-left-color: color-mix(in srgb, var(--bc) 60%, #fff); }
 .sc-bk.is-past:not(.is-flag), .sc-bk.is-done:not(.is-flag) { box-shadow: none; }
-.sc-bk.is-past > span, .sc-bk.is-done > span { opacity: .55; }
+.sc-bk.is-past > span, .sc-bk.is-done > span { opacity: .7; }
 /* Завършен час — ярко ✓ в ъгъла; не избледнява и се вижда и при най-малък мащаб */
 .sc-bk__ok {
     position: absolute; right: 3px; bottom: 3px; width: 18px; height: 18px; border-radius: 50%;
