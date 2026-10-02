@@ -465,6 +465,7 @@ window.Calendar = (function () {
                 laneOf[i] = l;
             });
             const lanes = Math.max(1, laneEnd.length), dl = Math.min(lanes, 8);
+            const nowStamp = `${todayKey()}T${minToHHMM(nowMin())}`;
             return arr.map((x, i) => {
                 const { s, e } = x, w = 100 / lanes, left = laneOf[i] * w;
                 const pos = `top:${pct(s)};height:calc(${pctD(e - s)} - 2px);left:calc(${left}% + 1px);width:calc(${w}% - 2px)`;
@@ -481,15 +482,18 @@ window.Calendar = (function () {
                 const b = x.b;
                 const flagged = b.noShowCount > 0, noShow = b.status === 'no_show';
                 const c = (flagged || noShow) ? '#D9534F' : empColor(b.employeeId);
-                const mark = flagged ? ' ⚠' : (b.status === 'completed' ? ' ✓' : '');
-                const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}`;
+                const mark = flagged ? ' ⚠' : '';
+                const done = b.status === 'completed' ? '<i class="sc-bk__ok" title="Завършен">✓</i>' : '';
+                // Минал (вече свършил) час -> по-блед; предстоящ -> по-ярък.
+                const past = (b.endAt || b.startAt).slice(0, 16) <= nowStamp;
+                const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}${past ? ' is-past' : ' is-next'}`;
                 const online = b.isOnline
                     ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
                 return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="${pos};--bc:${c}">
                     <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
                     <span class="sc-bk__s">${esc(b.serviceName)}</span>
                     <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
-                    ${online}
+                    ${online}${done}
                 </button>`;
             }).join('');
         }
