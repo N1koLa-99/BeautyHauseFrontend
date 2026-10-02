@@ -688,6 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="cl-f is-on" data-f="all">Всички</button>
                     <button class="cl-f" data-f="ok">Коректни</button>
                     <button class="cl-f" data-f="noshow">Некоректни</button>
+                    <button class="cl-f" data-f="dup">Повтарящи се</button>
                 </div>
                 <input class="input cl-q" type="search" placeholder="Търси по име, телефон или имейл…" autocomplete="off">
                 <button type="button" class="btn btn--gold cl-add-btn">+ Добави клиент</button>
@@ -708,7 +709,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="cl-body"><div class="spinner"></div></div>`;
         const body = box.querySelector('.cl-body'), countEl = box.querySelector('.cl-count');
         const qEl = box.querySelector('.cl-q');
-        let filter = 'all', seq = 0, timer = null;
+        let filter = 'all', seq = 0, timer = null, lastRows = [];
+        const nameKey = n => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim();
         const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return '—'; } };
         const phoneSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
         const mailSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>';
@@ -726,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 c.lastVisit ? `<span>последно: ${fmtDate(c.lastVisit)}</span>` : ''
             ].filter(Boolean).join('<i>·</i>');
             return `
-            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-added="${c.isAdded ? 1 : 0}" data-up="${c.upcoming || 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
+            <div class="cl-card${bad ? ' is-bad' : ''}" data-key="${esc(c.key)}" data-acc="${c.hasAccount ? 1 : 0}" data-added="${c.isAdded ? 1 : 0}" data-dup="${c.isDuplicate ? 1 : 0}" data-up="${c.upcoming || 0}" data-name="${esc(c.name || '')}" data-phone="${esc(c.phone || '')}">
                 <button type="button" class="cl-head">
                     <span class="cl-av">${bad ? '⚠' : esc((c.name || '?').trim().charAt(0).toUpperCase())}</span>
                     <span class="cl-main">
@@ -734,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="cl-name">${esc(c.name || 'Клиент')}</span>
                             ${bad ? `<span class="ns-count">${c.noShow}× не се яви</span>` : ''}
                             <span class="cl-tag${c.hasAccount ? ' is-acc' : ''}">${c.hasAccount ? 'с профил' : 'добавен ръчно'}</span>
+                            ${c.isDuplicate ? `<span class="cl-tag is-dup" title="Има и друг клиент със същите имена">повтаря се</span>` : ''}
                         </span>
                         <span class="ns-meta">${meta}</span>
                         <span class="cl-stats">${stats}</span>
@@ -751,9 +754,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const q = qEl.value.trim();
                 const rows = await API.get(`/clients?filter=${filter}${q ? '&q=' + encodeURIComponent(q) : ''}`) || [];
                 if (my !== seq) return;
+                lastRows = rows;
                 countEl.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? 'клиент' : 'клиента'}` : '';
                 body.innerHTML = rows.length ? rows.map(card).join('')
-                    : `<div class="panel center"><p class="hint" style="margin:0">${q ? 'Няма клиент, който да отговаря на търсенето.' : (filter === 'noshow' ? 'Няма некоректни клиенти. 🎉' : 'Още няма клиенти.')}</p></div>`;
+                    : `<div class="panel center"><p class="hint" style="margin:0">${q ? 'Няма клиент, който да отговаря на търсенето.' : (filter === 'noshow' ? 'Няма некоректни клиенти. 🎉' : (filter === 'dup' ? 'Няма повтарящи се клиенти. 🎉' : 'Още няма клиенти.'))}</p></div>`;
             } catch (err) {
                 if (my === seq) body.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
             }
@@ -777,12 +781,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" class="btn btn--gold cl-inv-btn" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Покани за профил</button>
                         <div class="cl-inv-out" hidden></div>
                     </div>`;
-                // Редакция (клиент без профил) + изтриване (добавен без часове — всички; с история — само Радина, без предстоящ час).
-                const isAcc = cardEl.dataset.acc === '1', isAdded = cardEl.dataset.added === '1';
-                const canDel = isAdded || (role === 'boss' && +cardEl.dataset.up === 0);
+                // Редакция + изтриване: добавен без часове — всички; с история — Радина, а служителките
+                // само повтарящ се клиент (същите имена като друг). И двете — само без предстоящ час.
+                const isAcc = cardEl.dataset.acc === '1', isAdded = cardEl.dataset.added === '1', isDup = cardEl.dataset.dup === '1';
+                const canDel = isAdded || (+cardEl.dataset.up === 0 && (role === 'boss' || isDup));
+                // Повтарящ се без телефон -> „Обедини“ с картата със същите имена и телефон (часовете минават там).
+                const mergeTo = (isDup && cardEl.dataset.key.charAt(0) === 'n')
+                    ? lastRows.filter(r => r.key !== cardEl.dataset.key && r.key.charAt(0) === 'p' && nameKey(r.name) === nameKey(cardEl.dataset.name)) : [];
                 const actBar = `
                     <div class="cl-acts">
                         <button type="button" class="btn btn--ghost cl-edit-btn">Редактирай</button>
+                        ${mergeTo.map(r => `<button type="button" class="btn btn--gold cl-merge-btn" data-name="${esc(r.name)}" data-phone="${esc(r.phone || '')}">Обедини с ${esc(r.phone || '')}</button>`).join('')}
                         ${canDel ? `<button type="button" class="btn btn--ghost cl-del-btn">Изтрий</button>` : ''}
                     </div>
                     <div class="cl-edit-box" hidden></div>`;
@@ -839,12 +848,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         body.addEventListener('click', async e => {
+            const mergeBtn = e.target.closest('.cl-merge-btn');
+            if (mergeBtn) {
+                const cardEl = mergeBtn.closest('.cl-card');
+                const nm = mergeBtn.dataset.name, ph = mergeBtn.dataset.phone;
+                if (!confirm(`Да обединя ли двете карти на ${nm}?\n\nЧасовете от картата „без телефон“ минават към ${nm} (${ph}) и остава само една карта. Предстоящите часове си остават в графика.`)) return;
+                mergeBtn.disabled = true;
+                try { await API.put(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`, { name: nm, phone: ph }); await load(); }
+                catch (err) { alert(err.message); mergeBtn.disabled = false; }
+                return;
+            }
             const delBtn = e.target.closest('.cl-del-btn');
             if (delBtn) {
                 const cardEl = delBtn.closest('.cl-card');
                 const nm = cardEl.dataset.name || 'клиента';
                 const q = cardEl.dataset.added === '1'
                     ? `Да изтрия ли ${nm}?`
+                    : cardEl.dataset.dup === '1'
+                    ? `Да изтрия ли този запис на ${nm}${cardEl.dataset.phone ? ' (' + cardEl.dataset.phone + ')' : ' (без телефон)'}?\n\nДругият запис със същите имена остава. Миналите часове и парите остават в статистиките.`
                     : `Да изтрия ли ${nm} от списъка?\n\nМиналите часове и парите остават в статистиките. Ако пак си запише час, ще се появи отново.`;
                 if (!confirm(q)) return;
                 delBtn.disabled = true;

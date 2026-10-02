@@ -105,6 +105,17 @@ window.Calendar = (function () {
     };
     const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
     const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+    // Последно избраната процедура (за всяка специалистка поотделно, на това устройство).
+    // При нов ръчен час тя е избрана направо — Радина записва миглопластика -> следващият път пак е миглопластика.
+    const svcRecentKey = empId => 'bh_svc_recent_' + empId;
+    const svcRecent = empId => { try { return JSON.parse(lsGet(svcRecentKey(empId))) || []; } catch (e) { return []; } };
+    const rememberSvc = (empId, v) => { if (!v || String(v).startsWith('__')) return; v = String(v); lsSet(svcRecentKey(empId), JSON.stringify([v, ...svcRecent(empId).filter(x => x !== v)].slice(0, 5))); };
+    // Слага последната процедура в <select>-а, ако я има в списъка на специалистката.
+    const selectLastSvc = (sel, empId) => {
+        const v = svcRecent(empId).find(x => [...sel.options].some(o => o.value === x));
+        if (v) sel.value = v;
+        return !!v;
+    };
 
     // ---- Бърз избор на услуга: търсене + категории + последно избирани ----
     // Стои върху обикновения <select> (той остава източникът на стойността), така че
@@ -143,9 +154,8 @@ window.Calendar = (function () {
         const qEl = wrap.querySelector('.svp-q'), catsEl = wrap.querySelector('.svp-cats'), listEl = wrap.querySelector('.svp-list');
         let q = '', cat = '', act = 0, shown = [];
 
-        const rKey = () => 'bh_svc_recent_' + recentKey();
-        const recent = () => { try { return JSON.parse(lsGet(rKey())) || []; } catch (e) { return []; } };
-        const remember = v => lsSet(rKey(), JSON.stringify([v, ...recent().filter(x => x !== v)].slice(0, 5)));
+        const recent = () => svcRecent(recentKey());
+        const remember = v => rememberSvc(recentKey(), v);
 
         function items() {
             const idx = svcCatalog();
@@ -1334,6 +1344,7 @@ window.Calendar = (function () {
                         ? list.map(s => `<option value="${s.serviceId}">${esc(s.serviceName)} · ${s.durationMinutes} мин</option>`).join('')
                         : `<option value="">Няма зададени услуги</option>`) + SPECIAL;
                     if (opts.preset && SPECIAL) svcSel.value = opts.preset;
+                    else if (!ED) selectLastSvc(svcSel, empId);   // последно избраната процедура
                     if (ED && (!empSel || +empSel.value === ED.employeeId)) pickEditSvc();
                     fillDur();
                 } catch (e) { svcSel.innerHTML = `<option value="">Грешка при зареждане</option>` + SPECIAL; fillDur(); }
@@ -1420,6 +1431,7 @@ window.Calendar = (function () {
 
             svcSel.addEventListener('change', fillDur);
             [timeSel, durSel, hSel, mSel].forEach(x => x.addEventListener('change', paintSum));
+            if (!empSel && !ED && !(opts.preset && SPECIAL)) selectLastSvc(svcSel, cfg.staffId);   // последно избраната процедура
             svcPicker(svcSel, () => (empSel ? empSel.value : cfg.staffId));
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
             else { if (opts.preset && SPECIAL) svcSel.value = opts.preset; if (ED) pickEditSvc(); fillDur(); } // единичен специалист: услугите вече са налични
@@ -1486,7 +1498,7 @@ window.Calendar = (function () {
                         : () => cfg.createBooking(dto);
                 }
                 saveBtn.disabled = true; saveBtn.style.opacity = .7;
-                try { await run(); close(); await load(); }
+                try { await run(); if (md === 'svc') rememberSvc(employeeId, svcSel.value); close(); await load(); }
                 catch (e) { err(e.message); saveBtn.disabled = false; saveBtn.style.opacity = 1; }
             });
         }
@@ -1836,6 +1848,7 @@ window.Calendar = (function () {
                 }
             }
             svc.addEventListener('change', loadSlots);
+            selectLastSvc(svc, cfg.staffId);   // последно избраната процедура
             svcPicker(svc, () => cfg.staffId);
             loadSlots();
 
@@ -1853,6 +1866,7 @@ window.Calendar = (function () {
                 btn.disabled = true; btn.style.opacity = .7;
                 try {
                     await cfg.createBooking(dto);
+                    rememberSvc(cfg.staffId, svc.value);
                     await load();
                 } catch (err) {
                     msg.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;

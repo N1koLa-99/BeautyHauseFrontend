@@ -1205,6 +1205,10 @@ textarea.input { resize: vertical; min-height: 110px; }
 .cl-f.is-on { background: var(--ink, #2A2226); color: #fff; }
 .cl-f[data-f="noshow"].is-on { background: #D9534F; }
 .cl-f[data-f="ok"].is-on { background: #3D8B5E; }
+.cl-f[data-f="dup"].is-on { background: #B26A00; }
+.cl-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.cl-seg::-webkit-scrollbar { display: none; }
+@media (max-width: 480px) { .cl-f { padding: .42rem .62rem; font-size: .8rem; } }
 .cl-q { flex: 1 1 220px; min-width: 0; }
 .cl-count { margin: 0 0 .6rem; font-size: .82rem; }
 .cl-add-btn { --pad-y: .55rem; --pad-x: 1.1rem; font-size: .88rem; white-space: nowrap; }
@@ -1238,6 +1242,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 .cl-name { font-weight: 700; font-size: 1.02rem; line-height: 1.25; margin-right: auto; }
 .cl-tag { font-size: .7rem; font-weight: 700; color: var(--muted); background: #F3EEEA; border-radius: 999px; padding: .18rem .55rem; white-space: nowrap; }
 .cl-tag.is-acc { color: #2F6BB0; background: #EAF1F8; }
+.cl-tag.is-dup { color: #B26A00; background: #FFF3E0; }
 .cl-stats { margin-top: .45rem; display: flex; flex-wrap: wrap; gap: .15rem .4rem; font-size: .78rem; color: var(--muted); }
 .cl-stats i { font-style: normal; opacity: .5; }
 .cl-up { color: #357A5C; font-weight: 700; }
