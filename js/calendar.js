@@ -1652,21 +1652,21 @@ window.Calendar = (function () {
             // Цена, която може да се поправи при затваряне на часа („Присъства“) —
             // напр. клиентът е платил друга сума. Важи и за минали часове.
             const canFixPrice = !!(cfg.editable && cfg.setStatus && (b.status === 'booked' || b.status === 'completed'));
-            const r2 = v => Math.round(v * 100) / 100;
+            const r2 = v => { const n = Number(v) || 0; return Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-6) / 100; };
             const priceBlock = canFixPrice
                 ? `<div class="cal-modal__price">
                        ${canManage ? `<label style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;font-size:.9rem;margin-bottom:.8rem">Отстъпка (лоялен клиент)
-                           <span style="white-space:nowrap"><input class="input md-disc" type="number" min="0" max="100" value="${curDisc}" style="width:74px;text-align:center"> %</span></label>` : ''}
+                           <span style="white-space:nowrap"><input class="input md-disc" type="number" min="0" max="100" step="any" inputmode="decimal" value="${curDisc}" style="width:74px;text-align:center"> %</span></label>` : ''}
                        <label class="md-pricefix">
                            <span>Цена за плащане${curDisc ? ` <small class="md-orig">${r2(orig)} € −${curDisc}%</small>` : ''}</span>
-                           <span class="ad-eur"><input class="input md-price" type="number" min="0" step="0.5" inputmode="decimal" value="${r2(finalPrice)}"><i>€</i></span>
+                           <span class="ad-eur"><input class="input md-price" type="number" min="0" step="0.01" inputmode="decimal" value="${r2(finalPrice)}"><i>€</i></span>
                        </label>
                        <div class="hint" style="font-size:.76rem;margin-top:.45rem">${b.status === 'completed'
                            ? 'Часът е приключен. Ако сумата е друга — поправи я и натисни „Запази цената“.'
                            : 'Взе друга сума (напр. 15 € вместо 20 €)? Поправи я тук и натисни „Приключи часа“.'}</div>
                    </div>`
                 : `<div class="cal-modal__price" style="display:flex;justify-content:space-between;align-items:baseline;font-size:1.05rem">
-                       <span class="hint">Цена</span><b style="color:var(--rose-deep);font-family:var(--font-display);font-size:1.4rem">${Number(finalPrice).toFixed(0)} €</b></div>`;
+                       <span class="hint">Цена</span><b style="color:var(--rose-deep);font-family:var(--font-display);font-size:1.4rem">${r2(finalPrice).toLocaleString('bg-BG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</b></div>`;
 
             const canCancelWithReason = cfg.editable && cfg.cancelBooking && b.status === 'booked';
             let actions = '';
@@ -1717,7 +1717,7 @@ window.Calendar = (function () {
             if (discInp && priceInp) {
                 // Смяна на отстъпката -> преизчислява цената за плащане.
                 discInp.addEventListener('input', () => {
-                    const d = Math.max(0, Math.min(100, +discInp.value || 0));
+                    const d = Math.max(0, Math.min(100, +String(discInp.value).replace(',', '.') || 0));
                     priceInp.value = r2(orig * (100 - d) / 100);
                 });
             }
@@ -1729,7 +1729,7 @@ window.Calendar = (function () {
             };
             const saveDiscount = async () => {
                 if (discInp && cfg.setDiscount) {
-                    const d = Math.max(0, Math.min(100, +discInp.value || 0));
+                    const d = Math.max(0, Math.min(100, +String(discInp.value).replace(',', '.') || 0));
                     if (d !== curDisc) await cfg.setDiscount(b.id, d);
                 }
             };

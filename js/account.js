@@ -22,7 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Акцентни цветове на разделите в таблото — съвпадат с css/styles.css (--acc-*).
     const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', cli: '#3A8C99', set: '#9B7FC2', crs: '#B07D52' };
     const pad = n => String(n).padStart(2, '0');
-    const money = v => Math.round(Number(v) || 0).toLocaleString('bg-BG') + ' €';
+    // Пари — винаги до стотинка (без закръгляне до цяло евро). 0.005 -> нагоре, както в бекенда.
+    const r2 = v => { const n = Number(v) || 0; return Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-6) / 100; };
+    const money = v => r2(v).toLocaleString('bg-BG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    // Процент — до 4 знака, без излишни нули (70 -> „70“, 66.6667 -> „66,6667“).
+    const fmtPct = v => (Math.round((Number(v) || 0) * 10000) / 10000).toLocaleString('bg-BG', { maximumFractionDigits: 4 });
     const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
     let BOSS_ID = 0;   // id на шефа (от /employees по роля) — надеждно, без session id
 
@@ -134,8 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // „30%" или „30% · 20% за някои" (Биорепил, пробиване са с фиксиран процент).
     const deductLbl = x => {
-        const fx = (x.fixedBossPercents || []).filter(p => p !== 100 - x.percent);
-        return `${100 - x.percent}%` + (fx.length ? ` · ${fx.join('/')}% за някои` : '');
+        const fx = (x.fixedBossPercents || []).filter(p => Math.abs(p - (100 - x.percent)) > 1e-9);
+        return `${fmtPct(100 - x.percent)}%` + (fx.length ? ` · ${fx.map(fmtPct).join('/')}% за някои` : '');
     };
 
     // Нетно разпределение: работничка = дела ѝ; шефът = своя дял + комисионните.
@@ -590,11 +594,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Дял на Радина (шефа): нейните 100% + комисионните от другите (100 - тех %).
             const comm = {}; (commissions || []).forEach(c => comm[c.employeeId] = c.percent);
+            const paid = b => (b.priceFinal != null ? b.priceFinal : b.priceSnapshot) || 0;   // с отстъпката
             const bossShareOf = b => (b.employeeId === BOSS_ID)
-                ? (b.priceSnapshot || 0)
+                ? paid(b)
                 : (b.serviceBossPercent != null)   // Биорепил, пробиване… -> фиксиран % за Радина
-                    ? (b.priceSnapshot || 0) * b.serviceBossPercent / 100
-                    : (b.priceSnapshot || 0) * (100 - (comm[b.employeeId] != null ? comm[b.employeeId] : 100)) / 100;
+                    ? paid(b) * b.serviceBossPercent / 100
+                    : paid(b) * (100 - (comm[b.employeeId] != null ? comm[b.employeeId] : 100)) / 100;
             const bossProjected = (cal || []).filter(b => b.status === 'completed' || b.status === 'booked').reduce((s, b) => s + bossShareOf(b), 0);
 
             dbox.innerHTML = `
@@ -964,24 +969,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="comm-head">
                         <span class="comm-av" style="background:${avColor(c.employeeId, c.name)}">${initials(c.name)}</span>
                         <div class="comm-name"><strong>${esc(c.name)}</strong><div class="hint">Комисионно разпределение</div></div>
-                        <span class="comm-boss-pill">за теб <b class="comm-boss">${100 - c.percent}%</b></span>
+                        <span class="comm-boss-pill">за теб <b class="comm-boss">${fmtPct(100 - c.percent)}%</b></span>
                     </div>
                     <div class="comm-bar"><span class="comm-bar__her" style="width:${c.percent}%"></span></div>
                     <div class="comm-ctrl">
                         <span class="hint">Дял за нея</span>
-                        <span class="set-field"><input class="input comm-input" data-id="${c.employeeId}" type="number" min="0" max="100" value="${c.percent}"><span class="set-field__u">%</span></span>
+                        <span class="set-field"><input class="input comm-input" data-id="${c.employeeId}" type="number" min="0" max="100" step="any" inputmode="decimal" value="${+(+c.percent).toFixed(4)}"><span class="set-field__u">%</span></span>
                         <button class="btn btn--gold comm-save" data-id="${c.employeeId}" style="--pad-y:.45rem;--pad-x:1rem;font-size:.82rem">Запази</button>
                     </div>
                 </div>`).join('');
             cbox.querySelectorAll('.comm-input').forEach(inp => inp.addEventListener('input', () => {
                 const card = inp.closest('.card');
-                const v = Math.max(0, Math.min(100, +inp.value || 0));
-                const b = card.querySelector('.comm-boss'); if (b) b.textContent = (100 - v) + '%';
+                const v = Math.max(0, Math.min(100, +String(inp.value).replace(',', '.') || 0));
+                const b = card.querySelector('.comm-boss'); if (b) b.textContent = fmtPct(100 - v) + '%';
                 const bar = card.querySelector('.comm-bar__her'); if (bar) bar.style.width = v + '%';
             }));
             cbox.querySelectorAll('.comm-save').forEach(btn => btn.addEventListener('click', async () => {
                 const inp = cbox.querySelector(`.comm-input[data-id="${btn.dataset.id}"]`);
-                const percent = Math.max(0, Math.min(100, +inp.value || 0));
+                const percent = Math.round(Math.max(0, Math.min(100, +String(inp.value).replace(',', '.') || 0)) * 10000) / 10000;
                 btn.disabled = true; btn.style.opacity = .7;
                 try { await API.put('/reports/commissions', { employeeId: +btn.dataset.id, percent }); btn.textContent = 'Запазено ✓'; setTimeout(() => btn.textContent = 'Запази', 1500); }
                 catch (err) { alert(err.message); }
@@ -1095,7 +1100,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div>
                 <strong style="font-size:1.08rem">${esc(b.serviceName)}</strong>
                 <div class="team-card__role" style="color:var(--muted);font-weight:500">при ${esc(b.employeeName)}</div>
-                <div class="hint" style="margin-top:.35rem;display:flex;align-items:center;gap:.4rem">${Icon('calendar', { size: 14 })} ${fmt(b.startAt)} · ${((b.priceFinal != null ? b.priceFinal : b.priceSnapshot) || 0).toFixed(0)} €</div>
+                <div class="hint" style="margin-top:.35rem;display:flex;align-items:center;gap:.4rem">${Icon('calendar', { size: 14 })} ${fmt(b.startAt)} · ${money((b.priceFinal != null ? b.priceFinal : b.priceSnapshot) || 0)}</div>
             </div>
             <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
                 <span class="alert ${st.cls}" style="padding:.35rem .7rem;font-size:.78rem">${st.label}</span>

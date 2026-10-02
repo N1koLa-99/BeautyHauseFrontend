@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('sum-emp').textContent  = state.emp ? state.emp.fullName : '—';
         $('sum-dur').textContent  = state.sel ? state.sel.durationMinutes + ' мин' : '—';
         $('sum-time').textContent = state.slot ? `${fmtDateBG(state.date)}, ${fmtTime(state.slot)}` : '—';
-        $('sum-price').textContent = state.sel ? state.sel.price.toFixed(0) + ' €' : '—';
+        $('sum-price').textContent = state.sel ? (n => Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)))(state.sel.price) + ' €' : '—';
         $('bk-confirm').disabled = !(state.emp && state.srv && state.slot);
     }
 
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="team-card__role">${esc(e.jobTitle || 'Специалист')}</div>
                     </div>
                     <div style="text-align:right;white-space:nowrap">
-                        <span class="price">${p.price.toFixed(0)} <small>€</small></span>
+                        <span class="price">${(n => Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)))(p.price)} <small>€</small></span>
                         <div class="hint">${p.durationMinutes} мин</div>
                     </div>
                 </button>`;

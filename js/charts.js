@@ -6,7 +6,11 @@
    ===================================================================== */
 window.Charts = (function () {
     const C = ['#A59079', '#C4A98A', '#BFAEA2', '#7D6B5F', '#DBCFBE', '#8FB0A0', '#9A8B7E'];
-    const money = v => Math.round(v || 0).toLocaleString('bg-BG');
+    // Без закръгляне до цяло: суми с частични евро се показват до стотинка (цели числа — без ,00).
+    const money = v => {
+        const n = Number(v) || 0, r = Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-6) / 100;
+        return r.toLocaleString('bg-BG', Number.isInteger(r) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
     const esc = window.esc || (s => String(s ?? ''));
 
     // „Хубав“ таван на скалата: 87 -> 100, 430 -> 500, 13 -> 15.

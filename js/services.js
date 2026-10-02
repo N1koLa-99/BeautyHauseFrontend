@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         box.innerHTML = services.map((s, i) => {
             const price = minPrice[s.id];
             const priceHtml = price !== undefined && price !== null
-                ? `<span class="price">от ${Number(price).toFixed(0)} <small>€</small></span>`
+                ? `<span class="price">от ${(n => Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)))(price)} <small>€</small></span>`
                 : `<span class="hint">Цена при избор</span>`;
             const cat = catFor(s.name);
             return `
