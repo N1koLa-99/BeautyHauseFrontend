@@ -3068,7 +3068,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 .ad-x__del { width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: #D9534F; font-size: 1.3rem; line-height: 1; cursor: pointer; }
 .ad-x__del:hover { background: rgba(217,83,79,.1); }
 .ad-x__price .ad-eur { max-width: 11rem; }
-.ad-add-x { justify-self: start; padding: .45rem .9rem; font-size: .85rem; }
+.ad-add-x { justify-self: stretch; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; padding: .55rem .8rem; font-size: .72rem; letter-spacing: .06em; white-space: normal; text-align: center; line-height: 1.25; }
 .ad-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
 .ad-chip { border: 1px solid var(--line); background: #fff; color: var(--ink-soft); border-radius: 999px; padding: .28rem .7rem; font-size: .78rem; font-weight: 600; cursor: pointer; }
 .ad-chip:hover { background: var(--blush-soft); color: var(--rose-deep); }
