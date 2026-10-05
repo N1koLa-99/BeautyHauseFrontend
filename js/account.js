@@ -782,9 +782,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="cl-inv-out" hidden></div>
                     </div>`;
                 // Редакция + изтриване: добавен без часове — всички; с история — Радина, а служителките
-                // само повтарящ се клиент (същите имена като друг). И двете — само без предстоящ час.
+                // само повтарящ се клиент (същите имена като друг). Предстоящ час не пречи.
                 const isAcc = cardEl.dataset.acc === '1', isAdded = cardEl.dataset.added === '1', isDup = cardEl.dataset.dup === '1';
-                const canDel = isAdded || (+cardEl.dataset.up === 0 && (role === 'boss' || isDup));
+                const canDel = isAdded || role === 'boss' || isDup;
                 // Повтарящ се без телефон -> „Обедини“ с картата със същите имена и телефон (часовете минават там).
                 const mergeTo = (isDup && cardEl.dataset.key.charAt(0) === 'n')
                     ? lastRows.filter(r => r.key !== cardEl.dataset.key && r.key.charAt(0) === 'p' && nameKey(r.name) === nameKey(cardEl.dataset.name)) : [];
@@ -867,7 +867,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     : cardEl.dataset.dup === '1'
                     ? `Да изтрия ли този запис на ${nm}${cardEl.dataset.phone ? ' (' + cardEl.dataset.phone + ')' : ' (без телефон)'}?\n\nДругият запис със същите имена остава. Миналите часове и парите остават в статистиките.`
                     : `Да изтрия ли ${nm} от списъка?\n\nМиналите часове и парите остават в статистиките. Ако пак си запише час, ще се появи отново.`;
-                if (!confirm(q)) return;
+                const upN = +cardEl.dataset.up || 0;
+                const upWarn = upN > 0 ? `\n\n⚠ Има ${upN} предстоящ${upN === 1 ? '' : 'и'} час${upN === 1 ? '' : 'а'} — ${upN === 1 ? 'той остава' : 'те остават'} в графика. Ако не трябва, отмени ги отделно.` : '';
+                if (!confirm(q + upWarn)) return;
                 delBtn.disabled = true;
                 try { await API.del(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`); await load(); }
                 catch (err) { alert(err.message); delBtn.disabled = false; }
