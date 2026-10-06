@@ -260,7 +260,9 @@ window.Calendar = (function () {
     function mount(container, cfg) {
         const todayKey = () => { const d = new Date(); return key(d.getFullYear(), d.getMonth(), d.getDate()); };
         const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
-        let selKey = todayKey();
+        // ?date=YYYY-MM-DD (напр. от push известие) -> графикът се отваря на тази дата.
+        const urlDate = (() => { try { const v = new URLSearchParams(location.search).get('date'); return /^\d{4}-\d{2}-\d{2}$/.test(v || '') && !isNaN(new Date(v)) ? v : null; } catch (e) { return null; } })();
+        let selKey = urlDate || todayKey();
         let data = {};            // 'YYYY-MM-DD' -> [bookings]
         let offs = {};            // 'YYYY-MM-DD' -> [почивки {kind:'rest'} / почивен ден {kind:'off'}]
         // избрана специалистка (null = всички). cfg.initialEmp -> графикът се отваря само с нейните часове

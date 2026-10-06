@@ -118,11 +118,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let employees = [];
         try { employees = (await API.get('/employees')) || []; } catch (e) {}
         // Радина отваря графика само със своите часове; „Всички“ / другите — от бутона с хората.
+        // ?emp=ID (от push известие за час при друга специалистка) -> направо нейния график.
         const me = BOSS_ID || Session.userId();
+        const urlEmp = +new URLSearchParams(location.search).get('emp') || 0;
+        const startEmp = employees.some(e => e.id === urlEmp) ? urlEmp : me;
         Calendar.mount(container, {
             editable: true, showEmployee: true, canManage: role === 'boss',
             employees: employees.map(e => ({ id: e.id, name: e.fullName, photo: e.photoUrl })),
-            initialEmp: employees.some(e => e.id === me) ? me : null,
+            initialEmp: employees.some(e => e.id === startEmp) ? startEmp : null,
             servicesFor: (empId) => API.get(`/employees/${empId}/services`),
             fetchMonth: (f, t, empId) => empId != null
                 ? API.get(`/reports/employee-calendar?employeeId=${empId}&from=${f}&to=${t}`)
@@ -151,11 +154,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const andJoin = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' и ' + a[a.length - 1] : a[0];
             const parts = Object.keys(byPct).map(Number).sort((a, b) => a - b)
-                .map(p => `${fmtPct(p)}% за ${andJoin(byPct[p])}`);
-            return `${fmtPct(base)}% · ${parts.join(' · ')}`;
+                .map(p => `за ${andJoin(byPct[p])} ${fmtPct(p)}%`);
+            return `${fmtPct(base)}%, а ${parts.join(', ')}`;
         }
         const fx = (x.fixedBossPercents || []).filter(diff);
-        return `${fmtPct(base)}%` + (fx.length ? ` · ${fx.map(fmtPct).join('/')}% за някои` : '');
+        return `${fmtPct(base)}%` + (fx.length ? `, а за някои процедури ${fx.map(fmtPct).join('/')}%` : '');
     };
 
     // Нетно разпределение: работничка = дела ѝ; шефът = своя дял + комисионните.
@@ -510,7 +513,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="earn-card__avatar" style="background:${color}">${initials}</span>
                 <div class="earn-card__title"><strong>${esc(name)}</strong>${isBoss ? `<span class="earn-card__badge">${Icon('crown', { size: 13 })} Управител</span>` : ''}</div>
             </div>
-            ${rows.map(r => `<div class="earn-card__row${r.total ? ' earn-card__row--total' : ''}"${r.after ? ' style="border-top:1px dashed var(--line);margin-top:.5rem;padding-top:.55rem"' : ''}><span>${r.label}</span><b>${money(r.value)}</b></div>`).join('')}
+            ${rows.map(r => {
+                const cls = r.total ? ' earn-card__row--total' : r.sign === '-' ? ' earn-card__row--minus' : r.sign === '+' ? ' earn-card__row--plus' : '';
+                const sign = r.sign === '-' ? '− ' : r.sign === '+' ? '+ ' : '';
+                return `<div class="earn-card__row${cls}">
+                    <span class="earn-card__lbl">${r.label}</span>
+                    <b>${sign}${money(r.value)}</b>${r.sub ? `<small class="earn-card__sub">${r.sub}</small>` : ''}</div>`;
+            }).join('')}
         </div>`;
     };
 
@@ -527,15 +536,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const cards = [];
             if (boss) cards.push(earnCard(boss.name, true, [
-                { label: 'Твоят дял', value: boss.take },
+                { label: 'Твоите часове', value: boss.take },
                 // Делът от всяка служителка поотделно (едно под друго).
-                ...workers.map(w => ({ label: `+ от ${esc(firstName(w.name))}`, value: w.commissionToBoss || 0 })),
+                ...workers.map(w => ({ label: `От ${esc(firstName(w.name))}`, sub: deductLbl(w), value: w.commissionToBoss || 0, sign: '+' })),
                 { label: 'Общо ще вземеш', value: bossTotal, total: true }
             ], earnColor(boss.employeeId, boss.name)));
             workers.forEach(w => cards.push(earnCard(w.name, false, [
                 { label: 'Изкарала', value: w.gross },
-                { label: 'Ще вземе', value: w.take, total: true },
-                { label: `За Радина (${deductLbl(w)})`, value: w.gross - w.take, after: true }
+                { label: 'За Радина', sub: deductLbl(w), value: w.gross - w.take, sign: '-' },
+                { label: 'Ще вземе', value: w.take, total: true }
             ], earnColor(w.employeeId, w.name))));
 
             body.innerHTML = `<div class="earn-grid">${cards.join('')}</div>
@@ -962,6 +971,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Раздел НАСТРОЙКИ (комисионни) ----
     async function renderSettings(box) {
         box.innerHTML = `
+            ${sectionTitle('Известия на телефона', ACC.set, '0 0 .3rem')}
+            <p class="hint" style="margin:0 0 .9rem">Нов или отменен онлайн час при всяка специалистка, записване за курс и часове, които Анелия добави в твоя график.</p>
+            <div class="push-host"></div>
+
             ${sectionTitle('Натовареност на графика', ACC.set, '0 0 .3rem')}
             <p class="hint" style="margin:0 0 .9rem">Прагове за цветовете в календара (брой часове за целия салон на ден).</p>
             <div class="card set-card" style="display:grid;margin-bottom:1.8rem">
@@ -983,6 +996,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ${sectionTitle('Комисионни', ACC.set, '0 0 .3rem')}
             <p class="hint" style="margin:0 0 .9rem">Процент от сумата, който остава за работничката (останалото е за теб).</p>
             <div class="comm-body"><div class="spinner"></div></div>`;
+
+        // Push известия на телефона (js/push.js).
+        if (window.StaffPush) StaffPush.mount(box.querySelector('.push-host'), { hint: 'Включва се отделно на всяко устройство.' });
 
         // Прагове за натовареност (пазят се локално, ползват се от календара).
         const ly = box.querySelector('.ld-yellow'), lr = box.querySelector('.ld-red');
@@ -1094,8 +1110,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!m) { body.innerHTML = `<div class="alert alert--info">Няма данни за периода.</div>`; return; }
                 body.innerHTML = `<div style="max-width:420px">${earnCard(m.name, false, [
                     { label: 'Изкарала', value: m.gross },
-                    { label: 'Ще вземеш', value: m.take, total: true },
-                    { label: `За Радина (${deductLbl(m)})`, value: m.gross - m.take, after: true }
+                    { label: 'За Радина', sub: deductLbl(m), value: m.gross - m.take, sign: '-' },
+                    { label: 'Ще вземеш', value: m.take, total: true }
                 ], earnColor(m.employeeId, m.name))}</div>
                 <p class="hint" style="margin-top:.7rem">${all ? 'Включени са и предстоящите записани часове.' : 'Само проведените часове.'}</p>`;
             } catch (err) {

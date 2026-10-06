@@ -1,0 +1,18 @@
+{
+  "name": "Beauty House",
+  "short_name": "Beauty House",
+  "description": "Beauty House — график, часове и известия за екипа на салона.",
+  "id": "/account.html",
+  "start_url": "/account.html",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "bg",
+  "dir": "ltr",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FBF6F2",
+  "icons": [
+    { "src": "/img/favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

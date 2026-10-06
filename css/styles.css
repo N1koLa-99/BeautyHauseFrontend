@@ -570,27 +570,43 @@ em, .italic { font-style: italic; }
 .earn-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
 @media (min-width: 720px) { .earn-grid { grid-template-columns: repeat(3, 1fr); } }
 
-.earn-card { padding: 1.3rem 1.35rem 1.15rem; border-radius: 18px; }
-.earn-card__head { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
+/* .card.earn-card — по-силно от общото .card { padding: 2rem }, което иначе смачква тесните карти. */
+.card.earn-card { padding: 1.2rem 1.1rem 1.05rem; border-radius: 18px; display: flex; flex-direction: column; }
+.earn-card__head { display: flex; align-items: center; gap: .65rem; margin-bottom: .6rem; }
 .earn-card__avatar {
-    width: 42px; height: 42px; flex: none; border-radius: 50%;
+    width: 40px; height: 40px; flex: none; border-radius: 50%;
     display: grid; place-items: center; color: #fff;
-    font-weight: 700; font-size: 1rem; letter-spacing: .02em;
+    font-weight: 700; font-size: .95rem; letter-spacing: .02em;
     box-shadow: 0 4px 12px rgba(60,30,35,.18);
 }
 .earn-card__title { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
-.earn-card__title strong { font-size: 1.02rem; line-height: 1.2; }
+.earn-card__title strong { font-size: .98rem; line-height: 1.2; }
 .earn-card__badge {
     display: inline-flex; align-items: center; gap: .25rem;
     font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--rose-deep);
 }
-.earn-card__row { display: flex; justify-content: space-between; align-items: baseline; gap: .8rem; padding: .34rem 0; }
-.earn-card__row span { color: var(--muted); font-size: .88rem; }
-.earn-card__row b { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.earn-card__row--total { border-top: 1px dashed var(--line); margin-top: .35rem; padding-top: .6rem; }
-.earn-card__row--total span { color: var(--ink); font-weight: 600; }
-.earn-card__row--total b { font-family: var(--font-dash); font-weight: 700; font-size: 1.5rem; color: var(--rose-deep); white-space: nowrap; }
+/* Всеки ред: надпис отгоре, сума отдолу, пояснение под сумата — тесните карти не чупят нищо. */
+.earn-card__row {
+    display: flex; flex-direction: column; align-items: flex-start; gap: .1rem;
+    padding: .65rem 0; border-top: 1px solid rgba(0,0,0,.06);
+}
+.earn-card__head + .earn-card__row { border-top: 0; padding-top: .35rem; }
+.earn-card__lbl { color: var(--muted); font-size: .8rem; font-weight: 500; line-height: 1.25; }
+.earn-card__row b {
+    font-family: var(--font-dash); font-weight: 600; font-size: 1.2rem; line-height: 1.2;
+    font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink);
+}
+.earn-card__sub { display: block; margin-top: .1rem; color: var(--muted); font-size: .74rem; line-height: 1.35; }
+.earn-card__row--plus b { color: #2F7D55; }
+.earn-card__row--minus b { color: #B4474F; }
+/* Крайната сума — винаги най-долу в картата, на едно ниво и в трите карти. */
+.earn-card__row--total {
+    margin-top: auto; padding: .75rem .85rem .7rem; border: 0; border-radius: 12px;
+    background: var(--acc-stats-soft);
+}
+.earn-card__row--total .earn-card__lbl { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.earn-card__row--total b { font-weight: 700; font-size: 1.6rem; color: var(--rose-deep); }
 
 /* ---- Таблото на шефа: рамка около активния раздел, оцветена според темата му ---- */
 .dash-body {
@@ -3177,3 +3193,26 @@ textarea.input { resize: vertical; min-height: 110px; }
 .cl-acts .cl-del-btn { color: #D9534F; }
 .cl-edit-box { display: grid; gap: .7rem; padding: .85rem; margin: 0 0 .8rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .cl-edit-box[hidden] { display: none; }
+
+/* ===== Известия на телефона (js/push.js) — „Моят акаунт“ и Настройки на шефа ===== */
+.push-card { padding: 1.25rem 1.35rem; display: grid; gap: .9rem; border-top: 3px solid var(--acc-set); margin-bottom: 1.8rem; }
+.push-card .spinner { margin: .6rem auto; width: 24px; height: 24px; }
+.push-head { display: flex; align-items: center; gap: .8rem; }
+.push-ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: var(--acc-set-soft); color: var(--acc-set-deep); }
+.push-head__t { display: grid; gap: .1rem; min-width: 0; flex: 1 1 0; }
+.push-head__t strong { font-size: 1rem; color: var(--ink); }
+.push-head__t .hint { font-size: .84rem; }
+.push-pill { flex: none; border-radius: 999px; padding: .28rem .7rem; font-size: .76rem; font-weight: 700; white-space: nowrap; background: var(--blush-soft); color: var(--ink-soft); }
+.push-pill--on { background: #EAF6EE; color: #2F7D50; }
+.push-pill--blocked { background: #FBEAE9; color: #C0453F; }
+.push-text { margin: 0; color: var(--ink-soft); font-size: .92rem; line-height: 1.55; }
+.push-steps { margin: .6rem 0 .3rem; padding: 0; list-style: none; display: grid; gap: .55rem; counter-reset: pst; }
+.push-steps li { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--ink-soft); line-height: 1.45; }
+.push-steps li > .push-step__ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; background: var(--acc-set-soft); color: var(--acc-set-deep); }
+.push-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.push-actions:empty, .push-msg:empty { display: none; }
+@media (max-width: 520px) {
+    .push-head { flex-wrap: wrap; }
+    .push-pill { order: 3; }
+    .push-actions .btn { flex: 1 1 100%; }
+}

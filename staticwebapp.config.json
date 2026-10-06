@@ -1,0 +1,11 @@
+{
+  "mimeTypes": {
+    ".webmanifest": "application/manifest+json"
+  },
+  "routes": [
+    {
+      "route": "/sw.js",
+      "headers": { "Cache-Control": "no-cache" }
+    }
+  ]
+}
