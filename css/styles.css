@@ -3210,9 +3210,14 @@ textarea.input { resize: vertical; min-height: 110px; }
 .push-steps li { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--ink-soft); line-height: 1.45; }
 .push-steps li > .push-step__ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; background: var(--acc-set-soft); color: var(--acc-set-deep); }
 .push-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+/* Дългите надписи („Изключи на това устройство“) се пренасят, вместо да излизат от картата. */
+.push-card > * { min-width: 0; }
+.push-actions .btn { white-space: normal; text-align: center; line-height: 1.25; min-width: 0; max-width: 100%; }
+.push-actions .btn svg { flex: none; }
 .push-actions:empty, .push-msg:empty { display: none; }
 @media (max-width: 520px) {
     .push-head { flex-wrap: wrap; }
-    .push-pill { order: 3; }
-    .push-actions .btn { flex: 1 1 100%; }
+    .push-head__t { flex: 1 1 calc(100% - 60px); }
+    .push-pill { order: 3; margin-left: 54px; }
+    .push-actions .btn { flex: 1 1 100%; letter-spacing: .05em; --pad-x: .9rem !important; }
 }
