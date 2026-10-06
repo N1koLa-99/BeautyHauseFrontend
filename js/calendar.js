@@ -321,8 +321,7 @@ window.Calendar = (function () {
         const below = container.querySelector('.sc-below');
 
         // ---- Специалистки ----
-        function empsSorted() {
-            const ORDER = ['ирина', 'радина', 'анелия'];
+        function empsSorted(ORDER = ['ирина', 'радина', 'анелия']) {
             const rank = n => { const s = (n || '').toLowerCase(); const i = ORDER.findIndex(o => s.includes(o)); return i < 0 ? ORDER.length : i; };
             return (cfg.employees || []).slice().sort((a, b) => rank(a.name) - rank(b.name) || String(a.name).localeCompare(String(b.name), 'bg'));
         }
@@ -809,7 +808,7 @@ window.Calendar = (function () {
                     <div class="sc-sh__grab"></div>
                     <div class="sc-sh__title">Чий график да се показва</div>
                     ${row('all', 'Всички', `<span class="sc-av sc-av--all">${ICO.people}</span>`, empFilter == null)}
-                    ${empsSorted().map(e => row(e.id, e.name, avatarHtml(e, 44), empFilter === e.id)).join('')}
+                    ${empsSorted(['радина', 'анелия', 'ирина']).map(e => row(e.id, e.name, avatarHtml(e, 44), empFilter === e.id)).join('')}
                 </div>`;
             sheet.hidden = false;
         });
