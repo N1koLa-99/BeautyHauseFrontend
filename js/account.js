@@ -505,6 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return Calendar.empColor(id);
     };
 
+    const RADINA_COLOR = '#C2185B';   // същото розово като в графика (calendar.js)
     const earnCard = (name, isBoss, rows, color) => {
         const initials = (name || '?').split(' ').map(w => w.charAt(0)).slice(0, 2).join('').toUpperCase();
         return `
@@ -516,9 +517,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ${rows.map(r => {
                 const cls = r.total ? ' earn-card__row--total' : r.sign === '-' ? ' earn-card__row--minus' : r.sign === '+' ? ' earn-card__row--plus' : '';
                 const sign = r.sign === '+' ? '+ ' : '';   // „За Радина“ — без минус
+                // r.color — „За Радина“ в нейния цвят (като в графика), с точка пред надписа.
+                const dot = r.color ? `<i class="earn-card__dot" style="background:${r.color}"></i>` : '';
                 return `<div class="earn-card__row${cls}">
-                    <span class="earn-card__lbl">${r.label}</span>
-                    <b>${sign}${money(r.value)}</b>${r.sub ? `<small class="earn-card__sub">${r.sub}</small>` : ''}</div>`;
+                    <span class="earn-card__lbl">${dot}${r.label}</span>
+                    <b${r.color ? ` style="color:${r.color}"` : ''}>${sign}${money(r.value)}</b>${r.sub ? `<small class="earn-card__sub">${r.sub}</small>` : ''}</div>`;
             }).join('')}
         </div>`;
     };
@@ -532,6 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const workers = (rows || []).filter(r => !r.isBoss);
             const fromOthers = workers.reduce((s, r) => s + (r.commissionToBoss || 0), 0);
             const firstName = n => (n || '').trim().split(/\s+/)[0] || n;
+            const bossCol = boss ? earnColor(boss.employeeId, boss.name) : RADINA_COLOR;
             const bossTotal = (boss ? boss.take : 0) + fromOthers;
 
             const cards = [];
@@ -545,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
             workers.forEach(w => cards.push(earnCard(w.name, false, [
                 { label: 'Изкарала', value: w.gross },
                 { label: 'Ще вземе', value: w.take, total: true },
-                { label: 'За Радина', sub: deductLbl(w), value: w.gross - w.take, sign: '-' }
+                { label: 'За Радина', sub: deductLbl(w), value: w.gross - w.take, sign: '-', color: bossCol }
             ], earnColor(w.employeeId, w.name))));
 
             body.innerHTML = `<div class="earn-grid">${cards.join('')}</div>
@@ -1112,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body.innerHTML = `<div style="max-width:420px">${earnCard(m.name, false, [
                     { label: 'Изкарала', value: m.gross },
                     { label: 'Ще вземеш', value: m.take, total: true },
-                    { label: 'За Радина', sub: deductLbl(m), value: m.gross - m.take, sign: '-' }
+                    { label: 'За Радина', sub: deductLbl(m), value: m.gross - m.take, sign: '-', color: RADINA_COLOR }
                 ], earnColor(m.employeeId, m.name))}</div>
                 <p class="hint" style="margin-top:.7rem">${all ? 'Включени са и предстоящите записани часове.' : 'Само проведените часове.'}</p>`;
             } catch (err) {

@@ -600,6 +600,7 @@ em, .italic { font-style: italic; }
 .earn-card__sub { display: block; margin-top: .1rem; color: var(--muted); font-size: .74rem; line-height: 1.35; }
 .earn-card__row--plus b { color: #2F7D55; }
 .earn-card__row--minus b { color: var(--ink); }
+.earn-card__dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .4rem; vertical-align: .05em; }
 /* Крайната сума — винаги най-долу в картата, на едно ниво и в трите карти. */
 .earn-card__row--total {
     margin-top: auto; padding: .75rem .85rem .7rem; border: 0; border-radius: 12px;
