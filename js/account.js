@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             ${rows.map(r => {
                 const cls = r.total ? ' earn-card__row--total' : r.sign === '-' ? ' earn-card__row--minus' : r.sign === '+' ? ' earn-card__row--plus' : '';
-                const sign = r.sign === '-' ? '− ' : r.sign === '+' ? '+ ' : '';
+                const sign = r.sign === '+' ? '+ ' : '';   // „За Радина“ — без минус
                 return `<div class="earn-card__row${cls}">
                     <span class="earn-card__lbl">${r.label}</span>
                     <b>${sign}${money(r.value)}</b>${r.sub ? `<small class="earn-card__sub">${r.sub}</small>` : ''}</div>`;
@@ -541,10 +541,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ...workers.map(w => ({ label: `От ${esc(firstName(w.name))}`, sub: deductLbl(w), value: w.commissionToBoss || 0, sign: '+' })),
                 { label: 'Общо ще вземеш', value: bossTotal, total: true }
             ], earnColor(boss.employeeId, boss.name)));
+            // Служителките: Изкарала -> Ще вземе -> под него „За Радина“.
             workers.forEach(w => cards.push(earnCard(w.name, false, [
                 { label: 'Изкарала', value: w.gross },
-                { label: 'За Радина', sub: deductLbl(w), value: w.gross - w.take, sign: '-' },
-                { label: 'Ще вземе', value: w.take, total: true }
+                { label: 'Ще вземе', value: w.take, total: true },
+                { label: 'За Радина', sub: deductLbl(w), value: w.gross - w.take, sign: '-' }
             ], earnColor(w.employeeId, w.name))));
 
             body.innerHTML = `<div class="earn-grid">${cards.join('')}</div>
@@ -1110,8 +1111,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!m) { body.innerHTML = `<div class="alert alert--info">Няма данни за периода.</div>`; return; }
                 body.innerHTML = `<div style="max-width:420px">${earnCard(m.name, false, [
                     { label: 'Изкарала', value: m.gross },
-                    { label: 'За Радина', sub: deductLbl(m), value: m.gross - m.take, sign: '-' },
-                    { label: 'Ще вземеш', value: m.take, total: true }
+                    { label: 'Ще вземеш', value: m.take, total: true },
+                    { label: 'За Радина', sub: deductLbl(m), value: m.gross - m.take, sign: '-' }
                 ], earnColor(m.employeeId, m.name))}</div>
                 <p class="hint" style="margin-top:.7rem">${all ? 'Включени са и предстоящите записани часове.' : 'Само проведените часове.'}</p>`;
             } catch (err) {

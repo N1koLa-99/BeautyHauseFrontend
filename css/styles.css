@@ -599,7 +599,7 @@ em, .italic { font-style: italic; }
 }
 .earn-card__sub { display: block; margin-top: .1rem; color: var(--muted); font-size: .74rem; line-height: 1.35; }
 .earn-card__row--plus b { color: #2F7D55; }
-.earn-card__row--minus b { color: #B4474F; }
+.earn-card__row--minus b { color: var(--ink); }
 /* Крайната сума — винаги най-долу в картата, на едно ниво и в трите карти. */
 .earn-card__row--total {
     margin-top: auto; padding: .75rem .85rem .7rem; border: 0; border-radius: 12px;
@@ -607,6 +607,10 @@ em, .italic { font-style: italic; }
 }
 .earn-card__row--total .earn-card__lbl { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .earn-card__row--total b { font-weight: 700; font-size: 1.6rem; color: var(--rose-deep); }
+/* Ред след крайната сума („За Радина“ под „Ще вземе“) — без черта, малко въздух. */
+.earn-card__row--total + .earn-card__row { border-top: 0; padding: .7rem .85rem 0; }
+/* „Ще вземе“ веднага под „Изкарала“ (не най-долу), когато под него има още ред. */
+.earn-card__row--total:not(:last-child) { margin-top: .35rem; }
 
 /* ---- Таблото на шефа: рамка около активния раздел, оцветена според темата му ---- */
 .dash-body {
