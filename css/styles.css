@@ -601,6 +601,12 @@ em, .italic { font-style: italic; }
 .earn-card__row--plus b { color: #2F7D55; }
 .earn-card__row--minus b { color: var(--ink); }
 .earn-card__dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .4rem; vertical-align: .05em; }
+/* „За Радина“ — в кутия като „Ще вземе“, с лек фон в розовия цвят на Радина. */
+.earn-card__row--total + .earn-card__row--her, .earn-card__row--her {
+    margin-top: .5rem; padding: .75rem .85rem .7rem; border: 0; border-radius: 12px;
+    background: #FBEAF1; background: color-mix(in srgb, var(--her, #C2185B) 9%, #fff);
+}
+.earn-card__row--her b { font-size: 1.35rem; font-weight: 700; }
 /* Крайната сума — винаги най-долу в картата, на едно ниво и в трите карти. */
 .earn-card__row--total {
     margin-top: auto; padding: .75rem .85rem .7rem; border: 0; border-radius: 12px;

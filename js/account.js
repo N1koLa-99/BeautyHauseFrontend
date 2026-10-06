@@ -515,11 +515,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="earn-card__title"><strong>${esc(name)}</strong>${isBoss ? `<span class="earn-card__badge">${Icon('crown', { size: 13 })} Управител</span>` : ''}</div>
             </div>
             ${rows.map(r => {
-                const cls = r.total ? ' earn-card__row--total' : r.sign === '-' ? ' earn-card__row--minus' : r.sign === '+' ? ' earn-card__row--plus' : '';
+                const cls = (r.total ? ' earn-card__row--total' : r.sign === '-' ? ' earn-card__row--minus' : r.sign === '+' ? ' earn-card__row--plus' : '') + (r.color ? ' earn-card__row--her' : '');
                 const sign = r.sign === '+' ? '+ ' : '';   // „За Радина“ — без минус
                 // r.color — „За Радина“ в нейния цвят (като в графика), с точка пред надписа.
                 const dot = r.color ? `<i class="earn-card__dot" style="background:${r.color}"></i>` : '';
-                return `<div class="earn-card__row${cls}">
+                return `<div class="earn-card__row${cls}"${r.color ? ` style="--her:${r.color}"` : ''}>
                     <span class="earn-card__lbl">${dot}${r.label}</span>
                     <b${r.color ? ` style="color:${r.color}"` : ''}>${sign}${money(r.value)}</b>${r.sub ? `<small class="earn-card__sub">${r.sub}</small>` : ''}</div>`;
             }).join('')}
