@@ -136,10 +136,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // „30%" или „30% · 20% за някои" (Биорепил, пробиване са с фиксиран процент).
+    // „30%" или „30% · 20% за биорепил и пробиване" (услуги с фиксиран процент за Радина).
+    // „Пробиване — нос", „Пробиване — хрущял"… се събират в „пробиване".
     const deductLbl = x => {
-        const fx = (x.fixedBossPercents || []).filter(p => Math.abs(p - (100 - x.percent)) > 1e-9);
-        return `${fmtPct(100 - x.percent)}%` + (fx.length ? ` · ${fx.map(fmtPct).join('/')}% за някои` : '');
+        const base = 100 - x.percent;
+        const diff = p => Math.abs(p - base) > 1e-9;
+        const svc = (x.fixedServices || []).filter(f => diff(f.bossPercent));
+        if (svc.length) {
+            const byPct = {};
+            svc.forEach(f => {
+                const short = String(f.name || '').split(/\s+[—–-]\s+/)[0].trim().toLowerCase();
+                const arr = byPct[f.bossPercent] || (byPct[f.bossPercent] = []);
+                if (short && !arr.includes(short)) arr.push(short);
+            });
+            const andJoin = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' и ' + a[a.length - 1] : a[0];
+            const parts = Object.keys(byPct).map(Number).sort((a, b) => a - b)
+                .map(p => `${fmtPct(p)}% за ${andJoin(byPct[p])}`);
+            return `${fmtPct(base)}% · ${parts.join(' · ')}`;
+        }
+        const fx = (x.fixedBossPercents || []).filter(diff);
+        return `${fmtPct(base)}%` + (fx.length ? ` · ${fx.map(fmtPct).join('/')}% за някои` : '');
     };
 
     // Нетно разпределение: работничка = дела ѝ; шефът = своя дял + комисионните.
