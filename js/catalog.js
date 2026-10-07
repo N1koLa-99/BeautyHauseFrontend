@@ -43,7 +43,8 @@ function mount(box, opts = {}) {
             if (!name) return;
             const k = norm(name);
             if (!map.has(k)) map.set(k, { name, rows: [] });
-            map.get(k).rows.push({ serviceId: es.serviceId, emp: e, price: es.price, dur: es.durationMinutes });
+            // Клиентът вижда времето заедно с почивката след процедурата (BH_CONFIG.REST_MIN).
+            map.get(k).rows.push({ serviceId: es.serviceId, emp: e, price: es.price, dur: es.durationMinutes + ((window.BH_CONFIG && window.BH_CONFIG.REST_MIN) || 0) });
         }));
         return map;
     }
@@ -86,6 +87,18 @@ function mount(box, opts = {}) {
         // При няколко специалисти редът вече е конкретен („при Радина") -> директно при нея.
         // auto=1: ако услугата се прави само от 1 специалист, той се избира автоматично.
         return row.multi ? `booking.html?emp=${row.emp.id}&${q}` : `booking.html?${q}&auto=1`;
+    }
+
+    // Брой снимки по процедура (портфолио) — за бутона „Виж снимки“.
+    // Бутонът се показва само на страници, където е зареден js/portfolio.js.
+    const PF = window.Portfolio || null;
+    let pfCounts = {};
+    function photosBtn(it) {
+        if (!PF) return '';
+        const ids = [...new Set(it.rows.map(r => r.serviceId).filter(Boolean))];
+        if (!ids.length) return '';
+        const n = ids.reduce((s, id) => s + (pfCounts[id] || 0), 0);
+        return `<button type="button" class="cat__photos" data-pf-ids="${ids.join(',')}" data-pf-title="${E(it.name)}">${Icon('camera', { size: 15 })}<span>Снимки</span>${n ? `<span class="cat__photos-n">${n}</span>` : ''}</button>`;
     }
 
     let tabs = [];
@@ -228,6 +241,7 @@ function mount(box, opts = {}) {
                     <div class="cat__item-info">
                         <div class="cat__item-name">${E(it.name)}</div>
                         <div class="cat__item-dur">${E(dur)}</div>
+                        ${photosBtn(it)}
                     </div>
                     <div class="cat__item-right"><span class="cat__price">${price(fmtPrice(r.price))}</span><a href="${bookHref(r, it.name)}" class="cat__pick" ${pickAttr(r, it.name)}>Запиши</a></div>
                 </div>
@@ -240,6 +254,7 @@ function mount(box, opts = {}) {
                 <div class="cat__item-info">
                     <div class="cat__item-name">${E(it.name)}</div>
                     <div class="cat__item-dur">${E(dur)}</div>
+                    ${photosBtn(it)}
                 </div>
                 <div class="cat__item-right"><span class="cat__price">${price(head)}</span><button class="cat__opts-toggle">опции <span class="cat__chev">⌄</span></button></div>
             </div>
@@ -266,6 +281,14 @@ function mount(box, opts = {}) {
         if (r.top < 60 || r.top > window.innerHeight * 0.5) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    // „Виж снимки“ -> галерия с работата по процедурата (от всички специалисти).
+    if (PF) box.addEventListener('click', (e) => {
+        const b = e.target.closest('.cat__photos[data-pf-ids]');
+        if (!b) return;
+        e.preventDefault();
+        PF.openService({ serviceIds: b.dataset.pfIds.split(',').map(Number), title: b.dataset.pfTitle });
+    });
+
     if (opts.onPick) box.addEventListener('click', (e) => {
         const a = e.target.closest('.cat__pick[data-r]');
         if (!a) return;
@@ -278,7 +301,8 @@ function mount(box, opts = {}) {
     // Първо се зареждат цените от базата, после се рисува.
     const params = new URLSearchParams(opts.fromHash ? (location.hash || '').slice(1) : '');
     panelEl.innerHTML = `<div class="cat__empty"><div class="spinner"></div></div>`;
-    loadPrices().then(prices => {
+    Promise.all([loadPrices(), PF ? PF.counts() : Promise.resolve({})]).then(([prices, cnt]) => {
+        pfCounts = cnt || {};
         tabs = buildTabs(prices);
         if (!tabs.find(t => t.key === tabKey)) tabKey = 'all';
         if (pendingOpen) open(...pendingOpen);

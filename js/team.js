@@ -6,9 +6,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!box) return;
 
     let list = null;
+    // На компютър шефът (Радина) е в средата; на телефон остава първа (teamMobileOrder).
+    const bossMiddle = (arr) => {
+        const i = arr.findIndex(e => e.role === 'boss');
+        if (i < 0) return arr;
+        const rest = arr.filter((_, k) => k !== i);
+        rest.splice(Math.floor(rest.length / 2), 0, arr[i]);
+        return rest;
+    };
     const paint = () => {
         if (!list) return;
-        box.innerHTML = (isMobileLayout() ? teamMobileOrder([...list]) : list).map((e, i) => teamCardHTML(e, i % 3)).join('');
+        box.innerHTML = (isMobileLayout() ? teamMobileOrder([...list]) : bossMiddle([...list])).map((e, i) => teamCardHTML(e, i % 3)).join('');
         box.scrollLeft = 0;
         revealNew(box);
     };
@@ -31,4 +39,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     paint();
     onLayoutChange(paint);
+
+    // Портфолио: клик по снимката/картата (или бутона „Портфолио“) -> модал със снимки и отзиви.
+    // Линковете вътре в картата (соц. мрежи, „Запиши се“) работят както досега.
+    if (window.Portfolio) {
+        box.addEventListener('click', (e) => {
+            if (e.target.closest('a')) return;
+            const card = e.target.closest('[data-pf-emp]');
+            if (!card) return;
+            const emp = list.find(x => String(x.id) === String(card.dataset.pfEmp));
+            Portfolio.openEmployee(emp || card.dataset.pfEmp);
+        });
+        // Директен линк: team.html?pf=<id> отваря портфолиото.
+        const pfId = new URLSearchParams(location.search).get('pf');
+        if (pfId) {
+            const emp = list.find(x => String(x.id) === String(pfId));
+            if (emp) Portfolio.openEmployee(emp);
+        }
+    }
 });

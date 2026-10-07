@@ -20,6 +20,12 @@ window.Session = (function () {
         } catch (e) { return 0; }
     }
     const expired = t => { const x = expOf(t); return !!x && x <= Date.now() + 15000; };
+    // Други полета от токена (sub = id на потребителя, iat = кога е издаден).
+    function claimsOf(t) {
+        try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) || {}; }
+        catch (e) { return {}; }
+    }
+    const subOf = t => (t ? String(claimsOf(t).sub || '') : '');
 
     // Изтекла сесия при отваряне на страницата -> чистим я веднага, за да не
     // изглеждаш „влязъл", а после да ти гърми при първото действие.
@@ -49,7 +55,13 @@ window.Session = (function () {
     // или влезе с друг профил, страницата се презарежда -> няма заявки с чужд
     // токен (оттам идваше 403 при отмяна на час).
     let pageToken = localStorage.getItem(K.token);
-    const changed = () => localStorage.getItem(K.token) !== pageToken;
+    // Подновен токен на СЪЩИЯ потребител (тихото подновяване на персонала)
+    // не е „смяна на профила" -> приемаме го без презареждане.
+    function adoptIfSameUser() {
+        const t = localStorage.getItem(K.token);
+        if (t && pageToken && t !== pageToken && subOf(t) === subOf(pageToken)) pageToken = t;
+    }
+    const changed = () => { adoptIfSameUser(); return localStorage.getItem(K.token) !== pageToken; };
     function syncIfChanged() { if (changed()) location.reload(); }
     window.addEventListener('storage', e => {
         if (e.key === K.token || e.key === null) syncIfChanged();
@@ -79,6 +91,40 @@ window.Session = (function () {
     document.addEventListener('visibilitychange', () => {
         const t = localStorage.getItem(K.token);
         if (document.visibilityState === 'visible' && t && expired(t)) onExpire();
+    });
+
+    // ---- Дълга сесия за персонала ----
+    // Токенът на служител/шеф е валиден 60 дни; при всяко отваряне на сайта
+    // (най-много веднъж на 12 ч) го подновяваме тихо. Така момичетата не
+    // излизат от админ панела на телефона, докато го ползват поне веднъж на 2 месеца.
+    const STAFF = /^(employee|boss)$/;
+    const RENEW_AFTER_MS = 12 * 60 * 60 * 1000;
+    let renewing = false;
+    async function renewStaffToken() {
+        const t = localStorage.getItem(K.token);
+        if (renewing || !t || expired(t) || !STAFF.test(localStorage.getItem(K.role) || '')) return;
+        const iat = (claimsOf(t).iat || 0) * 1000;
+        if (iat && Date.now() - iat < RENEW_AFTER_MS) return;
+        const base = window.BH_CONFIG && window.BH_CONFIG.API_BASE;
+        if (!base) return;
+        renewing = true;
+        try {
+            const res = await fetch(base + '/me/refresh-token', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } });
+            if (res.ok) {
+                const auth = await res.json();
+                // Само ако междувременно никой не е излязъл/влязъл с друг профил.
+                if (auth && auth.token && localStorage.getItem(K.token) === t) {
+                    save(auth); pageToken = auth.token;
+                }
+            }
+            // 401/403 (деактивиран профил) -> не пипаме нищо; старият токен
+            // си изтича сам, а заявките към API-то ще пратят към вход.
+        } catch (e) { /* няма мрежа -> пробваме при следващото отваряне */ }
+        finally { renewing = false; }
+    }
+    renewStaffToken();
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') renewStaffToken();
     });
 
     return {

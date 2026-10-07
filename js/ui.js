@@ -140,9 +140,14 @@ function teamCardHTML(emp, delay) {
 
     const bio = emp.bio ? `<p class="team-card__bio">${esc(emp.bio).slice(0, 120)}</p>` : '';
     const d = delay ? ` data-delay="${delay}"` : '';
+    // Портфолио (само където е зареден js/portfolio.js — напр. „Екип“): клик по картата го отваря.
+    const pf = !!window.Portfolio;
+    const pfBtn = pf
+        ? `<button type="button" class="btn btn--ghost team-card__pf" data-pf-emp="${esc(emp.id)}">${Icon('camera', { size: 15 })} Портфолио</button>`
+        : '';
 
     return `
-    <article class="card team-card reveal" data-tilt="4"${d}>
+    <article class="card team-card reveal${pf ? ' team-card--pf' : ''}" data-tilt="4"${d}${pf ? ` data-pf-emp="${esc(emp.id)}"` : ''}>
         <div class="team-card__photo">
             ${photo}
             ${socials ? `<div class="team-card__socials">${socials}</div>` : ''}
@@ -151,7 +156,10 @@ function teamCardHTML(emp, delay) {
             <h3>${name}</h3>
             <div class="team-card__role">${role}</div>
             ${bio}
-            <a href="booking.html?emp=${encodeURIComponent(emp.id)}" class="btn btn--ghost" style="margin-top:1.1rem;--pad-y:.6rem;--pad-x:1.1rem;font-size:.85rem">Запиши се →</a>
+            <div class="team-card__actions${pf ? ' team-card__actions--two' : ''}">
+                ${pfBtn}
+                <a href="booking.html?emp=${encodeURIComponent(emp.id)}" class="btn btn--ghost team-card__book">Запиши се →</a>
+            </div>
         </div>
     </article>`;
 }

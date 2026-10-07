@@ -8,6 +8,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     // srv = {serviceId, serviceName}; emp = избран специалист;
     // sel = {price, durationMinutes} на този специалист за услугата.
+    // durationMinutes тук е само за показване и е ВЕЧЕ с почивката (като в каталога).
+    const REST_MIN = (window.BH_CONFIG && window.BH_CONFIG.REST_MIN) || 0;
     const state = { srv: null, emp: null, sel: null, date: null, slot: null };
 
     const panes = document.querySelectorAll('.bk-pane');
@@ -36,8 +38,19 @@ document.addEventListener('DOMContentLoaded', () => {
             main.prepend(b);
         }
         b.innerHTML = `<span>Избрана процедура: <strong>${esc(txt)}</strong></span>
-            <a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени процедура</a>`;
-        if (inPage) b.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); goStep(1); });
+            <span style="display:flex;gap:1rem;flex-wrap:wrap">${pfLink(state.emp)}<a href="booking.html" class="bk-change" style="text-decoration:underline;white-space:nowrap">смени процедура</a></span>`;
+        if (inPage) b.querySelector('.bk-change').addEventListener('click', (e) => { e.preventDefault(); goStep(1); });
+        bindPfLink(b, state.emp);
+    }
+
+    // „Виж портфолио“ на избрания специалист — модал, без да се губи прогресът.
+    function pfLink(emp) {
+        return emp && window.Portfolio
+            ? `<button type="button" class="bk-pf-link">${Icon('camera', { size: 15 })} портфолио на ${esc(String(emp.fullName || '').split(' ')[0])}</button>` : '';
+    }
+    function bindPfLink(root, emp) {
+        const l = root.querySelector('.bk-pf-link');
+        if (l && emp) l.addEventListener('click', () => Portfolio.openEmployee(emp, { chooseLabel: 'Продължи със записването', onChoose: () => {} }));
     }
 
     // Банер за избран специалист (влизане през "Екип" / "Запази пак").
@@ -51,7 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
             main.prepend(b);
         }
         b.innerHTML = `<span>Резервираш при: <strong>${esc(emp.fullName)}</strong></span>
-            <a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени специалист</a>`;
+            <span style="display:flex;gap:1rem;flex-wrap:wrap">${pfLink(emp)}<a href="booking.html" style="text-decoration:underline;white-space:nowrap">смени специалист</a></span>`;
+        bindPfLink(b, emp);
     }
 
     // --- Навигация между стъпки ---
@@ -166,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const s = (allServices || []).find(x => x.id === match.serviceId);
                     state.srv = { serviceId: match.serviceId, serviceName: preLabel || (s ? s.name : preSrv) };
                     state.emp = emp;
-                    state.sel = { price: match.price, durationMinutes: match.durationMinutes };
+                    state.sel = { price: match.price, durationMinutes: match.durationMinutes + REST_MIN };
                     state.slot = null;
                     updateSummary();
                     goStep(3);
@@ -194,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const providers = [];
             (emps || []).forEach((e, i) => {
                 const es = (lists[i] || []).find(x => x.serviceId === serviceId);
-                if (es) providers.push({ emp: e, price: es.price, durationMinutes: es.durationMinutes });
+                if (es) providers.push({ emp: e, price: es.price, durationMinutes: es.durationMinutes + REST_MIN });
             });
             if (!providers.length) {
                 box.innerHTML = `<div class="alert alert--info">За тази услуга още няма свободен специалист. Избери друга услуга.</div>`;
@@ -212,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="flex:1;min-width:0">
                         <strong style="font-size:1.05rem">${esc(e.fullName)}</strong>
                         <div class="team-card__role">${esc(e.jobTitle || 'Специалист')}</div>
+                        ${window.Portfolio ? `<span class="bk-pf" role="button" tabindex="0" data-pf="${e.id}">${Icon('camera', { size: 14 })} Виж портфолио</span>` : ''}
                     </div>
                     <div style="text-align:right;white-space:nowrap">
                         <span class="price">${(n => Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)))(p.price)} <small>€</small></span>
@@ -227,8 +242,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 goStep(3);
                 initDate();
             };
+            // „Виж портфолио“ вътре в картата: отваря модал (прогресът остава), а „Избери“ от модала избира специалиста.
+            const openPf = (el) => {
+                const p = providers.find(x => x.emp.id === +el.dataset.pf);
+                if (p) Portfolio.openEmployee(p.emp, { serviceId: serviceId, onChoose: () => choose(p) });
+            };
+            box.querySelectorAll('.bk-pf').forEach(el => el.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); openPf(el); }
+            }));
             box.querySelectorAll('.bk-pick').forEach(btn =>
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (ev) => {
+                    const pfEl = ev.target.closest('.bk-pf');
+                    if (pfEl) { ev.preventDefault(); openPf(pfEl); return; }
                     const id = +btn.dataset.id;
                     choose(providers.find(x => x.emp.id === id));
                 }));

@@ -34,6 +34,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     paint();
     // Смяна телефон ↔ компютър (завъртане, промяна на прозореца) -> пренареждаме.
     onLayoutChange(paint);
+
+    // Портфолио: клик по снимката/картата или бутона „Портфолио“ -> модал (както в „Екип“).
+    if (window.Portfolio) {
+        box.addEventListener('click', (e) => {
+            if (e.target.closest('a')) return;
+            const card = e.target.closest('[data-pf-emp]');
+            if (!card) return;
+            const emp = list.find(x => String(x.id) === String(card.dataset.pfEmp));
+            Portfolio.openEmployee(emp || card.dataset.pfEmp);
+        });
+    }
 });
 
 /* Телефон: Радина → Анелия → Ирина. Десктоп: шефът в средата. */

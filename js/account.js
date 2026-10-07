@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         no_show:   { label: 'Не се яви', cls: 'alert--err' }
     };
     // Акцентни цветове на разделите в таблото — съвпадат с css/styles.css (--acc-*).
-    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', cli: '#3A8C99', set: '#9B7FC2', crs: '#B07D52' };
+    const ACC = { stats: '#5F8DBF', cal: '#4F9E7C', alert: '#D9534F', cli: '#3A8C99', set: '#9B7FC2', crs: '#B07D52', pf: '#B5657A' };
     const pad = n => String(n).padStart(2, '0');
     // Пари — винаги до стотинка (без закръгляне до цяло евро). 0.005 -> нагоре, както в бекенда.
     const r2 = v => { const n = Number(v) || 0; return Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-6) / 100; };
@@ -201,12 +201,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="dash-panel" data-p="calendar" hidden></div>
             <div class="dash-panel" data-p="noshow" hidden></div>
             <div class="dash-panel" data-p="courses" hidden></div>
+            <div class="dash-panel" data-p="portfolio" hidden></div>
             <div class="dash-panel" data-p="settings" hidden></div>
             <nav class="dash-nav" aria-label="Навигация на таблото">
                 <button class="dash-tab" data-t="stats"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Статистики</span></button>
                 <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="noshow"><span class="dash-tab__ic">${Icon('users', { size: 20 })}</span><span class="dash-tab__lb">Клиенти</span></button>
                 <button class="dash-tab" data-t="courses"><span class="dash-tab__ic">${Icon('book', { size: 20 })}<span class="dash-tab__badge" hidden></span></span><span class="dash-tab__lb">Курсове</span></button>
+                <button class="dash-tab" data-t="portfolio"><span class="dash-tab__ic">${Icon('camera', { size: 20 })}</span><span class="dash-tab__lb">Портфолио</span></button>
                 <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
             </nav>`;
 
@@ -222,9 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const panels = {};
         box.querySelectorAll('.dash-panel').forEach(p => panels[p.dataset.p] = p);
         const loaded = {};
-        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderClients, clients: renderClients, courses: renderCourses, settings: renderSettings };
+        const loaders = { stats: renderStats, calendar: renderCalendarTab, noshow: renderClients, clients: renderClients, courses: renderCourses, portfolio: renderPortfolioAdmin, settings: renderSettings };
         // Фонът на цялото табло се оцветява леко според отворения раздел — веднага личи къде си.
-        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-cli-soft)', courses: 'var(--acc-crs-soft)', settings: 'var(--acc-set-soft)' };
+        const PANEL_BG = { stats: 'var(--acc-stats-soft)', calendar: 'var(--acc-cal-soft)', noshow: 'var(--acc-cli-soft)', courses: 'var(--acc-crs-soft)', portfolio: 'var(--acc-pf-soft)', settings: 'var(--acc-set-soft)' };
 
         function show(name) {
             tabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
@@ -974,6 +976,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---- Раздел НАСТРОЙКИ (комисионни) ----
+    // ---- Портфолио (шеф): снимки на всеки служител + модерация на отзиви ----
+    async function renderPortfolioAdmin(box) {
+        box.innerHTML = `
+            ${sectionTitle('Портфолио и отзиви', ACC.pf, '0 0 .8rem')}
+            <div class="pf-seg" role="tablist">
+                <button type="button" class="pf-seg__b is-on" data-s="photos">${Icon('image', { size: 16 })} Снимки</button>
+                <button type="button" class="pf-seg__b" data-s="reviews">${Icon('star', { size: 16 })} Отзиви</button>
+            </div>
+            <div class="pf-seg__p" data-s="photos">
+                <div class="pfa-emps"><div class="spinner"></div></div>
+                <div class="pfa-mgr"></div>
+            </div>
+            <div class="pf-seg__p" data-s="reviews" hidden></div>`;
+        const segLoaded = {};
+        const segShow = s => {
+            box.querySelectorAll('.pf-seg__b').forEach(b => b.classList.toggle('is-on', b.dataset.s === s));
+            box.querySelectorAll('.pf-seg__p').forEach(p => p.hidden = p.dataset.s !== s);
+            if (s === 'reviews' && !segLoaded.reviews) { segLoaded.reviews = true; PortfolioAdmin.mountReviews(box.querySelector('.pf-seg__p[data-s="reviews"]')); }
+        };
+        box.querySelectorAll('.pf-seg__b').forEach(b => b.addEventListener('click', () => segShow(b.dataset.s)));
+
+        // Избор на служител (шефът е първа), после мениджърът за неговото портфолио.
+        const empsEl = box.querySelector('.pfa-emps');
+        const mgrEl = box.querySelector('.pfa-mgr');
+        try {
+            const emps = ((await API.get('/employees')) || []).slice()
+                .sort((a, b) => (a.role === 'boss' ? -1 : 0) - (b.role === 'boss' ? -1 : 0) || a.id - b.id);
+            if (!emps.length) { empsEl.innerHTML = `<div class="hint">Няма служители.</div>`; return; }
+            let cur = emps[0].id;
+            const paintEmps = () => {
+                empsEl.innerHTML = `<div class="pf-chips">${emps.map(e =>
+                    `<button type="button" class="pf-chip${e.id === cur ? ' is-on' : ''}" data-id="${e.id}">${esc(e.fullName)}</button>`).join('')}</div>`;
+                empsEl.querySelectorAll('.pf-chip').forEach(c => c.addEventListener('click', () => {
+                    if (+c.dataset.id === cur) return;
+                    cur = +c.dataset.id; paintEmps(); openMgr();
+                }));
+            };
+            const openMgr = () => {
+                const e = emps.find(x => x.id === cur);
+                PortfolioAdmin.mountManager(mgrEl, { employeeId: cur, employeeName: e ? e.fullName : '' });
+            };
+            paintEmps(); openMgr();
+        } catch (err) {
+            empsEl.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
+        }
+    }
+
+    // ---- Портфолио (служител): само своето ----
+    function renderMyPortfolio(box) {
+        box.innerHTML = `${sectionTitle('Моето портфолио', ACC.pf, '0 0 .3rem')}
+            <p class="hint" style="margin:0 0 1rem">Снимките се виждат в „Екип“, при „Виж снимки“ към процедурата и при записване на час.</p>
+            <div class="pfa-mgr"></div>`;
+        PortfolioAdmin.mountManager(box.querySelector('.pfa-mgr'), { employeeId: Session.userId(), employeeName: Session.name() });
+    }
+
     async function renderSettings(box) {
         box.innerHTML = `
             ${sectionTitle('Известия на телефона', ACC.set, '0 0 .3rem')}
@@ -1077,10 +1134,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="dash-panel" data-p="calendar"></div>
             <div class="dash-panel" data-p="earn" hidden></div>
             <div class="dash-panel" data-p="clients" hidden></div>
+            <div class="dash-panel" data-p="portfolio" hidden></div>
             <nav class="dash-nav dash-nav--3" aria-label="Навигация">
                 <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="earn"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Моите пари</span></button>
                 <button class="dash-tab" data-t="clients"><span class="dash-tab__ic">${Icon('users', { size: 20 })}</span><span class="dash-tab__lb">Клиенти</span></button>
+                <button class="dash-tab" data-t="portfolio"><span class="dash-tab__ic">${Icon('camera', { size: 20 })}</span><span class="dash-tab__lb">Портфолио</span></button>
             </nav>`;
         document.querySelectorAll('body > .dash-nav').forEach(n => n.remove());
         const eNav = list.querySelector('.dash-nav');
@@ -1090,8 +1149,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const ePanels = {};
         list.querySelectorAll('.dash-panel').forEach(p => ePanels[p.dataset.p] = p);
         const eLoaded = {};
-        const eLoaders = { calendar: mountEmployeeCalendars, earn: renderMyEarnings, clients: renderClients };
-        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-cli-soft)' };
+        const eLoaders = { calendar: mountEmployeeCalendars, earn: renderMyEarnings, clients: renderClients, portfolio: renderMyPortfolio };
+        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-cli-soft)', portfolio: 'var(--acc-pf-soft)' };
         const eShow = name => {
             eTabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
             Object.entries(ePanels).forEach(([k, el]) => el.hidden = k !== name);
@@ -1180,7 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="rev-stars" style="display:flex;gap:.25rem;font-size:1.7rem;color:#E7B100;cursor:pointer;margin-bottom:.7rem">
                     ${[1, 2, 3, 4, 5].map(n => `<span data-n="${n}">★</span>`).join('')}
                 </div>
-                <textarea class="input rev-comment" placeholder="Сподели впечатленията си (по избор)" style="min-height:90px"></textarea>
+                <textarea class="input rev-comment" maxlength="1000" placeholder="Сподели впечатленията си (по избор)" style="min-height:90px"></textarea>
                 <div style="display:flex;gap:.6rem;margin-top:.8rem">
                     <button class="btn btn--primary rev-send">Публикувай</button>
                     <button class="btn btn--ghost rev-cancel">Отказ</button>
@@ -1197,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await API.post('/reviews', { bookingId, rating, comment: host.querySelector('.rev-comment').value.trim() || null });
                 reviewedIds.add(bookingId);
-                host.innerHTML = `<div class="alert alert--ok">Благодарим за отзива! 💛</div>`;
+                host.innerHTML = `<div class="alert alert--ok" style="align-items:center">${Icon('heart', { size: 16 })} Благодарим за отзива!</div>`;
                 setTimeout(load, 900);
             } catch (err) {
                 host.querySelector('.rev-msg').innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
