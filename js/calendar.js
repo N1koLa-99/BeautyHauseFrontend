@@ -1139,7 +1139,7 @@ window.Calendar = (function () {
         // В „Целият салон" има и избор на специалист (за кого е часът).
         // В списъка с услуги има и „Почивка" (блокира време) и „Почивен ден" (цял ден).
         // opts: { dayKey, dur (маркирани минути), empId (от колоната), onClose }
-        const REST = 10; // стандартна почивка след процедура (като WorkingHours.RestBufferMinutes в backend-а)
+        const REST = 15; // стандартна почивка след процедура (като WorkingHours.RestBufferMinutes в backend-а)
         function openAddModal(hhmm, opts = {}) {
             document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
             const pickEmp = !!(cfg.showEmployee && cfg.employees && cfg.employees.length && cfg.servicesFor);

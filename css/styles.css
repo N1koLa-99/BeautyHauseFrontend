@@ -1534,7 +1534,7 @@ textarea.input { resize: vertical; min-height: 110px; }
 .sc.is-tiny .sc-bk__t { font-size: .66rem; }
 .sc-bk.is-flag { box-shadow: 0 0 0 2px #D9534F, 0 2px 8px rgba(217,83,79,.45); }
 /* Предстоящ час — по-ярък; минал/завършен — по-блед */
-.sc-bk.is-next { background: color-mix(in srgb, var(--bc) 58%, #fff); border-left-color: var(--bc); }
+.sc-bk.is-next { background: color-mix(in srgb, var(--bc) 46%, #fff); border-left-color: var(--bc); }
 .sc-bk.is-next:not(.is-flag) { box-shadow: 0 2px 6px rgba(0,0,0,.22); }
 .sc-bk.is-past, .sc-bk.is-done { background: color-mix(in srgb, var(--bc) 26%, #fff); border-left-color: color-mix(in srgb, var(--bc) 75%, #fff); }
 .sc-bk.is-past:not(.is-flag), .sc-bk.is-done:not(.is-flag) { box-shadow: none; }
