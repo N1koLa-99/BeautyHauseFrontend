@@ -1291,7 +1291,9 @@ window.Calendar = (function () {
                     // Специалистът може да го промени свободно — така си прави и почивката.
                     // По подразбиране: времето на процедурата. Ако в графика е маркиран
                     // по-дълъг период (напр. с почивка) — остава маркираното.
-                    const std = stdTotal() || 30;
+                    // + REST (15 мин почивка) по подразбиране — като онлайн записването:
+                    // процедура 1:30 -> часът заема 1:45 в графика.
+                    const std = stdTotal() ? stdTotal() + REST : 30;
                     // Редакция: първия път — текущото времетраене и цена на часа; при смяна на услугата — нейните.
                     if (ED && !edDurUsed) { edDurUsed = true; setHM(opts.dur || std); priceEl.value = fmtP(ED.priceSnapshot); }
                     else { setHM(ED ? std : Math.max(std, opts.dur || 0)); priceEl.value = fmtP(svcPrice[+svcSel.value]); }

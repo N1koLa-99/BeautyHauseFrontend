@@ -81,11 +81,7 @@
                         <a href="booking.html" class="btn btn--primary btn--lg" data-magnetic>Запази час <span class="btn__arrow" data-icon="arrow-right" data-icon-size="14"></span></a>
                         <a href="services.html" class="btn btn--outline-light btn--lg">Виж услугите <span class="btn__arrow" data-icon="arrow-right" data-icon-size="14"></span></a>
                     </div>
-                    <div class="hero__stats anim">
-                        <div class="hero__stat">
-                            <strong><b data-count="5.0">5.0</b><i aria-hidden="true">★</i></strong>
-                            <span>от 84 отзива</span>
-                        </div>
+                    <div class="hero__stats anim" id="hero-stats">
                         <div class="hero__stat">
                             <strong><b data-count="12">0</b><i>+</i></strong>
                             <span>години опит</span>
@@ -309,37 +305,13 @@
     </section>
 
     <!-- ================= ОТЗИВИ ================= -->
-    <section class="section" style="background:var(--sand)">
+    <!-- Само реални отзиви от /reviews — секцията стои скрита, докато няма нито един. -->
+    <section class="section" id="reviews-section" style="background:var(--sand)" hidden>
         <div class="container">
             <div class="section__head center">
                 <h2 class="reveal" data-delay="1">Доверието, което ни движи</h2>
             </div>
-            <div class="testimonials" id="reviews-list">
-                <article class="testimonial reveal">
-                    <div class="testimonial__stars"><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span></div>
-                    <p>„Най-добрата прическа, която съм имала. Екипът наистина слуша какво искаш.“</p>
-                    <div class="testimonial__who">
-                        <figure class="ph"><img src="img/client1.svg" alt="Клиент" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="user"></span></span></figure>
-                        <div><b>Мария Иванова</b><span>Редовен клиент</span></div>
-                    </div>
-                </article>
-                <article class="testimonial reveal" data-delay="1">
-                    <div class="testimonial__stars"><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span></div>
-                    <p>„Онлайн резервацията е супер удобна, а маникюрът — перфектен всеки път.“</p>
-                    <div class="testimonial__who">
-                        <figure class="ph"><img src="img/client2.svg" alt="Клиент" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="user"></span></span></figure>
-                        <div><b>George Petrov</b><span>Клиент от 2022</span></div>
-                    </div>
-                </article>
-                <article class="testimonial reveal" data-delay="2">
-                    <div class="testimonial__stars"><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span><span data-icon="star"></span></div>
-                    <p>„Атмосферата е спокойна и луксозна. Излизам всеки път по-уверена.“</p>
-                    <div class="testimonial__who">
-                        <figure class="ph"><img src="img/client3.svg" alt="Клиент" loading="lazy" onerror="this.closest('.ph')&&this.closest('.ph').classList.add('ph--broken')"><span class="ph__mark"><span data-icon="user"></span></span></figure>
-                        <div><b>Диана Стоянова</b><span>Редовен клиент</span></div>
-                    </div>
-                </article>
-            </div>
+            <div class="testimonials" id="reviews-list"></div>
         </div>
     </section>
 
@@ -394,7 +366,7 @@
 
     <script src="js/icons.js?v=20261005b"></script>
     <script src="js/config.js?v=20261007r2"></script>
-    <script src="js/fallback.js"></script>
+    <script src="js/fallback.js?v=20261008"></script>
     <script src="js/api.js"></script>
     <script src="js/auth.js?v=20261007sess"></script>
     <script src="js/courses-data.js"></script>
@@ -405,7 +377,7 @@
     <script src="js/interactions.js"></script>
     <script src="js/home.js?v=20261005b"></script>
     <script src="js/hero-typer.js"></script>
-    <script src="js/reviews.js"></script>
+    <script src="js/reviews.js?v=20261008"></script>
     <script src="js/catalog-data.js?v=20260929l"></script>
     <script src="js/catalog.js?v=20261007buf"></script>
 </body>

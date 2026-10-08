@@ -1,17 +1,33 @@
 /* =====================================================================
-   Началната секция „Отзиви" — тегли реални отзиви от /reviews.
-   Ако още няма — оставя статичните примери в HTML.
+   Началната страница — само РЕАЛНИ отзиви от /reviews.
+   • Секцията „Отзиви" стои скрита, докато няма нито един видим отзив.
+   • В hero-то „★ от N отзива" се показва само ако има отзиви
+     (средната оценка и броят са изчислени от тях — нищо измислено).
    ===================================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
     const box = document.getElementById('reviews-list');
-    if (!box) return;
-    try {
-        const reviews = await API.get('/reviews?take=6');
-        if (reviews && reviews.length) {
-            box.innerHTML = reviews.map(reviewCard).join('');
-            if (window.revealNew) revealNew(box);
-        }
-    } catch (e) { /* при грешка оставяме статичните примери */ }
+    const section = document.getElementById('reviews-section');
+    const stats = document.getElementById('hero-stats');
+    if (!box && !stats) return;
+    let reviews = [];
+    try { reviews = (await API.get('/reviews?take=500')) || []; } catch (e) { return; }
+    if (!reviews.length) return;
+
+    if (box && section) {
+        box.innerHTML = reviews.slice(0, 6).map(reviewCard).join('');
+        section.hidden = false;
+        if (window.revealNew) revealNew(box);
+    }
+    if (stats) {
+        const sum = reviews.reduce((a, r) => a + Math.max(1, Math.min(5, r.rating || 5)), 0);
+        const avg = (sum / reviews.length).toFixed(1);
+        const n = reviews.length;
+        stats.insertAdjacentHTML('afterbegin', `
+            <div class="hero__stat">
+                <strong><b>${avg}</b><i aria-hidden="true">★</i></strong>
+                <span>от ${n} ${n === 1 ? 'отзив' : 'отзива'}</span>
+            </div>`);
+    }
 });
 
 function reviewCard(r, i) {
