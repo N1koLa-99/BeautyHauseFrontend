@@ -79,6 +79,11 @@ window.Calendar = (function () {
     // Бялата (работна) част на графика = работното време на салона: пн–пт 09:00–18:30,
     // сб 10:00–14:30. Извън него е сиво, но пак може да се записва ръчно — записването
     // е 08:00–20:00 (BOOK_S/BOOK_E). Неделя остава сива (салонът е затворен).
+    // Почивка след процедура (мин) — като WorkingHours.RestBufferMinutes в backend-а.
+    const REST_MIN = 10;
+    // В избора на услуга персоналът вижда колко заема часът в графика:
+    // процедура + почивка, в часове (90 мин -> „1 ч 40 мин“).
+    const svcDurLabel = d => { const t = d + REST_MIN, h = Math.floor(t / 60), m = t % 60; return h ? `${h} ч${m ? ` ${m} мин` : ''}` : `${m} мин`; };
     const SALON_HOURS = { 0: null, 1: [540, 1110], 2: [540, 1110], 3: [540, 1110], 4: [540, 1110], 5: [540, 1110], 6: [600, 870] };
 
     // Геометрия на решетката. --hh = пиксели за 1 час, --cw = ширина на колона.
@@ -183,7 +188,7 @@ window.Calendar = (function () {
             const o = sel.selectedOptions[0];
             const m = o && o.value && o.text.match(/^(.*) · (\d+) мин$/);
             btn.disabled = !items().length;
-            btn.innerHTML = m ? `<span>${esc(m[1])}</span><small>${m[2]} мин</small>` : `<span>${esc(o ? o.text : '')}</span>`;
+            btn.innerHTML = m ? `<span>${esc(m[1])}</span><small>${svcDurLabel(+m[2])}</small>` : `<span>${esc(o ? o.text : '')}</span>`;
         }
         function renderList() {
             const all = items(), words = toLat(q).split(' ').filter(Boolean);
@@ -191,7 +196,7 @@ window.Calendar = (function () {
             catsEl.innerHTML = cats.length > 1 ? ['', ...cats].map(c =>
                 `<button type="button" class="svp-cat${c === cat ? ' is-on' : ''}" data-c="${esc(c)}">${c ? esc(c) : 'Всички'}</button>`).join('') : '';
             shown = [];
-            const row = it => `<button type="button" class="svp-it${it.v === sel.value ? ' is-sel' : ''}" data-i="${shown.push(it) - 1}" role="option"><span>${hl(it.name)}</span>${it.dur ? `<small>${it.dur} мин</small>` : ''}</button>`;
+            const row = it => `<button type="button" class="svp-it${it.v === sel.value ? ' is-sel' : ''}" data-i="${shown.push(it) - 1}" role="option"><span>${hl(it.name)}</span>${it.dur ? `<small>${svcDurLabel(it.dur)}</small>` : ''}</button>`;
             let html = '';
             if (!q && !cat) {
                 const rec = recent().map(v => all.find(i => i.v === v)).filter(Boolean);
@@ -1139,7 +1144,7 @@ window.Calendar = (function () {
         // В „Целият салон" има и избор на специалист (за кого е часът).
         // В списъка с услуги има и „Почивка" (блокира време) и „Почивен ден" (цял ден).
         // opts: { dayKey, dur (маркирани минути), empId (от колоната), onClose }
-        const REST = 10; // стандартна почивка след процедура (като WorkingHours.RestBufferMinutes в backend-а)
+        const REST = REST_MIN; // стандартна почивка след процедура (като WorkingHours.RestBufferMinutes в backend-а)
         function openAddModal(hhmm, opts = {}) {
             document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
             const pickEmp = !!(cfg.showEmployee && cfg.employees && cfg.employees.length && cfg.servicesFor);
