@@ -1139,7 +1139,7 @@ window.Calendar = (function () {
         // В „Целият салон" има и избор на специалист (за кого е часът).
         // В списъка с услуги има и „Почивка" (блокира време) и „Почивен ден" (цял ден).
         // opts: { dayKey, dur (маркирани минути), empId (от колоната), onClose }
-        const REST = 15; // стандартна почивка след процедура (като WorkingHours.RestBufferMinutes в backend-а)
+        const REST = 10; // стандартна почивка след процедура (като WorkingHours.RestBufferMinutes в backend-а)
         function openAddModal(hhmm, opts = {}) {
             document.querySelectorAll('.cal-modal-backdrop').forEach(x => x.remove());
             const pickEmp = !!(cfg.showEmployee && cfg.employees && cfg.employees.length && cfg.servicesFor);
@@ -1291,8 +1291,8 @@ window.Calendar = (function () {
                     // Специалистът може да го промени свободно — така си прави и почивката.
                     // По подразбиране: времето на процедурата. Ако в графика е маркиран
                     // по-дълъг период (напр. с почивка) — остава маркираното.
-                    // + REST (15 мин почивка) по подразбиране — като онлайн записването:
-                    // процедура 1:30 -> часът заема 1:45 в графика.
+                    // + REST (10 мин почивка) по подразбиране — като онлайн записването:
+                    // процедура 1:30 -> часът заема 1:40 в графика.
                     const std = stdTotal() ? stdTotal() + REST : 30;
                     // Редакция: първия път — текущото времетраене и цена на часа; при смяна на услугата — нейните.
                     if (ED && !edDurUsed) { edDurUsed = true; setHM(opts.dur || std); priceEl.value = fmtP(ED.priceSnapshot); }
