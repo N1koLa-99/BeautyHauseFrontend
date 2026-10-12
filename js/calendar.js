@@ -1444,6 +1444,12 @@ window.Calendar = (function () {
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
             else { if (opts.preset && SPECIAL) svcSel.value = opts.preset; if (ED) pickEditSvc(); fillDur(); } // единичен специалист: услугите вече са налични
             if (ED) { nameEl.value = ED.clientName || ''; phoneEl.value = ED.clientPhone || ''; }
+            // Онлайн час: клиентът е от профила си — име и телефон не се сменят тук.
+            if (ED && ED.isOnline) {
+                [nameEl, phoneEl].forEach(el => { el.readOnly = true; el.style.opacity = '.7'; });
+                knownEl.hidden = false;
+                knownEl.textContent = 'Онлайн час — клиентът е от профила си. Може да смениш процедурата, часа, времетраенето и цената.';
+            }
 
             saveBtn.addEventListener('click', async () => {
                 const employeeId = empSel ? +empSel.value : cfg.staffId;
@@ -1695,7 +1701,10 @@ window.Calendar = (function () {
             const canCancelWithReason = cfg.editable && cfg.cancelBooking && b.status === 'booked';
             let actions = '';
             if (cfg.editable) {
-                const canEdit = b.status === 'booked' && !b.isOnline && canAdd();
+                // Редакция: ръчни и онлайн часове (напр. сбъркана процедура); в чужд график — само ръчни.
+                const canEdit = b.status === 'booked' && (!b.isOnline || !cfg.shared) && canAdd();
+                // Изтриване: шефът — всеки час (deleteAny); служителката — предстоящите в своя график.
+                const canDel = !!cfg.deleteBk && (cfg.deleteAny || b.status === 'booked');
                 actions = `<div class="cal-modal__actions">
                     ${canEdit ? `<button class="btn btn--primary md-edit">Редактирай часа</button>` : ''}
                     ${cfg.setStatus ? `<button class="btn btn--gold md-present">${b.status === 'completed' ? 'Запази цената' : 'Приключи часа'}</button>
@@ -1706,8 +1715,8 @@ window.Calendar = (function () {
                         <span class="ad-hm">
                             <select class="md-h" aria-label="Часове">${Array.from({ length: 9 }, (_, h) => `<option value="${h}"${h === Math.floor(dur / 60) ? ' selected' : ''}>${h} ч</option>`).join('')}</select><span class="ad-hm__sep"></span>
                             <select class="md-m" aria-label="Минути">${[...new Set([...Array.from({ length: 12 }, (_, i) => i * 5), dur % 60])].sort((a, b) => a - b).map(m => `<option value="${m}"${m === dur % 60 ? ' selected' : ''}>${String(m).padStart(2, '0')} мин</option>`).join('')}</select>
-                        </span></div>
-                    <button class="btn btn--ghost md-del" style="color:#D9534F">Изтрий часа</button>` : ''}
+                        </span></div>` : ''}
+                    ${canDel ? `<button class="btn btn--ghost md-del" style="color:#D9534F">Изтрий часа</button>` : ''}
                 </div>`;
             }
 

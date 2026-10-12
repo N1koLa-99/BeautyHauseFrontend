@@ -52,13 +52,18 @@ document.addEventListener('DOMContentLoaded', () => {
         let services = [];
         const [svc, wh] = await Promise.all([API.get('/me/services').catch(() => []), workHoursFor(null)]);
         services = svc;
+        // Своя график: същото като Радина в нейния — отстъпка, времетраене, редакция и триене
+        // на предстоящи часове (ръчни и онлайн). Разликата е само, че не вижда чужди графици/пари.
         Calendar.mount(container, {
-            editable: true, staffId: BOSS_ID || Session.userId(), workHours: wh,
+            editable: true, canManage: true, staffId: BOSS_ID || Session.userId(), workHours: wh,
             services: (services || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes, price: s.price })),
             fetchMonth: (f, t) => API.get(`/me/calendar?from=${f}&to=${t}`),
             createBooking: (dto) => API.post('/me/bookings', dto),
             setStatus: (id, st, price) => API.patch(`/bookings/${id}/status`, price != null ? { status: st, price } : { status: st }),
-            cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason })
+            cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
+            setDiscount: (id, pct) => API.put(`/bookings/${id}/discount`, { discountPercent: pct }),
+            setDuration: (id, min) => API.put(`/bookings/${id}/duration`, { durationMinutes: min }),
+            deleteBk: (id) => API.del(`/bookings/${id}`)
         });
     }
     async function mountReadonlyCalendar(container, staffId) {
@@ -74,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
             setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
             setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
-            deleteBk: (id) => API.del(`/reports/bookings/${id}`)
+            deleteBk: (id) => API.del(`/reports/bookings/${id}`), deleteAny: true
         });
     }
     // Чужд график с достъп (напр. Анелия -> Радина): вижда часовете и записва нови,
@@ -135,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
             setDiscount: (id, pct) => API.put(`/reports/bookings/${id}/discount`, { discountPercent: pct }),
             setDuration: (id, min) => API.put(`/reports/bookings/${id}/duration`, { durationMinutes: min }),
-            deleteBk: (id) => API.del(`/reports/bookings/${id}`)
+            deleteBk: (id) => API.del(`/reports/bookings/${id}`), deleteAny: true
         });
     }
 
@@ -1136,11 +1141,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="dash-panel" data-p="earn" hidden></div>
             <div class="dash-panel" data-p="clients" hidden></div>
             <div class="dash-panel" data-p="portfolio" hidden></div>
+            <div class="dash-panel" data-p="settings" hidden></div>
             <nav class="dash-nav dash-nav--3" aria-label="Навигация">
                 <button class="dash-tab" data-t="calendar"><span class="dash-tab__ic">${Icon('calendar-check', { size: 20 })}</span><span class="dash-tab__lb">График</span></button>
                 <button class="dash-tab" data-t="earn"><span class="dash-tab__ic">${Icon('chart', { size: 20 })}</span><span class="dash-tab__lb">Моите пари</span></button>
                 <button class="dash-tab" data-t="clients"><span class="dash-tab__ic">${Icon('users', { size: 20 })}</span><span class="dash-tab__lb">Клиенти</span></button>
                 <button class="dash-tab" data-t="portfolio"><span class="dash-tab__ic">${Icon('camera', { size: 20 })}</span><span class="dash-tab__lb">Портфолио</span></button>
+                <button class="dash-tab" data-t="settings"><span class="dash-tab__ic">${Icon('gear', { size: 20 })}</span><span class="dash-tab__lb">Настройки</span></button>
             </nav>`;
         document.querySelectorAll('body > .dash-nav').forEach(n => n.remove());
         const eNav = list.querySelector('.dash-nav');
@@ -1150,8 +1157,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const ePanels = {};
         list.querySelectorAll('.dash-panel').forEach(p => ePanels[p.dataset.p] = p);
         const eLoaded = {};
-        const eLoaders = { calendar: mountEmployeeCalendars, earn: renderMyEarnings, clients: renderClients, portfolio: renderMyPortfolio };
-        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-cli-soft)', portfolio: 'var(--acc-pf-soft)' };
+        const eLoaders = { calendar: mountEmployeeCalendars, earn: renderMyEarnings, clients: renderClients, portfolio: renderMyPortfolio, settings: renderEmpSettings };
+        const eBg = { calendar: 'var(--acc-cal-soft)', earn: 'var(--acc-stats-soft)', clients: 'var(--acc-cli-soft)', portfolio: 'var(--acc-pf-soft)', settings: 'var(--acc-set-soft)' };
         const eShow = name => {
             eTabs.forEach(t => t.classList.toggle('active', t.dataset.t === name));
             Object.entries(ePanels).forEach(([k, el]) => el.hidden = k !== name);
@@ -1163,6 +1170,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const eWanted = new URLSearchParams(location.search).get('tab');
         eShow(eLoaders[eWanted] ? eWanted : (eWanted === 'noshow' ? 'clients' : 'calendar'));
         return;
+    }
+
+    // Настройки на служителката — само известията на телефона (js/push.js).
+    function renderEmpSettings(box) {
+        box.innerHTML = `
+            ${sectionTitle('Известия на телефона', ACC.set, '0 0 .3rem')}
+            <p class="hint" style="margin:0 0 .9rem">Нов или отменен онлайн час в твоя график и часове, които Радина ти добави.</p>
+            <div class="push-host"></div>`;
+        if (window.StaffPush) StaffPush.mount(box.querySelector('.push-host'), { hint: 'Включва се отделно на всяко устройство.' });
+        else box.querySelector('.push-host').innerHTML = `<div class="alert alert--info">Известията не са налични в този браузър.</div>`;
     }
 
     // Собствена печалба за период (служителката вижда само своята).
