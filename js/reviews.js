@@ -2,7 +2,7 @@
    Началната страница — само РЕАЛНИ отзиви.
    • Взимат се отзивите на всяка специалистка (/reviews/employee/{id} —
      и тези само със звезди, без текст) + общия /reviews; без дубли.
-   • Над картите: средна оценка + брой. В hero-то „★ от N отзива".
+   • Над картите: средна оценка (без брой). В hero-то „5,0 ★ оценка".
    • Няма отзиви -> „Все още няма отзиви“ (нищо измислено).
    ===================================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const n = reviews.length;
     const avg = reviews.reduce((a, r) => a + clampR(r.rating), 0) / n;
     const avgTxt = avg.toLocaleString('bg-BG', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-    const cnt = `${n} ${n === 1 ? 'отзив' : 'отзива'}`;
 
     if (box && section) {
         const shown = reviews.slice(0, 6);
@@ -36,7 +35,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="rv-summary reveal">
                 <b class="rv-summary__avg">${avgTxt}</b>
                 <span class="rv-summary__stars">${starRow(Math.round(avg), 20)}</span>
-                <span class="rv-summary__cnt">от ${cnt} на наши клиентки</span>
             </div>`);
         box.innerHTML = shown.map(reviewCard).join('');
         // 1–2 отзива -> центрирани, а не залепени вляво в мрежата от 3 колони.
@@ -48,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         stats.insertAdjacentHTML('afterbegin', `
             <div class="hero__stat">
                 <strong><b>${avgTxt}</b><i aria-hidden="true">★</i></strong>
-                <span>от ${cnt}</span>
+                <span>оценка</span>
             </div>`);
     }
 });

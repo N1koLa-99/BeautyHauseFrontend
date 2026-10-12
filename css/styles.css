@@ -912,7 +912,7 @@ em, .italic { font-style: italic; }
 }
 .hero__stat {
     position: relative; min-width: 0;
-    display: flex; flex-direction: column; align-items: flex-start; gap: .45rem;
+    display: flex; flex-direction: column; align-items: flex-start; gap: .85rem;
     padding: .15rem clamp(1.3rem, 3.2vw, 2.4rem);
 }
 .hero__stat:first-child { padding-left: 0; }
@@ -2025,12 +2025,13 @@ textarea.input { resize: vertical; min-height: 110px; }
     /* Статистиката — пак на един ред: три равни колони с наклонени линии между тях. */
     .hero__stats {
         margin-top: calc(1rem + (100svh - 667px) * .025); padding-top: calc(.9rem + (100svh - 667px) * .02);
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, auto); justify-content: space-between;
     }
-    .hero__stat { padding: .1rem .7rem 0 1rem; gap: .3rem; }
+    /* Размерите следват ширината на екрана -> три колони на един ред и на малък (320px), и на голям телефон. */
+    .hero__stat { padding: .1rem clamp(.4rem, 2vw, .7rem) 0 clamp(.7rem, 3.4vw, 1.1rem); gap: .6rem; }
     .hero__stat:first-child { padding-left: 0; }
-    .hero__stat strong { font-size: 1.7rem; }
-    .hero__stat span { font-size: .52rem; letter-spacing: .1em; }
+    .hero__stat strong { font-size: clamp(1.45rem, 7.2vw, 1.9rem); }
+    .hero__stat span { font-size: clamp(.47rem, 2.25vw, .6rem); letter-spacing: .07em; white-space: normal; line-height: 1.35; }
     .hero__scrollcue { display: none; }
 
     .footer__grid { grid-template-columns: 1fr; gap: 28px; }
