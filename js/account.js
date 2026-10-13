@@ -828,6 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? lastRows.filter(r => r.key !== cardEl.dataset.key && r.key.charAt(0) === 'p' && nameKey(r.name) === nameKey(cardEl.dataset.name)) : [];
                 const actBar = `
                     <div class="cl-acts">
+                        ${cardEl.classList.contains('is-bad') ? `<button type="button" class="btn btn--gold cl-ok-btn">Коректен е ✓</button>` : ''}
                         <button type="button" class="btn btn--ghost cl-edit-btn">Редактирай</button>
                         ${mergeTo.map(r => `<button type="button" class="btn btn--gold cl-merge-btn" data-name="${esc(r.name)}" data-phone="${esc(r.phone || '')}">Обедини с ${esc(r.phone || '')}</button>`).join('')}
                         ${canDel ? `<button type="button" class="btn btn--ghost cl-del-btn">Изтрий</button>` : ''}
@@ -894,6 +895,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 mergeBtn.disabled = true;
                 try { await API.put(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`, { name: nm, phone: ph }); await load(); }
                 catch (err) { alert(err.message); mergeBtn.disabled = false; }
+                return;
+            }
+            // „Коректен е“ -> неявяванията стават „Отменен“, клиентът излиза от некоректните.
+            const okBtn = e.target.closest('.cl-ok-btn');
+            if (okBtn) {
+                const cardEl = okBtn.closest('.cl-card');
+                if (!confirm(`${cardEl.dataset.name || 'Клиентът'} да не се води некоректен?\n\nЧасовете „Не се яви“ стават „Отменен“ и предупреждението изчезва от графика.`)) return;
+                okBtn.disabled = true;
+                try { await API.post(`/clients/clear-noshow?key=${encodeURIComponent(cardEl.dataset.key)}`, {}); await load(); }
+                catch (err) { alert(err.message); okBtn.disabled = false; }
                 return;
             }
             const delBtn = e.target.closest('.cl-del-btn');
