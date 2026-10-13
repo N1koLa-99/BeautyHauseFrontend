@@ -1420,9 +1420,22 @@ window.Calendar = (function () {
                     acMute = true; phoneEl.dispatchEvent(new Event('input')); acMute = false;   // -> „познат клиент“ отдолу
                 }
             }
+            // Мишка -> избира веднага (без да губи фокуса). Пръст -> само при докосване без плъзгане,
+            // иначе списъкът/прозорецът се скролват нормално.
+            let acTouch = null;
             acEl.addEventListener('pointerdown', e => {
                 const b = e.target.closest('.ad-ac__it'); if (!b) return;
-                e.preventDefault(); acPick(acList[+b.dataset.i]);
+                if (e.pointerType === 'mouse') { e.preventDefault(); acPick(acList[+b.dataset.i]); return; }
+                acTouch = { b, x: e.clientX, y: e.clientY };
+            });
+            acEl.addEventListener('pointermove', e => {
+                if (acTouch && Math.hypot(e.clientX - acTouch.x, e.clientY - acTouch.y) > 8) acTouch = null;
+            });
+            acEl.addEventListener('pointercancel', () => { acTouch = null; });   // браузърът пое скрола
+            acEl.addEventListener('pointerup', e => {
+                const t = acTouch; acTouch = null;
+                if (!t || e.target.closest('.ad-ac__it') !== t.b) return;
+                e.preventDefault(); acPick(acList[+t.b.dataset.i]);
             });
             [nameEl, phoneEl].forEach(el => {
                 el.addEventListener('input', () => acQuery(el));
