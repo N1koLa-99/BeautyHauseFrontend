@@ -40,6 +40,22 @@ window.Calendar = (function () {
     const hhmmToMin = v => { const p = (v || '').split(':'); return p.length < 2 ? null : (+p[0]) * 60 + (+p[1]); };
     const addMinIso = (iso, mins) => { const d = new Date(iso); d.setMinutes(d.getMinutes() + mins); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`; };
     const WDNAMES = ['неделя', 'понеделник', 'вторник', 'сряда', 'четвъртък', 'петък', 'събота'];
+    // Всички клиенти — зареждат се веднъж и се търси в тях на място (подсказките излизат веднага).
+    // Опреснява се във фонов режим при всяко отваряне на формата (дотогава се търси в стария списък).
+    const CL = { list: null, at: 0, p: null };
+    function clientsLoad(fresh) {
+        if (CL.p) return CL.p;
+        if (CL.list && !(fresh && Date.now() - CL.at > 5000)) return Promise.resolve(CL.list);
+        CL.p = window.API.get('/clients').then(r => {
+            CL.list = (r || []).filter(c => c.name).map(c => {
+                const n = String(c.name).toLowerCase();
+                return Object.assign({}, c, { _n: n, _w: n.split(/\s+/), _d: String(c.phone || '').replace(/\D/g, '') });
+            });
+            CL.at = Date.now();
+            return CL.list;
+        }).finally(() => { CL.p = null; });
+        return CL.p;
+    }
     // Видимата част от денонощието в графика: 08:00–20:00 (извън нея салонът не работи).
     const DAY_S = 7 * 60 + 30, DAY_E = 20 * 60 + 30, SPAN = DAY_E - DAY_S;   // видимо: 07:30–20:30 (по половин час буфер)
     const BOOK_S = 8 * 60, BOOK_E = 20 * 60;                                 // записване: 08:00–20:00
@@ -1202,7 +1218,7 @@ window.Calendar = (function () {
                         <div class="ad-off-note hint" style="display:none">Целият ден ще е почивен — никой няма да може да си запише час. Отменя се с клик върху деня в графика.</div>
                         <div class="ad-pair ad-row-client">
                             <label class="field"><span class="ad-lbl">Име на клиента</span>
-                                <input class="input ad-name" type="text" placeholder="напр. Мария" autocomplete="off"></label>
+                                <input class="input ad-name" type="text" placeholder="напр. Мария" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></label>
                             <label class="field"><span class="ad-lbl">Телефон <small>(по избор)</small></span>
                                 <input class="input ad-phone" type="tel" placeholder="+359…" autocomplete="off"></label>
                         </div>
@@ -1381,36 +1397,60 @@ window.Calendar = (function () {
             const acEl = document.createElement('div');
             acEl.className = 'ad-ac'; acEl.hidden = true;
             $('.ad-row-client').appendChild(acEl);
-            let acT = null, acSeq = 0, acList = [], acAct = -1, acMute = false;
-            const acHide = () => { acEl.hidden = true; acList = []; acAct = -1; };
-            // Първо тези, чието име започва с написаното, после — някоя дума от името.
-            const acRank = (c, q) => {
-                const n = String(c.name || '').toLowerCase(), ql = q.toLowerCase();
-                if (n.startsWith(ql)) return 0;
-                return n.split(/\s+/).some(w => w.startsWith(ql)) ? 1 : 2;
-            };
-            function acPaint() {
+            let acSeq = 0, acList = [], acAct = -1, acMute = false, acQ = null;
+            const acHide = () => { acEl.hidden = true; acList = []; acAct = -1; acQ = null; };
+            const ph0 = d => d.startsWith('359') ? '0' + d.slice(3) : d;   // +359 888… == 0888…
+            // 0 — името започва с написаното, 1 — някоя дума от името, 2 — съдържа го, 3 — по телефона.
+            function acRank(c, q, qd) {
+                if (c._n.startsWith(q)) return 0;
+                if (c._w.some(w => w.startsWith(q))) return 1;
+                if (q.length >= 3 && c._n.includes(q)) return 2;
+                if (qd.length >= 2 && c._d && (c._d.includes(qd) || ph0(c._d).includes(ph0(qd)))) return 3;
+                return -1;
+            }
+            function acPaint(scroll) {
                 if (!acList.length) { acHide(); return; }
                 acEl.innerHTML = acList.map((c, i) => `<button type="button" class="ad-ac__it${i === acAct ? ' is-act' : ''}" data-i="${i}">
                     <b>${esc(c.name)}</b><span>${esc(c.phone || 'без телефон')}${c.hasAccount ? ' · профил' : ''}${c.noShow ? ` · <em>⚠ ${c.noShow}× не се яви</em>` : ''}</span></button>`).join('');
+                const wasHidden = acEl.hidden;
                 acEl.hidden = false;
-                acEl.scrollIntoView({ block: 'nearest' });
+                if (wasHidden || scroll) acEl.scrollIntoView({ block: 'nearest' });
+                if (!wasHidden && !scroll) acEl.scrollTop = 0;
             }
-            function acQuery(src) {
-                if (acMute) return;
-                clearTimeout(acT);
-                const q = src.value.trim(), digits = q.replace(/\D/g, '');
-                if (src === phoneEl ? digits.length < 3 : q.length < 2) { acHide(); return; }
-                acT = setTimeout(async () => {
-                    const my = ++acSeq;
-                    try {
-                        const r = await window.API.get(`/clients?q=${encodeURIComponent(q)}`);
-                        if (my !== acSeq) return;
-                        acList = (r || []).filter(c => c.name).sort((a, b) => acRank(a, q) - acRank(b, q)).slice(0, 6);
-                        acAct = -1; acPaint();
-                    } catch (e) { acHide(); }
-                }, 250);
+            function acFilter(list, raw, src) {
+                const q = raw.toLowerCase().replace(/\s+/g, ' '), qd = raw.replace(/\D/g, '');
+                const byPhone = src === phoneEl || (qd && qd.length === raw.replace(/[\s+()-]/g, '').length);
+                const out = [];
+                for (const c of list) {
+                    const r = byPhone ? (qd.length >= 2 && c._d && (c._d.includes(qd) || ph0(c._d).includes(ph0(qd))) ? 3 : -1) : acRank(c, q, qd);
+                    if (r >= 0) out.push([r, c]);
+                }
+                out.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name, 'bg'));
+                return out.slice(0, 30).map(x => x[1]);
             }
+            // Търси на място в заредения списък — без чакане на сървъра.
+            async function acQuery(src) {
+                if (acMute || src.readOnly) return;
+                const raw = src.value.trim();
+                if (!raw || (src === phoneEl && raw.replace(/\D/g, '').length < 2)) { acHide(); return; }
+                if (raw === acQ && !acEl.hidden) return;   // keyup/compositionend след input — нищо ново
+                acQ = raw;
+                const my = ++acSeq;
+                let list = CL.list;
+                if (!list) {
+                    try { list = await clientsLoad(); }
+                    catch (e) {   // списъкът не се зареди -> търсене в сървъра
+                        try {
+                            const r = await window.API.get(`/clients?q=${encodeURIComponent(raw)}`);
+                            list = (r || []).filter(c => c.name).map(c => { const n = String(c.name).toLowerCase(); return Object.assign({}, c, { _n: n, _w: n.split(/\s+/), _d: String(c.phone || '').replace(/\D/g, '') }); });
+                        } catch (e2) { list = []; }
+                    }
+                    if (my !== acSeq || document.activeElement !== src) return;
+                }
+                acList = acFilter(list, src.value.trim(), src);
+                acAct = -1; acPaint();
+            }
+            clientsLoad(true).catch(() => {});   // зарежда/опреснява списъка още докато формата се отваря
             function acPick(c) {
                 if (!c) return;
                 nameEl.value = c.name;
@@ -1438,13 +1478,21 @@ window.Calendar = (function () {
                 e.preventDefault(); acPick(acList[+t.b.dataset.i]);
             });
             [nameEl, phoneEl].forEach(el => {
-                el.addEventListener('input', () => acQuery(el));
-                el.addEventListener('blur', () => setTimeout(acHide, 150));
+                // iOS понякога не праща „input“ при предложенията на клавиатурата -> и keyup/compositionend.
+                ['input', 'keyup', 'compositionend'].forEach(ev => el.addEventListener(ev, e => {
+                    if (e.type === 'keyup' && /^(Arrow|Enter|Escape|Tab)/.test(e.key)) return;
+                    acQuery(el);
+                }));
+                el.addEventListener('focus', () => { acQ = null; acQuery(el); });
+                el.addEventListener('blur', () => setTimeout(() => {
+                    if (document.activeElement !== nameEl && document.activeElement !== phoneEl) acHide();
+                }, 200));
                 el.addEventListener('keydown', e => {
                     if (acEl.hidden || !acList.length) return;
                     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         e.preventDefault();
-                        acAct = (acAct + (e.key === 'ArrowDown' ? 1 : -1) + acList.length) % acList.length; acPaint();
+                        acAct = (acAct + (e.key === 'ArrowDown' ? 1 : -1) + acList.length) % acList.length; acPaint(true);
+                        const it = acEl.children[acAct]; if (it) it.scrollIntoView({ block: 'nearest' });
                     } else if (e.key === 'Enter' && acAct >= 0) { e.preventDefault(); acPick(acList[acAct]); }
                     else if (e.key === 'Escape') { e.stopPropagation(); acHide(); }
                 });
