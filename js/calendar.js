@@ -2,8 +2,8 @@
    График за служител/шеф.
    Calendar.mount(container, cfg):
      cfg.editable     – true => може ръчно добавяне на час + маркиране
-     cfg.shared       – чужд график с достъп (напр. Анелия -> Радина): само часове,
-                        без почивки/„Запазено“/почивни дни и без статуси
+     cfg.shared       – чужд график с достъп (напр. Анелия -> Радина): пълен достъп
+                        (часове, статуси, „Запазено“, почивки, почивни дни), но без пари
      cfg.hidePrices   – не показва цени (чужди пари)
      cfg.staffId      – id-то на служителя (за свободни часове)
      cfg.services     – [{serviceId, serviceName, durationMinutes}] (за формата)
@@ -373,9 +373,18 @@ window.Calendar = (function () {
         const toMin = iso => (+iso.slice(11, 13)) * 60 + (+iso.slice(14, 16));
         const endMin = b => b.endAt ? toMin(b.endAt) : toMin(b.startAt) + 30;
         const listFor = k => { const a = data[k] || []; return empFilter != null ? a.filter(b => b.employeeId === empFilter) : a; };
+        // Застъпване: ръчно въведен час може да легне върху друг час на същата специалистка
+        // (онлайн през сайта — никога). Такива часове се оцветяват в червено, за да се оправят.
+        const isActiveBk = b => b.status === 'booked' || b.status === 'completed';
+        const clashesOf = b => {
+            if (!b || !isActiveBk(b)) return [];
+            const s = b.startAt.slice(0, 16), e = (b.endAt || b.startAt).slice(0, 16);
+            return (data[b.startAt.slice(0, 10)] || []).filter(x => x.id !== b.id && x.employeeId === b.employeeId && isActiveBk(x)
+                && x.startAt.slice(0, 16) < e && (x.endAt || x.startAt).slice(0, 16) > s);
+        };
         const offsFor = k => { const a = offs[k] || []; return empFilter != null ? a.filter(o => o.employeeId === empFilter) : a; };
         // Почивки/почивни дни: за служител (собствения график) и шефа (чужд / целия салон).
-        const canRest = () => !!(cfg.editable && !cfg.shared && (cfg.staffId || hasEmps()));
+        const canRest = () => !!(cfg.editable && (cfg.staffId || hasEmps()));
         const ITEM_SEL = '.sc-bk, .sc-dayoff, .sc-offtag, .sc-sel.is-pend';
 
         function visibleDays() {
@@ -525,14 +534,15 @@ window.Calendar = (function () {
                 const done = b.status === 'completed' ? '<i class="sc-bk__ok" title="Завършен">✓</i>' : '';
                 // Минал (вече свършил) час -> по-блед; предстоящ -> по-ярък.
                 const past = (b.endAt || b.startAt).slice(0, 16) <= nowStamp;
-                const cls = `sc-bk${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}${past ? ' is-past' : ' is-next'}`;
+                const clash = clashesOf(b).length > 0;
+                const cls = `sc-bk${clash ? ' is-clash' : ''}${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}${past ? ' is-past' : ' is-next'}`;
                 const online = b.isOnline
                     ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
                 return `<button type="button" class="${cls}" data-l="${dl}" data-id="${b.id}" data-k="${b.startAt.slice(0, 10)}" style="${pos};--bc:${c}">
                     <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
                     <span class="sc-bk__s">${esc(b.serviceName)}</span>
                     <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
-                    ${online}${done}
+                    ${online}${done}${clash ? '<i class="sc-bk__clash" title="Застъпва се с друг час">!</i>' : ''}
                 </button>`;
             }).join('');
         }
@@ -735,7 +745,8 @@ window.Calendar = (function () {
                 const dot = cnt ? (cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76')) : '';
                 const items = arr.slice(0, 3).map(b => {
                     const c = (b.noShowCount > 0 || b.status === 'no_show') ? '#D9534F' : empColor(b.employeeId);
-                    return `<span class="sc-mi${b.status === 'cancelled' ? ' is-cancel' : ''}" style="--bc:${c}"><b>${b.startAt.slice(11, 16)}</b> ${esc(b.serviceName)}</span>`;
+                    const clash = clashesOf(b).length > 0;
+                    return `<span class="sc-mi${b.status === 'cancelled' ? ' is-cancel' : ''}${clash ? ' is-clash' : ''}" style="--bc:${c}"><b>${b.startAt.slice(11, 16)}</b> ${clash ? '⚠ ' : ''}${esc(b.serviceName)}</span>`;
                 }).join('');
                 return `<button type="button" class="sc-mc${other ? ' is-other' : ''}${workHours[d.getDay()] ? '' : ' is-off'}${k === tk ? ' is-today' : ''}${k === selKey ? ' is-sel' : ''}" data-k="${k}">
                     <span class="sc-mc__n">${d.getDate()}${dot ? `<i style="background:${dot}"></i>` : ''}</span>
@@ -1174,10 +1185,10 @@ window.Calendar = (function () {
             const dd = parseK(dayKey);
             const presetEmp = opts.empId != null ? opts.empId : empFilter;
             const ED = opts.edit || null;   // редакция на съществуващ ръчен час
-            // Чужд график (Анелия -> Радина): само „Запазено“, без почивки и почивни дни.
+            // И в чужд график с достъп (Анелия -> Радина) — всичко: „Запазено“, почивка, почивен ден.
             const SPECIAL = ED ? '' : canRest()
                 ? `<option value="__resv">Запазено (без клиент)</option><option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>`
-                : (cfg.shared && cfg.editable ? `<option value="__resv">Запазено (без клиент)</option>` : '');
+                : '';
 
             let timeOpts = '';
             for (let mm = BOOK_S; mm < BOOK_E; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
@@ -1217,7 +1228,7 @@ window.Calendar = (function () {
                                 <span class="ad-eur"><input class="input ad-price" type="number" min="0" step="0.5" inputmode="decimal"><i>€</i></span></label>
                         </div>
                         <div class="ad-extras"></div>
-                        ${ED ? '' : `<button type="button" class="btn btn--ghost ad-add-x">+ Още процедура за същия клиент</button>`}
+                        <button type="button" class="btn btn--ghost ad-add-x">+ Още процедура за същия клиент</button>
                         <div class="ad-row-note">
                             <label class="field"><span class="ad-lbl">Пояснение <small>(по избор)</small></span>
                                 <input class="input ad-bnote" type="text" maxlength="200" placeholder="напр. Почивам"></label>
@@ -1274,12 +1285,21 @@ window.Calendar = (function () {
             const svcOptsHtml = () => [...svcSel.options].filter(o => o.value && !o.value.startsWith('__'))
                 .map(o => `<option value="${o.value}">${esc(o.text)}</option>`).join('');
             const xRows = () => [...extrasEl.querySelectorAll('.ad-x')];
+            // Редакция: времето на часа преди първата добавена процедура (към него се добавят новите).
+            let edBase = null;
+            const xStd = () => xRows().reduce((s, r) => s + (svcDur[+r.querySelector('.ad-x-svc').value] || 0), 0);
+            const fitX = () => {
+                if (!ED) return setHM(Math.max(stdTotal(), opts0()));
+                if (edBase == null) edBase = hmVal();
+                setHM(edBase + xStd());
+            };
             const stdTotal = () => (svcDur[+svcSel.value] || 0) + xRows().reduce((s, r) => s + (svcDur[+r.querySelector('.ad-x-svc').value] || 0), 0);
             const numP = el => { const v = String(el.value).trim().replace(',', '.'); return v === '' ? null : +v; };
             function renumberX() { xRows().forEach((r, i) => { r.querySelector('.ad-x-n').textContent = `Процедура ${i + 2}`; }); }
             function addExtra() {
                 const oh = svcOptsHtml();
                 if (!oh) return;
+                if (ED && edBase == null) edBase = hmVal();
                 const row = document.createElement('div');
                 row.className = 'ad-x';
                 row.innerHTML = `<div class="ad-x__top"><span class="ad-lbl ad-x-n"></span><button type="button" class="ad-x__del" aria-label="Махни процедурата">×</button></div>
@@ -1288,10 +1308,10 @@ window.Calendar = (function () {
                         <span class="ad-eur"><input class="input ad-x-price" type="number" min="0" step="0.5" inputmode="decimal"><i>€</i></span></label>`;
                 extrasEl.appendChild(row);
                 const sel = row.querySelector('.ad-x-svc'), pr = row.querySelector('.ad-x-price');
-                const onSvc = () => { pr.value = fmtP(svcPrice[+sel.value]); setHM(Math.max(stdTotal(), opts0())); paintSum(); };
+                const onSvc = () => { pr.value = fmtP(svcPrice[+sel.value]); fitX(); paintSum(); };
                 sel.addEventListener('change', onSvc);
                 pr.addEventListener('input', paintSum);
-                row.querySelector('.ad-x__del').addEventListener('click', () => { row.remove(); renumberX(); setHM(Math.max(stdTotal(), opts0())); paintSum(); });
+                row.querySelector('.ad-x__del').addEventListener('click', () => { row.remove(); renumberX(); fitX(); paintSum(); });
                 svcPicker(sel, () => (empSel ? empSel.value : cfg.staffId));
                 renumberX();
                 const b = row.querySelector('.svp-btn'); if (b) b.click();
@@ -1326,7 +1346,7 @@ window.Calendar = (function () {
                     const std = stdTotal() ? stdTotal() + REST : 30;
                     // Редакция: първия път — текущото времетраене и цена на часа; при смяна на услугата — нейните.
                     if (ED && !edDurUsed) { edDurUsed = true; setHM(opts.dur || std); priceEl.value = fmtP(ED.priceSnapshot); }
-                    else { setHM(ED ? std : Math.max(std, opts.dur || 0)); priceEl.value = fmtP(svcPrice[+svcSel.value]); }
+                    else { setHM(ED ? std : Math.max(std, opts.dur || 0)); priceEl.value = fmtP(svcPrice[+svcSel.value]); if (ED && edBase != null) edBase = hmVal() - xStd(); }
                 }
                 paintMode();
             }
@@ -1564,6 +1584,7 @@ window.Calendar = (function () {
                     if (!dto.guestName) return err('Въведи име на клиента.');
                     if (ED) {
                         const body = { serviceId: dto.serviceId, startAt, procedureMinutes: dto.procedureMinutes, price: dto.price, guestName: dto.guestName, guestPhone: dto.guestPhone };
+                        if (xs.length) body.extras = xs;   // добавени процедури за същия клиент
                         if (empSel) body.employeeId = employeeId;
                         run = () => window.API.put(`/bookings/${ED.id}/edit`, body);
                         saveBtn.disabled = true; saveBtn.style.opacity = .7;
@@ -1683,7 +1704,7 @@ window.Calendar = (function () {
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
                     ${!isOff && o.note ? `<div class="rm-note">${esc(o.note)}</div>` : ''}
                     <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
-                    ${cfg.editable && (!cfg.shared || resv) ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-time-edit">Редактирай времето</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
+                    ${cfg.editable ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-time-edit">Редактирай времето</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
             document.body.appendChild(backdrop);
@@ -1752,6 +1773,12 @@ window.Calendar = (function () {
 
             const warn = flagged
                 ? `<div style="background:#D9534F;color:#fff;font-weight:800;font-size:.78rem;padding:.5rem .8rem;border-radius:12px;margin-bottom:1rem">⚠ Некоректен клиент · ${b.noShowCount}× не се е явявал(а)</div>` : '';
+            // Застъпване с друг час на същата специалистка -> с кой и какво да се направи.
+            const clashes = clashesOf(b);
+            const clashWarn = clashes.length
+                ? `<div class="md-clash"><b>⚠ Застъпва се с:</b>${clashes.map(x =>
+                    `<span>${x.startAt.slice(11, 16)}–${(x.endAt || '').slice(11, 16)} · ${esc(x.clientName || 'Клиент')} · ${esc(x.serviceName)}</span>`).join('')}
+                    <small>Премести или скъси единия час, за да не се застъпват.</small></div>` : '';
 
             // Цена, която може да се поправи при затваряне на часа („Присъства“) —
             // напр. клиентът е платил друга сума. Важи и за минали часове.
@@ -1776,12 +1803,12 @@ window.Calendar = (function () {
             let actions = '';
             if (cfg.editable) {
                 // Редакция: ръчни и онлайн часове (напр. сбъркана процедура); в чужд график — само ръчни.
-                const canEdit = b.status === 'booked' && (!b.isOnline || !cfg.shared) && canAdd();
+                const canEdit = b.status === 'booked' && canAdd();
                 // Изтриване: шефът — всеки час (deleteAny); служителката — предстоящите в своя график.
                 const canDel = !!cfg.deleteBk && (cfg.deleteAny || b.status === 'booked');
                 actions = `<div class="cal-modal__actions">
                     ${canEdit ? `<button class="btn btn--primary md-edit">Редактирай часа</button>` : ''}
-                    ${cfg.setStatus ? `<button class="btn btn--gold md-present">${b.status === 'completed' ? 'Запази цената' : 'Приключи часа'}</button>
+                    ${cfg.setStatus && !(cfg.hidePrices && b.status === 'completed') ? `<button class="btn btn--gold md-present">${b.status === 'completed' ? 'Запази цената' : 'Приключи часа'}</button>
                     <button class="btn btn--ghost md-absent">Не присъства</button>` : ''}
                     ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">${b.isOnline ? 'Отмени часа на клиента' : 'Отмени часа'}</button>` : ''}
                     ${canManage ? `
@@ -1799,7 +1826,7 @@ window.Calendar = (function () {
             backdrop.innerHTML = `
                 <div class="cal-modal">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
-                    ${warn}
+                    ${warn}${clashWarn}
                     <div class="cal-modal__title">${esc(b.serviceName)}</div>
                     <div class="cal-modal__meta hint">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${cfg.showEmployee ? ' · ' + esc(b.employeeName) : ''} <span class="alert ${st.cls}" style="padding:.12rem .5rem;font-size:.72rem">${st.label}</span></div>
                     <div class="cal-modal__rows">

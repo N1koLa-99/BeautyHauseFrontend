@@ -82,15 +82,20 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteBk: (id) => API.del(`/reports/bookings/${id}`), deleteAny: true
         });
     }
-    // Чужд график с достъп (напр. Анелия -> Радина): вижда часовете и записва нови,
-    // без цени, без почивки/„Запазено“ и без „присъства/не присъства“.
+    // Чужд график с достъп (напр. Анелия -> Радина): ПЪЛЕН достъп като в своя график —
+    // нов час, редакция (и на онлайн), приключи / не присъства, отмяна, изтриване,
+    // времетраене, „Запазено“, почивки и почивни дни. Без пари: цени и отстъпки не се виждат.
     async function mountSharedCalendar(container, ownerId) {
         const [svc, wh] = await Promise.all([API.get(`/employees/${ownerId}/services`).catch(() => []), workHoursFor(ownerId)]);
         Calendar.mount(container, {
-            editable: true, shared: true, hidePrices: true, staffId: ownerId, workHours: wh,
+            editable: true, shared: true, hidePrices: true, canManage: true, staffId: ownerId, workHours: wh,
             services: (svc || []).map(s => ({ serviceId: s.serviceId, serviceName: s.serviceName, durationMinutes: s.durationMinutes })),
             fetchMonth: (f, t) => API.get(`/me/shared-calendar?ownerId=${ownerId}&from=${f}&to=${t}`),
-            createBooking: (dto) => API.post(`/me/shared-bookings?ownerId=${ownerId}`, dto)
+            createBooking: (dto) => API.post(`/me/shared-bookings?ownerId=${ownerId}`, dto),
+            setStatus: (id, st) => API.patch(`/bookings/${id}/status`, { status: st }),
+            cancelBooking: (id, reason) => API.post(`/bookings/${id}/cancel`, { reason }),
+            setDuration: (id, min) => API.put(`/bookings/${id}/duration`, { durationMinutes: min }),
+            deleteBk: (id) => API.del(`/bookings/${id}`)
         });
     }
 
