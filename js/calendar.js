@@ -915,7 +915,6 @@ window.Calendar = (function () {
             // (зает час без клиент/процедура); докосване върху него или „+" -> пълния попъп.
             pend = { el, k: col.dataset.k, s, e, empId: col.dataset.emp ? +col.dataset.emp : undefined };
             el.classList.add('is-pend');
-            if (cfg.shared) { openPend(); return; }   // чужд график -> направо нов час (без „Запазено“)
             el.insertAdjacentHTML('beforeend', `<em>✓ = запази · докосни за клиент</em>`);
             fabOk.hidden = false;
         }
@@ -1175,7 +1174,10 @@ window.Calendar = (function () {
             const dd = parseK(dayKey);
             const presetEmp = opts.empId != null ? opts.empId : empFilter;
             const ED = opts.edit || null;   // редакция на съществуващ ръчен час
-            const SPECIAL = (canRest() && !ED) ? `<option value="__resv">Запазено (без клиент)</option><option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>` : '';
+            // Чужд график (Анелия -> Радина): само „Запазено“, без почивки и почивни дни.
+            const SPECIAL = ED ? '' : canRest()
+                ? `<option value="__resv">Запазено (без клиент)</option><option value="__rest">Почивка</option><option value="__off">Почивен ден (цял ден)</option>`
+                : (cfg.shared && cfg.editable ? `<option value="__resv">Запазено (без клиент)</option>` : '');
 
             let timeOpts = '';
             for (let mm = BOOK_S; mm < BOOK_E; mm += 15) { const v = minToHHMM(mm); timeOpts += `<option value="${v}"${v === hhmm ? ' selected' : ''}>${v}</option>`; }
@@ -1404,9 +1406,9 @@ window.Calendar = (function () {
             const acEl = document.createElement('div');
             acEl.className = 'ad-ac'; acEl.hidden = true;
             $('.ad-row-client').appendChild(acEl);
-            // До 6 имена без вътрешен скрол — на iPhone списък със скрол не мърда при отворена клавиатура.
-            // Пишеш още букви -> стеснява се.
-            const AC_MAX = 6;
+            // Всички съвпадения (до 100), по един ред, без вътрешен скрол — скролва се самата форма
+            // (на iPhone списък със собствен скрол не мърда при отворена клавиатура).
+            const AC_MAX = 100;
             let acSeq = 0, acList = [], acAct = -1, acMute = false, acQ = null, acMore = 0;
             const acHide = () => { acEl.hidden = true; acList = []; acAct = -1; acQ = null; };
             const ph0 = d => d.startsWith('359') ? '0' + d.slice(3) : d;   // +359 888… == 0888…
@@ -1681,7 +1683,7 @@ window.Calendar = (function () {
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
                     ${!isOff && o.note ? `<div class="rm-note">${esc(o.note)}</div>` : ''}
                     <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
-                    ${cfg.editable && !cfg.shared ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-time-edit">Редактирай времето</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
+                    ${cfg.editable && (!cfg.shared || resv) ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-time-edit">Редактирай времето</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
                 </div>`;
             document.body.appendChild(backdrop);

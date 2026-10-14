@@ -3111,9 +3111,9 @@ textarea.input { resize: vertical; min-height: 110px; }
 .ad-ac { grid-column: 1 / -1; margin-top: -.2rem; background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 28px rgba(0,0,0,.14); padding: .25rem; }
 .ad-ac__more { padding: .35rem .65rem .2rem; font-size: .74rem; color: var(--muted); }
 .ad-ac[hidden] { display: none; }
-.ad-ac__it { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; width: 100%; border: 0; background: transparent; text-align: left; padding: .5rem .65rem; border-radius: 10px; cursor: pointer; font: inherit; }
-.ad-ac__it b { font-size: .92rem; color: var(--ink, #222); }
-.ad-ac__it span { font-size: .78rem; color: var(--muted); }
+.ad-ac__it { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: .6rem; width: 100%; border: 0; background: transparent; text-align: left; padding: .5rem .65rem; border-radius: 10px; cursor: pointer; font: inherit; }
+.ad-ac__it b { flex: 1 1 auto; min-width: 40%; font-size: .92rem; color: var(--ink, #222); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-ac__it span { flex: 0 1 auto; font-size: .78rem; color: var(--muted); text-align: right; }
 .ad-ac__it em { font-style: normal; color: #D9534F; font-weight: 700; }
 .ad-ac__it:hover, .ad-ac__it.is-act { background: var(--blush-soft); }
 
