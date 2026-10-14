@@ -376,12 +376,19 @@ window.Calendar = (function () {
         // Застъпване: ръчно въведен час може да легне върху друг час на същата специалистка
         // (онлайн през сайта — никога). Такива часове се оцветяват в червено, за да се оправят.
         const isActiveBk = b => b.status === 'booked' || b.status === 'completed';
-        const clashesOf = b => {
-            if (!b || !isActiveBk(b)) return [];
-            const s = b.startAt.slice(0, 16), e = (b.endAt || b.startAt).slice(0, 16);
-            return (data[b.startAt.slice(0, 10)] || []).filter(x => x.id !== b.id && x.employeeId === b.employeeId && isActiveBk(x)
-                && x.startAt.slice(0, 16) < e && (x.endAt || x.startAt).slice(0, 16) > s);
+        // Застъпване на час с друг час ИЛИ с почивка/„Запазено“, и на блок с час — за същата специалистка.
+        // Връща [{ b } | { r }] (час / блок).
+        const clashesOf = (b, isBlock) => {
+            if (!b || (!isBlock && !isActiveBk(b))) return [];
+            const k = b.startAt.slice(0, 10), s = b.startAt.slice(0, 16), e = (b.endAt || b.startAt).slice(0, 16);
+            const hit = x => x.employeeId === b.employeeId && x.startAt.slice(0, 16) < e && (x.endAt || x.startAt).slice(0, 16) > s;
+            const bks = (data[k] || []).filter(x => (isBlock || x.id !== b.id) && isActiveBk(x) && hit(x)).map(x => ({ b: x }));
+            const rs = isBlock ? [] : (offs[k] || []).filter(o => o.kind === 'rest' && hit(o)).map(o => ({ r: o }));
+            return bks.concat(rs);
         };
+        const clashLabel = c => c.b
+            ? `${c.b.startAt.slice(11, 16)}–${(c.b.endAt || '').slice(11, 16)} · ${esc(c.b.clientName || 'Клиент')} · ${esc(c.b.serviceName)}`
+            : `${c.r.startAt.slice(11, 16)}–${c.r.endAt.slice(11, 16)} · ${c.r.blockType === 'reserved' ? 'Запазено' : 'Почивка'}${c.r.note ? ' · ' + esc(c.r.note) : ''}`;
         const offsFor = k => { const a = offs[k] || []; return empFilter != null ? a.filter(o => o.employeeId === empFilter) : a; };
         // Почивки/почивни дни: за служител (собствения график) и шефа (чужд / целия салон).
         const canRest = () => !!(cfg.editable && (cfg.staffId || hasEmps()));
@@ -521,10 +528,11 @@ window.Calendar = (function () {
                     // Почивка — щрихована; „Запазено" (зает час без клиент) — плътна, в цвета на специалистката.
                     const r = x.r, resv = r.blockType === 'reserved';
                     const who = cfg.showEmployee && empFilter == null ? esc(firstName(r.employeeName)) : '';
-                    return `<button type="button" class="sc-bk ${resv ? 'sc-resv' : 'sc-rest'}" data-l="${dl}" data-rest="${r.id}" data-k="${r.startAt.slice(0, 10)}" style="${pos};--bc:${empColor(r.employeeId)}">
+                    const rClash = clashesOf(r, true).length > 0;
+                    return `<button type="button" class="sc-bk ${resv ? 'sc-resv' : 'sc-rest'}${rClash ? ' is-clash' : ''}" data-l="${dl}" data-rest="${r.id}" data-k="${r.startAt.slice(0, 10)}" style="${pos};--bc:${empColor(r.employeeId)}">
                     <span class="sc-bk__t">${r.startAt.slice(11, 16)}–${minToHHMM(e)}</span>
                     <span class="sc-bk__s">${r.note ? esc(r.note) : (resv ? 'Запазено' : 'Почивка')}</span>
-                    ${who ? `<span class="sc-bk__c">${who}</span>` : ''}
+                    ${who ? `<span class="sc-bk__c">${who}</span>` : ''}${rClash ? '<i class="sc-bk__clash" title="Застъпва се със записан час">!</i>' : ''}
                 </button>`;
                 }
                 const b = x.b;
@@ -1703,6 +1711,7 @@ window.Calendar = (function () {
                     <div class="cal-modal__title">${isOff ? 'Почивен ден' : (resv ? 'Запазено време' : 'Почивка')}</div>
                     <div class="cal-modal__meta hint">${WDNAMES[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()].toLowerCase()} · ${time}${cfg.showEmployee ? ' · ' + esc(o.employeeName) : ''}</div>
                     ${!isOff && o.note ? `<div class="rm-note">${esc(o.note)}</div>` : ''}
+                    ${(() => { const cl = isOff ? [] : clashesOf(o, true); return cl.length ? `<div class="md-clash" style="margin:.8rem 0 0"><b>⚠ Застъпва се с:</b>${cl.map(c => `<span>${clashLabel(c)}</span>`).join('')}<small>Премести часа или промени времето, за да не се застъпват.</small></div>` : ''; })()}
                     <div class="hint" style="margin:.7rem 0 1rem">${isOff ? 'В този ден никой не може да си запише час.' : (resv ? 'Часовете са заети — никой не може да си запише онлайн в това време. Клиент и процедура не са въведени.' : 'В това време никой не може да си запише час.')}</div>
                     ${cfg.editable ? `<div class="cal-modal__actions">${resv && canAdd() ? `<button class="btn btn--primary rm-fill">Добави клиент и процедура</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-time-edit">Редактирай времето</button>` : ''}${!isOff ? `<button class="btn btn--ghost rm-note-edit">${o.note ? 'Смени пояснението' : 'Добави пояснение'}</button>` : ''}<button class="btn btn--ghost rm-del" style="color:#D9534F">${isOff ? 'Направи го работен ден' : (resv ? 'Освободи часовете' : 'Премахни почивката')}</button></div>` : ''}
                     <div class="md-msg" style="margin-top:.8rem"></div>
@@ -1776,9 +1785,8 @@ window.Calendar = (function () {
             // Застъпване с друг час на същата специалистка -> с кой и какво да се направи.
             const clashes = clashesOf(b);
             const clashWarn = clashes.length
-                ? `<div class="md-clash"><b>⚠ Застъпва се с:</b>${clashes.map(x =>
-                    `<span>${x.startAt.slice(11, 16)}–${(x.endAt || '').slice(11, 16)} · ${esc(x.clientName || 'Клиент')} · ${esc(x.serviceName)}</span>`).join('')}
-                    <small>Премести или скъси единия час, за да не се застъпват.</small></div>` : '';
+                ? `<div class="md-clash"><b>⚠ Застъпва се с:</b>${clashes.map(c => `<span>${clashLabel(c)}</span>`).join('')}
+                    <small>Премести или скъси единия, за да не се застъпват.</small></div>` : '';
 
             // Цена, която може да се поправи при затваряне на часа („Присъства“) —
             // напр. клиентът е платил друга сума. Важи и за минали часове.

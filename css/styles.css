@@ -1557,6 +1557,7 @@ textarea.input { resize: vertical; min-height: 110px; }
     box-shadow: 0 0 0 2px #fff; z-index: 1;
 }
 .sc.is-tiny .sc-bk__clash { width: 12px; height: 12px; font-size: 9px; right: 2px; top: 2px; }
+.sc-bk.sc-rest.is-clash, .sc-bk.sc-resv.is-clash { outline: 2px dashed #D9534F; outline-offset: -2px; }
 .sc-mi.is-clash { outline: 1.5px dashed #D9534F; outline-offset: -1px; color: #B52B27; }
 .md-clash { background: #FDECEC; border: 1.5px dashed #D9534F; color: #8E1F1C; border-radius: 12px; padding: .55rem .8rem; margin-bottom: 1rem; font-size: .8rem; display: flex; flex-direction: column; gap: .2rem; }
 .md-clash b { color: #D9534F; }
