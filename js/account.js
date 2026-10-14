@@ -749,6 +749,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const qEl = box.querySelector('.cl-q');
         let filter = 'all', seq = 0, timer = null, lastRows = [];
         const nameKey = n => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        // Попъп с „Отказ“ / okLabel. okLabel = null -> само „Добре“. Връща true при потвърждение.
+        const askBox = (html, okLabel) => new Promise(res => {
+            const bd = document.createElement('div');
+            bd.className = 'cal-modal-backdrop';
+            bd.innerHTML = `<div class="cal-modal ask-box">
+                <div class="ask-text">${html}</div>
+                <div class="ask-acts">
+                    ${okLabel ? `<button type="button" class="btn btn--ghost ask-no">Отказ</button><button type="button" class="btn btn--primary ask-yes">${esc(okLabel)}</button>`
+                              : `<button type="button" class="btn btn--primary ask-no">Добре</button>`}
+                </div></div>`;
+            const done = v => { bd.remove(); res(v); };
+            bd.addEventListener('click', e => { if (e.target === bd || e.target.closest('.ask-no')) done(false); else if (e.target.closest('.ask-yes')) done(true); });
+            document.body.appendChild(bd);
+        });
+        // Същата проверка като в сървъра (ClientService.CanMergeFreely): еднакъв телефон или близки имена.
+        const TR = [['sht','щ'],['zh','ж'],['ch','ч'],['sh','ш'],['yu','ю'],['ya','я'],['ts','ц'],['a','а'],['b','б'],['v','в'],['w','в'],['g','г'],['d','д'],['e','е'],['z','з'],['i','и'],['y','и'],['j','и'],['k','к'],['q','к'],['l','л'],['m','м'],['n','н'],['o','о'],['p','п'],['r','р'],['s','с'],['t','т'],['u','у'],['f','ф'],['h','х'],['c','ц'],['x','кс']];
+        const nameWords = n => { let s = String(n || '').toLowerCase(); TR.forEach(([l, c]) => { s = s.split(l).join(c); }); return s.replace(/й/g, 'и').split(/[\s\-.,]+/).filter(Boolean); };
+        const sameStart = (p, q) => { if (p === q) return true; const [s, l] = p.length <= q.length ? [p, q] : [q, p]; return s.length >= 3 && l.startsWith(s); };
+        const phN = v => { let d = String(v || '').replace(/\D/g, ''); if (d.startsWith('359')) d = '0' + d.slice(3); return d.length >= 6 ? d : ''; };
+        const mergeOk = (a, b) => {
+            if (phN(a.phone) && phN(a.phone) === phN(b.phone)) return true;
+            const x = nameWords(a.name), y = nameWords(b.name);
+            if (!x.length || !y.length) return false;
+            if (sameStart(x[0], y[0])) return true;
+            const [s, l] = x.length <= y.length ? [x, y] : [y, x];
+            return s.every(w => l.includes(w));
+        };
         const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return '—'; } };
         const phoneSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
         const mailSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>';
@@ -823,17 +850,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 // само повтарящ се клиент (същите имена като друг). Предстоящ час не пречи.
                 const isAcc = cardEl.dataset.acc === '1', isAdded = cardEl.dataset.added === '1', isDup = cardEl.dataset.dup === '1';
                 const canDel = isAdded || role === 'boss' || isDup;
-                // Повтарящ се без телефон -> „Обедини“ с картата със същите имена и телефон (часовете минават там).
-                const mergeTo = (isDup && cardEl.dataset.key.charAt(0) === 'n')
-                    ? lastRows.filter(r => r.key !== cardEl.dataset.key && r.key.charAt(0) === 'p' && nameKey(r.name) === nameKey(cardEl.dataset.name)) : [];
                 const actBar = `
                     <div class="cl-acts">
                         ${cardEl.classList.contains('is-bad') ? `<button type="button" class="btn btn--gold cl-ok-btn">Коректен е ✓</button>` : ''}
                         <button type="button" class="btn btn--ghost cl-edit-btn">Редактирай</button>
-                        ${mergeTo.map(r => `<button type="button" class="btn btn--gold cl-merge-btn" data-name="${esc(r.name)}" data-phone="${esc(r.phone || '')}">Обедини с ${esc(r.phone || '')}</button>`).join('')}
+                        <button type="button" class="btn btn--gold cl-mg-btn">Обедини с…</button>
                         ${canDel ? `<button type="button" class="btn btn--ghost cl-del-btn">Изтрий</button>` : ''}
                     </div>
-                    <div class="cl-edit-box" hidden></div>`;
+                    <div class="cl-edit-box" hidden></div>
+                    <div class="cl-mg-box" hidden></div>`;
                 if (!items.length) { hist.innerHTML = actBar + inviteBar + `<p class="hint" style="margin:.4rem 0 0">Няма записани часове.</p>`; return; }
                 const now = Date.now();
                 hist.innerHTML = actBar + inviteBar + items.map(b => {
@@ -887,14 +912,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         body.addEventListener('click', async e => {
-            const mergeBtn = e.target.closest('.cl-merge-btn');
-            if (mergeBtn) {
-                const cardEl = mergeBtn.closest('.cl-card');
-                const nm = mergeBtn.dataset.name, ph = mergeBtn.dataset.phone;
-                if (!confirm(`Да обединя ли двете карти на ${nm}?\n\nЧасовете от картата „без телефон“ минават към ${nm} (${ph}) и остава само една карта. Предстоящите часове си остават в графика.`)) return;
-                mergeBtn.disabled = true;
-                try { await API.put(`/clients?key=${encodeURIComponent(cardEl.dataset.key)}`, { name: nm, phone: ph }); await load(); }
-                catch (err) { alert(err.message); mergeBtn.disabled = false; }
+            // ---- Обедини с… — избираш с кой клиент да се слее (търсене по име/телефон) ----
+            const mgBtn = e.target.closest('.cl-mg-btn');
+            if (mgBtn) {
+                const cardEl = mgBtn.closest('.cl-card'), mb = cardEl.querySelector('.cl-mg-box');
+                if (!mb.hidden) { mb.hidden = true; return; }
+                cardEl.querySelector('.cl-edit-box').hidden = true;
+                mb.innerHTML = `
+                    <input class="input cl-mg-q" type="search" placeholder="Търси клиента — име или телефон…" autocomplete="off">
+                    <div class="cl-mg-list"><div class="spinner"></div></div>`;
+                mb.hidden = false;
+                const qIn = mb.querySelector('.cl-mg-q'), listEl = mb.querySelector('.cl-mg-list');
+                const me = { key: cardEl.dataset.key, name: cardEl.dataset.name, acc: cardEl.dataset.acc === '1' };
+                let all = [];
+                const paint = () => {
+                    const q = nameKey(qIn.value), qd = qIn.value.replace(/\D/g, '');
+                    const myName = nameKey(me.name);
+                    const c = all.filter(r => r.key !== me.key && !(me.acc && r.hasAccount));   // два профила не се сливат
+                    const hit = r => {
+                        const n = nameKey(r.name), d = String(r.phone || '').replace(/\D/g, '');
+                        if (!q) return mergeOk(r, { name: me.name, phone: cardEl.dataset.phone });   // без търсене -> близките
+
+                        return n.includes(q) || n.split(' ').some(w => w.startsWith(q)) || (qd.length >= 3 && d.includes(qd));
+                    };
+                    const mine = { name: me.name, phone: cardEl.dataset.phone };
+                    const rows = c.filter(hit).sort((a, b) => (nameKey(b.name) === myName) - (nameKey(a.name) === myName) || mergeOk(b, mine) - mergeOk(a, mine) || (!!b.phone - !!a.phone) || a.name.localeCompare(b.name, 'bg')).slice(0, 8);
+                    listEl.innerHTML = rows.length ? rows.map(r => `
+                        <button type="button" class="cl-mg-it" data-key="${esc(r.key)}" data-name="${esc(r.name)}" data-phone="${esc(r.phone || '')}" data-acc="${r.hasAccount ? 1 : 0}">
+                            <b>${esc(r.name)}</b><span>${esc(r.phone || 'без телефон')}${r.hasAccount ? ' · профил' : ''} · ${r.total || 0} ч.${mergeOk(r, mine) ? '' : ' · <em class="cl-mg-diff">различни имена</em>'}</span>
+                        </button>`).join('')
+                        : `<p class="hint" style="margin:.3rem 0 0">${q ? 'Няма такъв клиент.' : 'Няма клиент с подобни имена — потърси по име или телефон.'}</p>`;
+                };
+                try { all = await API.get('/clients') || []; paint(); }
+                catch (err) { listEl.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`; }
+                qIn.addEventListener('input', paint);
+                listEl.addEventListener('click', async ev => {
+                    const it = ev.target.closest('.cl-mg-it'); if (!it) return;
+                    const other = { key: it.dataset.key, name: it.dataset.name, phone: it.dataset.phone, acc: it.dataset.acc === '1' };
+                    const label = x => `${x.name}${x.phone ? ' (' + x.phone + ')' : ''}${x.acc ? ' · профил' : ''}`;
+                    const mineFull = { name: me.name, phone: cardEl.dataset.phone, acc: me.acc };
+                    // Кой остава (както в сървъра): профил > с телефон > избраният.
+                    const otherWins = other.acc || (!mineFull.acc && !!other.phone) || (!mineFull.acc && !mineFull.phone);
+                    const keep = otherWins ? other : mineFull, gone = otherWins ? mineFull : other;
+                    const ok = mergeOk(other, mineFull);
+                    if (!ok && role !== 'boss') {
+                        await askBox(`<b>${esc(gone.name)}</b> и <b>${esc(keep.name)}</b> са с различни имена — такива клиенти може да обедини само Радина.`, null);
+                        return;
+                    }
+                    const yes = await askBox(`
+                        Сигурна ли си, че искаш да обединиш <b>${esc(label(gone))}</b> с <b>${esc(label(keep))}</b>?
+                        <div class="ask-sub">Остава <b>${esc(keep.name)}</b>${keep.phone ? ' · ' + esc(keep.phone) : ''}. Всички часове минават там, предстоящите си остават в графика.</div>
+                        ${ok ? '' : `<div class="ask-warn">⚠ Имената са различни — провери, че е един и същ човек.</div>`}`, 'Обедини');
+                    if (!yes) return;
+                    it.disabled = true;
+                    try { await API.post(`/clients/merge?from=${encodeURIComponent(me.key)}&to=${encodeURIComponent(other.key)}${ok ? '' : '&force=true'}`, {}); await load(); }
+                    catch (err) { alert(err.message); it.disabled = false; }
+                });
+                qIn.focus();
                 return;
             }
             // „Коректен е“ -> неявяванията стават „Отменен“, клиентът излиза от некоректните.
@@ -953,7 +1027,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 return;
             }
-            if (e.target.closest('.cl-edit-box')) return;
+            if (e.target.closest('.cl-edit-box') || e.target.closest('.cl-mg-box')) return;
             const invBtn = e.target.closest('.cl-inv-btn');
             if (invBtn) {
                 const cardEl = invBtn.closest('.cl-card'), out = cardEl.querySelector('.cl-inv-out');

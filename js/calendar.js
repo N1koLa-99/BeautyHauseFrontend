@@ -42,16 +42,22 @@ window.Calendar = (function () {
     const WDNAMES = ['неделя', 'понеделник', 'вторник', 'сряда', 'четвъртък', 'петък', 'събота'];
     // Всички клиенти — зареждат се веднъж и се търси в тях на място (подсказките излизат веднага).
     // Опреснява се във фонов режим при всяко отваряне на формата (дотогава се търси в стария списък).
+    // Списъкът се пази и в браузъра -> при ново отваряне на сайта подсказките излизат веднага,
+    // а пресният списък се тегли отзад. Трие се при изход (auth.js).
+    const CL_CACHE = 'bh_cl_cache';
+    const clPrep = r => (r || []).filter(c => c.name).map(c => {
+        const n = String(c.name).toLowerCase();
+        return Object.assign({}, c, { _n: n, _w: n.split(/\s+/), _d: String(c.phone || '').replace(/\D/g, '') });
+    });
     const CL = { list: null, at: 0, p: null };
+    try { const c = JSON.parse(localStorage.getItem(CL_CACHE) || 'null'); if (Array.isArray(c)) CL.list = clPrep(c); } catch (e) {}
     function clientsLoad(fresh) {
         if (CL.p) return CL.p;
-        if (CL.list && !(fresh && Date.now() - CL.at > 5000)) return Promise.resolve(CL.list);
+        if (CL.list && CL.at && !(fresh && Date.now() - CL.at > 5000)) return Promise.resolve(CL.list);
         CL.p = window.API.get('/clients').then(r => {
-            CL.list = (r || []).filter(c => c.name).map(c => {
-                const n = String(c.name).toLowerCase();
-                return Object.assign({}, c, { _n: n, _w: n.split(/\s+/), _d: String(c.phone || '').replace(/\D/g, '') });
-            });
+            CL.list = clPrep(r);
             CL.at = Date.now();
+            try { localStorage.setItem(CL_CACHE, JSON.stringify((r || []).filter(c => c.name).map(c => ({ key: c.key, name: c.name, phone: c.phone, hasAccount: c.hasAccount, noShow: c.noShow })))); } catch (e) {}
             return CL.list;
         }).finally(() => { CL.p = null; });
         return CL.p;
@@ -279,6 +285,7 @@ window.Calendar = (function () {
     }
 
     function mount(container, cfg) {
+        if (cfg && cfg.editable) clientsLoad(true).catch(() => {});   // подсказките са готови преди първия „Нов час“
         const todayKey = () => { const d = new Date(); return key(d.getFullYear(), d.getMonth(), d.getDate()); };
         const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
         // ?date=YYYY-MM-DD (напр. от push известие) -> графикът се отваря на тази дата.
@@ -1397,7 +1404,10 @@ window.Calendar = (function () {
             const acEl = document.createElement('div');
             acEl.className = 'ad-ac'; acEl.hidden = true;
             $('.ad-row-client').appendChild(acEl);
-            let acSeq = 0, acList = [], acAct = -1, acMute = false, acQ = null;
+            // До 6 имена без вътрешен скрол — на iPhone списък със скрол не мърда при отворена клавиатура.
+            // Пишеш още букви -> стеснява се.
+            const AC_MAX = 6;
+            let acSeq = 0, acList = [], acAct = -1, acMute = false, acQ = null, acMore = 0;
             const acHide = () => { acEl.hidden = true; acList = []; acAct = -1; acQ = null; };
             const ph0 = d => d.startsWith('359') ? '0' + d.slice(3) : d;   // +359 888… == 0888…
             // 0 — името започва с написаното, 1 — някоя дума от името, 2 — съдържа го, 3 — по телефона.
@@ -1411,11 +1421,11 @@ window.Calendar = (function () {
             function acPaint(scroll) {
                 if (!acList.length) { acHide(); return; }
                 acEl.innerHTML = acList.map((c, i) => `<button type="button" class="ad-ac__it${i === acAct ? ' is-act' : ''}" data-i="${i}">
-                    <b>${esc(c.name)}</b><span>${esc(c.phone || 'без телефон')}${c.hasAccount ? ' · профил' : ''}${c.noShow ? ` · <em>⚠ ${c.noShow}× не се яви</em>` : ''}</span></button>`).join('');
+                    <b>${esc(c.name)}</b><span>${esc(c.phone || 'без телефон')}${c.hasAccount ? ' · профил' : ''}${c.noShow ? ` · <em>⚠ ${c.noShow}× не се яви</em>` : ''}</span></button>`).join('')
+                    + (acMore ? `<div class="ad-ac__more">още ${acMore} — пиши още от името</div>` : '');
                 const wasHidden = acEl.hidden;
                 acEl.hidden = false;
                 if (wasHidden || scroll) acEl.scrollIntoView({ block: 'nearest' });
-                if (!wasHidden && !scroll) acEl.scrollTop = 0;
             }
             function acFilter(list, raw, src) {
                 const q = raw.toLowerCase().replace(/\s+/g, ' '), qd = raw.replace(/\D/g, '');
@@ -1426,7 +1436,8 @@ window.Calendar = (function () {
                     if (r >= 0) out.push([r, c]);
                 }
                 out.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name, 'bg'));
-                return out.slice(0, 30).map(x => x[1]);
+                acMore = Math.max(0, out.length - AC_MAX);
+                return out.slice(0, AC_MAX).map(x => x[1]);
             }
             // Търси на място в заредения списък — без чакане на сървъра.
             async function acQuery(src) {
@@ -1442,7 +1453,7 @@ window.Calendar = (function () {
                     catch (e) {   // списъкът не се зареди -> търсене в сървъра
                         try {
                             const r = await window.API.get(`/clients?q=${encodeURIComponent(raw)}`);
-                            list = (r || []).filter(c => c.name).map(c => { const n = String(c.name).toLowerCase(); return Object.assign({}, c, { _n: n, _w: n.split(/\s+/), _d: String(c.phone || '').replace(/\D/g, '') }); });
+                            list = clPrep(r);
                         } catch (e2) { list = []; }
                     }
                     if (my !== acSeq || document.activeElement !== src) return;

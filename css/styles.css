@@ -3108,7 +3108,8 @@ textarea.input { resize: vertical; min-height: 110px; }
 
 /* Подсказки за клиент при ръчно записване */
 .ad-row-client { position: relative; }
-.ad-ac { grid-column: 1 / -1; margin-top: -.2rem; background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 28px rgba(0,0,0,.14); max-height: 264px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: .25rem; }
+.ad-ac { grid-column: 1 / -1; margin-top: -.2rem; background: #fff; border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 28px rgba(0,0,0,.14); padding: .25rem; }
+.ad-ac__more { padding: .35rem .65rem .2rem; font-size: .74rem; color: var(--muted); }
 .ad-ac[hidden] { display: none; }
 .ad-ac__it { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; width: 100%; border: 0; background: transparent; text-align: left; padding: .5rem .65rem; border-radius: 10px; cursor: pointer; font: inherit; }
 .ad-ac__it b { font-size: .92rem; color: var(--ink, #222); }
@@ -3207,6 +3208,20 @@ textarea.input { resize: vertical; min-height: 110px; }
 .cl-acts .cl-del-btn { color: #D9534F; }
 .cl-edit-box { display: grid; gap: .7rem; padding: .85rem; margin: 0 0 .8rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .cl-edit-box[hidden] { display: none; }
+/* „Обедини с…“ — търсене + до 8 клиента, без вътрешен скрол (на iPhone не се скролва при отворена клавиатура) */
+.cl-mg-box { display: grid; gap: .5rem; padding: .85rem; margin: 0 0 .8rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+.cl-mg-box[hidden] { display: none; }
+.cl-mg-list { display: grid; gap: .3rem; }
+.cl-mg-it { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; width: 100%; text-align: left; font: inherit; cursor: pointer; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--ivory); }
+.cl-mg-it b { font-size: .9rem; }
+.cl-mg-it span { font-size: .76rem; color: var(--muted); }
+.cl-mg-it:hover, .cl-mg-it:active { background: var(--blush-soft); }
+.ask-box { max-width: 360px; padding: 1.4rem 1.3rem 1.2rem; }
+.ask-text { font-size: .95rem; line-height: 1.5; }
+.ask-sub { margin-top: .6rem; font-size: .82rem; color: var(--muted); }
+.ask-warn { margin-top: .7rem; padding: .55rem .75rem; border-radius: 10px; background: #FDECEC; color: #B03A36; font-weight: 700; font-size: .82rem; }
+.ask-acts { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem; }
+.cl-mg-it em.cl-mg-diff { font-style: normal; color: #D9534F; font-weight: 700; }
 
 /* =====================================================================
    Портфолио (2026-10-05) — модал на специалист, галерия по процедура,

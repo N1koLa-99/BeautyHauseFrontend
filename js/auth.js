@@ -10,7 +10,7 @@ window.Session = (function () {
         localStorage.setItem(K.name, auth.fullName || '');
         localStorage.setItem(K.id, auth.userId);
     }
-    function clear() { Object.values(K).forEach(k => localStorage.removeItem(k)); }
+    function clear() { Object.values(K).forEach(k => localStorage.removeItem(k)); localStorage.removeItem('bh_cl_cache'); }
 
     // Кога изтича токенът (JWT „exp", в ms) — четем го направо от токена.
     function expOf(t) {
