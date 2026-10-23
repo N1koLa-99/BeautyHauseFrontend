@@ -36,6 +36,9 @@ window.Calendar = (function () {
     const pad = n => String(n).padStart(2, '0');
     const key = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
     const esc = window.esc || (s => String(s ?? ''));
+    // Значка „има профил в сайта" (подсказки, банер, попъп).
+    const PROF_ICO = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>`;
+    const profBadge = (txt = 'профил') => `<i class="bh-prof">${PROF_ICO}${txt}</i>`;
     const minToHHMM = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
     const hhmmToMin = v => { const p = (v || '').split(':'); return p.length < 2 ? null : (+p[0]) * 60 + (+p[1]); };
     const addMinIso = (iso, mins) => { const d = new Date(iso); d.setMinutes(d.getMinutes() + mins); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`; };
@@ -45,8 +48,18 @@ window.Calendar = (function () {
     // Списъкът се пази и в браузъра -> при ново отваряне на сайта подсказките излизат веднага,
     // а пресният списък се тегли отзад. Трие се при изход (auth.js).
     const CL_CACHE = 'bh_cl_cache';
+    // Име -> общ вид за търсене: кирилица и латиница (и „шльокавица“) стават едно и също.
+    // Мария / Mariq / Maria / Mariya -> „maria“; Йордан / Yordan -> „iordan“; Анна / Ana -> „ana“.
+    const TLC = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sht', ъ: 'a', ь: 'i', ю: 'iu', я: 'ia', ы: 'i', э: 'e', ё: 'io' };
+    const nameKey = s => String(s || '').toLowerCase()
+        .replace(/[а-яёыэ]/g, ch => TLC[ch] ?? ch)
+        .replace(/4/g, 'ch').replace(/6/g, 'sh')
+        .replace(/q/g, 'ia').replace(/w/g, 'v').replace(/x/g, 'ks').replace(/j/g, 'zh').replace(/y/g, 'i')
+        .replace(/c(?!h)/g, 'ts')
+        .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+        .replace(/([a-z])\1+/g, '$1');
     const clPrep = r => (r || []).filter(c => c.name).map(c => {
-        const n = String(c.name).toLowerCase();
+        const n = nameKey(c.name);
         return Object.assign({}, c, { _n: n, _w: n.split(/\s+/), _d: String(c.phone || '').replace(/\D/g, '') });
     });
     const CL = { list: null, at: 0, p: null };
@@ -1413,8 +1426,31 @@ window.Calendar = (function () {
             // Познат клиент по телефона -> подсказка + попълва името (ако е празно).
             const phoneEl = $('.ad-phone'), nameEl = $('.ad-name'), knownEl = $('.ad-known');
             let lkT = null, lkSeq = 0;
+            // Избрана от подсказките клиентка: ключът ѝ (u12 = профил) отива към сървъра,
+            // за да влезе часът в профила ѝ дори без/с друг телефон.
+            let picked = null;   // { key, name, phone, hasAccount }
+            const digits = v => String(v || '').replace(/\D/g, '').replace(/^359/, '0');
+            function paintPicked() {
+                knownEl.classList.toggle('is-prof', !!(picked && picked.hasAccount));
+                if (!picked || !picked.hasAccount) return false;
+                knownEl.innerHTML = `${profBadge('Има профил')}<span><b>${esc(picked.name)}</b> — часът ще се появи в профила ѝ, в „Предстоящи часове“.</span>`
+                    + (picked.noShow ? ` <span style="color:#D9534F;font-weight:700">⚠ ${picked.noShow}× не се яви</span>` : '');
+                knownEl.hidden = false;
+                return true;
+            }
+            // Сменено име И телефон спрямо избраната -> вече е друг човек, връзката пада.
+            function checkPicked() {
+                if (!picked) return;
+                const sameName = nameEl.value.trim().toLowerCase() === picked.name.trim().toLowerCase();
+                const samePhone = picked.phone && digits(phoneEl.value) === digits(picked.phone);
+                if (!nameEl.value.trim() || (!sameName && !samePhone) || (picked.phone && digits(phoneEl.value) && !samePhone)) {
+                    picked = null; knownEl.classList.remove('is-prof'); knownEl.hidden = true;
+                    acMute = true; phoneEl.dispatchEvent(new Event('input')); acMute = false;
+                }
+            }
             phoneEl.addEventListener('input', () => {
                 clearTimeout(lkT);
+                if (paintPicked()) return;
                 const v = phoneEl.value.replace(/\D/g, '');
                 if (v.length < 9) { knownEl.hidden = true; return; }
                 lkT = setTimeout(async () => {
@@ -1422,10 +1458,14 @@ window.Calendar = (function () {
                     try {
                         const r = await window.API.get(`/clients/lookup?phone=${encodeURIComponent(phoneEl.value.trim())}`);
                         if (my !== lkSeq) return;
+                        if (paintPicked()) return;
                         if (!r) { knownEl.hidden = true; return; }
                         if (!nameEl.value.trim()) nameEl.value = r.name;
-                        knownEl.innerHTML = `<b>${esc(r.name)}</b> · ${r.hasAccount ? 'има профил — часът ще се появи и при нея' : 'познат клиент'} · ${r.total} ${r.total === 1 ? 'час' : 'часа'}`
-                            + (r.noShow ? ` · <span style="color:#D9534F;font-weight:700">⚠ ${r.noShow}× не се яви</span>` : '');
+                        knownEl.classList.toggle('is-prof', !!r.hasAccount);
+                        knownEl.innerHTML = (r.hasAccount
+                                ? `${profBadge('Има профил')}<span><b>${esc(r.name)}</b> — часът ще се появи в профила ѝ · ${r.total} ${r.total === 1 ? 'час' : 'часа'}</span>`
+                                : `<b>${esc(r.name)}</b> · познат клиент · ${r.total} ${r.total === 1 ? 'час' : 'часа'}`)
+                            + (r.noShow ? ` <span style="color:#D9534F;font-weight:700">⚠ ${r.noShow}× не се яви</span>` : '');
                         knownEl.hidden = false;
                     } catch (e) { knownEl.hidden = true; }
                 }, 350);
@@ -1450,22 +1490,22 @@ window.Calendar = (function () {
             }
             function acPaint(scroll) {
                 if (!acList.length) { acHide(); return; }
-                acEl.innerHTML = acList.map((c, i) => `<button type="button" class="ad-ac__it${i === acAct ? ' is-act' : ''}" data-i="${i}">
-                    <b>${esc(c.name)}</b><span>${esc(c.phone || 'без телефон')}${c.hasAccount ? ' · профил' : ''}${c.noShow ? ` · <em>⚠ ${c.noShow}× не се яви</em>` : ''}</span></button>`).join('')
+                acEl.innerHTML = acList.map((c, i) => `<button type="button" class="ad-ac__it${i === acAct ? ' is-act' : ''}${c.hasAccount ? ' is-prof' : ''}" data-i="${i}"${c.hasAccount ? ' title="Има профил в сайта"' : ''}>
+                    ${c.hasAccount ? `<i class="ad-ac__ico">${PROF_ICO}</i>` : ''}<b>${esc(c.name)}</b><span>${esc(c.phone || 'без телефон')}${c.noShow ? ` · <em>⚠ ${c.noShow}× не се яви</em>` : ''}</span></button>`).join('')
                     + (acMore ? `<div class="ad-ac__more">още ${acMore} — пиши още от името</div>` : '');
                 const wasHidden = acEl.hidden;
                 acEl.hidden = false;
                 if (wasHidden || scroll) acEl.scrollIntoView({ block: 'nearest' });
             }
             function acFilter(list, raw, src) {
-                const q = raw.toLowerCase().replace(/\s+/g, ' '), qd = raw.replace(/\D/g, '');
+                const q = nameKey(raw), qd = raw.replace(/\D/g, '');
                 const byPhone = src === phoneEl || (qd && qd.length === raw.replace(/[\s+()-]/g, '').length);
                 const out = [];
                 for (const c of list) {
                     const r = byPhone ? (qd.length >= 2 && c._d && (c._d.includes(qd) || ph0(c._d).includes(ph0(qd))) ? 3 : -1) : acRank(c, q, qd);
                     if (r >= 0) out.push([r, c]);
                 }
-                out.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name, 'bg'));
+                out.sort((a, b) => a[0] - b[0] || (b[1].hasAccount ? 1 : 0) - (a[1].hasAccount ? 1 : 0) || a[1].name.localeCompare(b[1].name, 'bg'));
                 acMore = Math.max(0, out.length - AC_MAX);
                 return out.slice(0, AC_MAX).map(x => x[1]);
             }
@@ -1495,7 +1535,9 @@ window.Calendar = (function () {
             function acPick(c) {
                 if (!c) return;
                 nameEl.value = c.name;
+                picked = { key: c.key, name: c.name, phone: c.phone || '', hasAccount: !!c.hasAccount, noShow: c.noShow || 0 };
                 acHide();
+                paintPicked();
                 if (c.phone) {
                     phoneEl.value = c.phone;
                     acMute = true; phoneEl.dispatchEvent(new Event('input')); acMute = false;   // -> „познат клиент“ отдолу
@@ -1522,6 +1564,7 @@ window.Calendar = (function () {
                 // iOS понякога не праща „input“ при предложенията на клавиатурата -> и keyup/compositionend.
                 ['input', 'keyup', 'compositionend'].forEach(ev => el.addEventListener(ev, e => {
                     if (e.type === 'keyup' && /^(Arrow|Enter|Escape|Tab)/.test(e.key)) return;
+                    if (e.type === 'input' && !acMute) checkPicked();
                     acQuery(el);
                 }));
                 el.addEventListener('focus', () => { acQ = null; acQuery(el); });
@@ -1546,6 +1589,10 @@ window.Calendar = (function () {
             if (empSel) { empSel.addEventListener('change', () => loadSvc(+empSel.value)); loadSvc(+empSel.value); }
             else { if (opts.preset && SPECIAL) svcSel.value = opts.preset; if (ED) pickEditSvc(); fillDur(); } // единичен специалист: услугите вече са налични
             if (ED) { nameEl.value = ED.clientName || ''; phoneEl.value = ED.clientPhone || ''; }
+            if (ED && !ED.isOnline && ED.clientId > 0) {
+                picked = { key: 'u' + ED.clientId, name: ED.clientName || '', phone: ED.clientPhone || '', hasAccount: true, noShow: 0 };
+                paintPicked();
+            }
             // Онлайн час: клиентът е от профила си — име и телефон не се сменят тук.
             if (ED && ED.isOnline) {
                 [nameEl, phoneEl].forEach(el => { el.readOnly = true; el.style.opacity = '.7'; });
@@ -1578,6 +1625,7 @@ window.Calendar = (function () {
                         restMinutes: 0, // почивката е включена във времетраенето
                         guestName: $('.ad-name').value.trim(),
                         guestPhone: $('.ad-phone').value.trim() || null,
+                        clientKey: picked ? picked.key : null,
                         note: null
                     };
                     if (!dto.serviceId) return err('Избери услуга.');
@@ -1591,7 +1639,7 @@ window.Calendar = (function () {
                     if (dto.procedureMinutes < 5 * (xs.length + 1)) return err('Времетраенето е твърде кратко за всички процедури.');
                     if (!dto.guestName) return err('Въведи име на клиента.');
                     if (ED) {
-                        const body = { serviceId: dto.serviceId, startAt, procedureMinutes: dto.procedureMinutes, price: dto.price, guestName: dto.guestName, guestPhone: dto.guestPhone };
+                        const body = { serviceId: dto.serviceId, startAt, procedureMinutes: dto.procedureMinutes, price: dto.price, guestName: dto.guestName, guestPhone: dto.guestPhone, clientKey: dto.clientKey };
                         if (xs.length) body.extras = xs;   // добавени процедури за същия клиент
                         if (empSel) body.employeeId = employeeId;
                         run = () => window.API.put(`/bookings/${ED.id}/edit`, body);
@@ -1838,7 +1886,7 @@ window.Calendar = (function () {
                     <div class="cal-modal__title">${esc(b.serviceName)}</div>
                     <div class="cal-modal__meta hint">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${cfg.showEmployee ? ' · ' + esc(b.employeeName) : ''} <span class="alert ${st.cls}" style="padding:.12rem .5rem;font-size:.72rem">${st.label}</span></div>
                     <div class="cal-modal__rows">
-                        <div class="cmrow"><span class="hint">Клиент</span><b>${esc(b.clientName || 'Клиент')}</b></div>
+                        <div class="cmrow"><span class="hint">Клиент</span><b>${esc(b.clientName || 'Клиент')}${b.clientId > 0 ? ' ' + profBadge() : ''}</b></div>
                         <div class="cmrow"><span class="hint">Телефон</span><span>${phone}</span></div>
                         <div class="cmrow"><span class="hint">Източник</span>${b.isOnline
                             ? `<span style="display:inline-flex;align-items:center;gap:.35rem;background:var(--blush-soft);color:var(--rose-deep);border-radius:999px;padding:.22rem .65rem;font-size:.76rem;font-weight:700"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg> Онлайн през сайта</span>`
@@ -1847,8 +1895,10 @@ window.Calendar = (function () {
                     ${cfg.hidePrices ? '' : priceBlock}
                     ${actions}
                     <div class="md-msg" style="margin-top:.8rem"></div>
+                    <div class="md-hist" hidden></div>
                 </div>`;
             document.body.appendChild(backdrop);
+            loadHistory(b, backdrop.querySelector('.md-hist'), () => document.body.contains(backdrop));
 
             const close = () => backdrop.remove();
             backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
@@ -1922,6 +1972,47 @@ window.Calendar = (function () {
                 };
                 mdH.addEventListener('change', onDur); mdM.addEventListener('change', onDur);
             }
+        }
+
+        // Минали часове на клиентката (явила се или не) — най-отдолу в попъпа на часа.
+        async function loadHistory(b, box, alive) {
+            if (!box || !b.clientKey || b.clientKey === 'n') return;
+            box.hidden = false;
+            box.innerHTML = `<div class="md-hist__h">Минали часове</div><div class="hint" style="font-size:.8rem">Зареждане…</div>`;
+            let h;
+            try { h = await window.API.get(`/clients/history?key=${encodeURIComponent(b.clientKey)}`); }
+            catch (e) { if (alive()) box.hidden = true; return; }
+            if (!alive()) return;
+            const now = new Date();
+            const past = (h && h.bookings || [])
+                .filter(x => x.id !== b.id && new Date(x.startAt) < now)
+                .sort((x, y) => new Date(y.startAt) - new Date(x.startAt));
+            const HS = {
+                completed: ['Дошла', 'is-ok'], no_show: ['Не дошла', 'is-no'],
+                cancelled: ['Отменен', 'is-x'], booked: ['Без отметка', 'is-x']
+            };
+            const nOk = past.filter(x => x.status === 'completed').length;
+            const nNo = past.filter(x => x.status === 'no_show').length;
+            const d = iso => { const t = new Date(iso); return `${pad(t.getDate())}.${pad(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)}`; };
+            const row = x => {
+                const [lbl, cls] = HS[x.status] || [x.status, 'is-x'];
+                const pr = (!cfg.hidePrices && x.price != null) ? `<em>${(+x.price).toLocaleString('bg-BG', { maximumFractionDigits: 2 })} €</em>` : '';
+                return `<li><span class="md-hist__d">${d(x.startAt)}</span>
+                    <span class="md-hist__s">${esc(x.serviceName)}<small>${esc(firstName(x.employeeName))}</small></span>
+                    ${pr}<i class="md-hist__st ${cls}">${lbl}</i></li>`;
+            };
+            const SHOW = 6;
+            box.innerHTML = `<div class="md-hist__h">Минали часове <span>${past.length}</span></div>`
+                + (past.length
+                    ? `<div class="md-hist__sum"><b class="is-ok">${nOk} дошла</b>${nNo ? `<b class="is-no">${nNo} не дошла</b>` : ''}</div>
+                       <ul class="md-hist__list">${past.slice(0, SHOW).map(row).join('')}</ul>
+                       ${past.length > SHOW ? `<button type="button" class="md-hist__more">Покажи всички (${past.length})</button>` : ''}`
+                    : `<div class="hint" style="font-size:.82rem">Първо посещение — няма минали часове.</div>`);
+            const more = box.querySelector('.md-hist__more');
+            if (more) more.addEventListener('click', () => {
+                box.querySelector('.md-hist__list').innerHTML = past.map(row).join('');
+                more.remove();
+            });
         }
 
         function renderForm(box) {

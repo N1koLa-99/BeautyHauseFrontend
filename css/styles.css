@@ -3564,3 +3564,35 @@ html.pf-lock, html.pf-lock body { overflow: hidden; }
 .rv-text { margin: 0; }
 .rv-svc { align-self: flex-start; margin-top: 1rem; background: var(--blush-soft); color: var(--rose-deep); border-radius: 999px; padding: .3rem .8rem; font-size: .78rem; font-weight: 700; }
 @media (max-width: 980px) { .testimonials--few { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
+
+/* ---- Клиент с профил: значка, банер при записване, минали часове в попъпа ---- */
+.bh-prof { display: inline-flex; align-items: center; gap: .25rem; vertical-align: middle; font-style: normal; font-family: inherit; font-size: .68rem; font-weight: 700; letter-spacing: .01em; line-height: 1; color: #2F7A50; background: #E6F4EC; border-radius: 999px; padding: .2rem .5rem .2rem .4rem; white-space: nowrap; }
+.bh-prof svg { flex: none; }
+/* Клиентка с профил в подсказките: целият ред е зелен + иконка пред името (не се реже при дълго име) */
+.ad-ac__it.is-prof { background: #EAF6EF; align-items: center; margin-bottom: 2px; }
+.ad-ac__it.is-prof b { color: #24563A; }
+.ad-ac__it.is-prof span { color: #3F7A58; }
+.ad-ac__it.is-prof:hover, .ad-ac__it.is-prof.is-act { background: #D4EEDF; }
+.ad-ac__ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: -.2rem; border-radius: 50%; background: #2F7A50; color: #fff; font-style: normal; }
+.ad-ac__ico svg { width: 11px; height: 11px; }
+.ad-known.is-prof { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; background: #F1F9F4; border: 1px solid #CDE7D6; color: #2F5D43; border-radius: 12px; padding: .55rem .7rem; font-size: .82rem; }
+.ad-known.is-prof[hidden] { display: none; }
+.ad-known.is-prof b { color: #24563A; }
+.md-hist { margin-top: 1.1rem; padding-top: 1rem; border-top: 2px solid var(--line); }
+.md-hist[hidden] { display: none; }
+.md-hist__h { display: flex; align-items: center; gap: .45rem; font-weight: 800; font-size: .95rem; color: var(--ink, #222); margin-bottom: .5rem; }
+.md-hist__h span { background: var(--blush-soft); color: var(--rose-deep); border-radius: 999px; padding: .1rem .5rem; font-size: .75rem; }
+.md-hist__sum { display: flex; gap: .4rem; margin-bottom: .55rem; }
+.md-hist__sum b { font-size: .74rem; border-radius: 999px; padding: .18rem .55rem; }
+.md-hist__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.md-hist__list li { display: flex; align-items: center; gap: .6rem; padding: .5rem 0; border-bottom: 1px solid var(--line); font-size: .84rem; }
+.md-hist__list li:last-child { border-bottom: 0; }
+.md-hist__d { flex: none; width: 4.6rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.md-hist__s { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; font-weight: 600; overflow: hidden; }
+.md-hist__s small { font-weight: 400; color: var(--muted); font-size: .74rem; }
+.md-hist__list em { flex: none; font-style: normal; color: var(--ink-soft); font-size: .8rem; }
+.md-hist__st { flex: none; font-style: normal; font-size: .7rem; font-weight: 700; border-radius: 999px; padding: .18rem .5rem; }
+.md-hist .is-ok { background: #E6F4EC; color: #2F7A50; }
+.md-hist .is-no { background: #FDECEC; color: #C0392B; }
+.md-hist .is-x  { background: var(--line); color: var(--muted); }
+.md-hist__more { margin-top: .4rem; border: 0; background: transparent; color: var(--rose-deep); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; padding: .3rem 0; }
