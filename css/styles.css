@@ -3596,3 +3596,146 @@ html.pf-lock, html.pf-lock body { overflow: hidden; }
 .md-hist .is-no { background: #FDECEC; color: #C0392B; }
 .md-hist .is-x  { background: var(--line); color: var(--muted); }
 .md-hist__more { margin-top: .4rem; border: 0; background: transparent; color: var(--rose-deep); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; padding: .3rem 0; }
+
+/* =====================================================================
+   Запази час — стъпка 3: само дните със свободни часове + часовете им
+   ===================================================================== */
+.bk-h { margin-bottom: .3rem; }
+.bk-sub { margin: 0 0 1.1rem; font-size: .86rem; }
+/* Месечен календар */
+.bk-cal { max-width: 520px; padding: 1rem; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+.bk-cal[hidden] { display: none; }
+.bk-cal__head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .8rem; }
+.bk-cal__title { font-family: var(--font-display); font-size: 1.2rem; font-weight: 500; color: var(--ink); }
+.bk-cal__nav { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--ivory); color: var(--ink); font-size: 1.5rem; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0 0 3px; -webkit-tap-highlight-color: transparent; transition: border-color .2s, background .2s; }
+.bk-cal__nav:disabled { opacity: .3; cursor: default; }
+@media (hover: hover) { .bk-cal__nav:not(:disabled):hover { border-color: var(--rose); } }
+.bk-cal__wd, .bk-cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.bk-cal__wd { margin-bottom: 5px; }
+.bk-cal__wd span { text-align: center; font-size: .7rem; font-weight: 700; color: var(--muted); letter-spacing: .03em; }
+.bk-cal__d { aspect-ratio: 1 / 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-radius: 10px; border: 1px solid transparent; font: inherit; color: var(--ink); background: transparent; padding: 0; -webkit-tap-highlight-color: transparent; }
+.bk-cal__d b { font-size: .95rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.bk-cal__d small { font-size: .66rem; font-weight: 700; line-height: 1; color: #3E8A69; }
+.bk-cal__d.is-out b, .bk-cal__d.is-full b { color: #CFC7BE; font-weight: 500; }
+.bk-cal__d.is-wait { background: linear-gradient(90deg, var(--blush-soft) 0%, #fff 50%, var(--blush-soft) 100%); background-size: 200% 100%; animation: bkSk 1.2s linear infinite; }
+.bk-cal__d.is-wait b { color: #BDB3A8; }
+.bk-cal__d.is-free { cursor: pointer; background: #EAF5EF; border-color: #CBE6D7; transition: transform .15s var(--ease-out), border-color .2s, background .2s; }
+.bk-cal__d.is-free b { font-weight: 700; color: #22533E; }
+.bk-cal__d.is-free:active { transform: scale(.95); }
+@media (hover: hover) { .bk-cal__d.is-free:not(.is-sel):hover { border-color: #4F9E7C; } }
+.bk-cal__d.is-today:not(.is-sel) { box-shadow: inset 0 0 0 1.5px var(--rose); }
+.bk-cal__d.is-sel { background: var(--grad-rose); border-color: transparent; box-shadow: 0 6px 16px rgba(125,107,95,.3); }
+.bk-cal__d.is-sel b, .bk-cal__d.is-sel small { color: #fff; }
+.bk-cal__d:focus-visible, .bk-cal__nav:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+.bk-cal__foot { margin-top: .8rem; min-height: 1.2rem; font-size: .8rem; color: var(--muted); }
+.bk-cal__lg { display: inline-flex; align-items: center; gap: .45rem; }
+.bk-cal__lg i { width: 12px; height: 12px; border-radius: 4px; background: #EAF5EF; border: 1px solid #CBE6D7; flex: none; }
+.bk-cal__err { color: #C0453F; }
+@keyframes bkSk { to { background-position: -200% 0; } }
+.bk-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; font-weight: 700; }
+@media (min-width: 721px) { .bk-cal { padding: 1.2rem 1.3rem; } .bk-cal__wd, .bk-cal__grid { gap: 7px; } .bk-cal__d b { font-size: 1rem; } .bk-cal__d small { font-size: .7rem; } }
+@media (max-width: 380px) { .bk-cal { padding: .7rem .55rem; border-radius: 14px; } .bk-cal__wd, .bk-cal__grid { gap: 3px; } .bk-cal__d { border-radius: 8px; } .bk-cal__d b { font-size: .85rem; } .bk-cal__d small { font-size: .6rem; } .bk-cal__nav { width: 36px; height: 36px; } }
+
+.bk-slots-wrap:empty { display: none; }
+.bk-slots-wrap { margin-top: 1.5rem; padding-top: 1.3rem; border-top: 1px solid var(--line); scroll-margin-top: calc(var(--nav-h) + 16px); }
+.bk-slots-h { margin: 0 0 .9rem; font-family: var(--font-body); font-size: .95rem; font-weight: 700; color: var(--ink); }
+.bk-slots-h span { font-weight: 500; color: var(--muted); }
+.bk-slots { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: .55rem; }
+.bk-slots .slot { min-height: 46px; font-size: .95rem; font-variant-numeric: tabular-nums; }
+@media (hover: none) { .bk-slots .slot:hover { transform: none; } }
+
+/* Телефон: лента долу с избрания час */
+.bk-bar { display: none; }
+@media (max-width: 720px) {
+    .bk-bar:not([hidden]) {
+        position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 150;
+        display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+        padding: .65rem .65rem .65rem 1.1rem; border-radius: 18px;
+        background: rgba(255,255,255,.96); border: 1px solid var(--line);
+        box-shadow: 0 10px 30px rgba(20,16,12,.16); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        animation: bkBarIn .25s var(--ease-out);
+    }
+    .bk-bar__txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+    .bk-bar__txt small { font-size: .7rem; color: var(--muted); font-weight: 600; }
+    .bk-bar__txt strong { font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bk-bar .btn { flex: none; padding: .75rem 1.3rem; }
+    body.has-bk-bar .footer { padding-bottom: 90px; }
+}
+@keyframes bkBarIn { from { transform: translateY(12px); opacity: 0; } }
+/* Малки телефони (≤ 360px): 3 часа на ред */
+@media (max-width: 360px) {
+    .bk-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .bk-bar .btn { padding: .75rem 1rem; }
+}
+@media (prefers-reduced-motion: reduce) { .bk-cal__d.is-wait, .bk-bar:not([hidden]) { animation: none; } }
+
+/* =====================================================================
+   Статистики — „Натовареност по дни" (опростена: средно часове на ден)
+   ===================================================================== */
+.ld-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: .3rem .6rem; margin: 0 0 1.1rem; padding: .85rem 1rem; border-radius: 14px; background: #EEF6F2; }
+.ld-top b { font-size: 1.15rem; color: #2E6B51; }
+.ld-top span { font-size: .85rem; color: #4D6B5E; }
+.ld-list { display: grid; gap: .55rem; }
+.ld-row { display: grid; grid-template-columns: 7.4rem minmax(0, 1fr) auto; align-items: center; gap: .7rem; }
+.ld-row__d { font-size: .88rem; font-weight: 600; color: #2A2622; white-space: nowrap; }
+.ld-row__track { height: 12px; border-radius: 999px; background: #F3EEE8; overflow: hidden; }
+.ld-row__fill { height: 100%; border-radius: 999px; background: #A9D2BF; }
+.ld-row.is-max .ld-row__fill { background: #4F9E7C; }
+.ld-row.is-max .ld-row__d { color: #2E6B51; font-weight: 800; }
+.ld-row__v { font-size: .84rem; font-weight: 700; color: #4D4740; white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 3.6rem; text-align: right; }
+.ld-row.is-off .ld-row__d, .ld-row.is-off .ld-row__v { color: #C4BBB1; font-weight: 500; }
+@media (max-width: 380px) { .ld-row { grid-template-columns: 6.4rem minmax(0, 1fr) auto; gap: .5rem; } .ld-row__d { font-size: .8rem; } .ld-row__v { min-width: 3.2rem; font-size: .8rem; } }
+
+/* Запази час — телефон: по-големи цели за пръст (дни ≥ 52px височина, часове 52px, стрелки 44px) */
+.bk-cal__d, .bk-cal__nav, .bk-slots .slot, .bk-bar .btn { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+@media (max-width: 720px) {
+    .booking-grid:not(.is-picking) .booking-panel-main { padding: 1.2rem .8rem; }
+    .bk-h, .bk-sub { padding-inline: .2rem; }
+    .bk-cal { max-width: none; padding: 0; border: 0; border-radius: 0; background: none; }
+    .bk-cal__head { margin-bottom: .6rem; padding-inline: .1rem; }
+    .bk-cal__nav { width: 44px; height: 44px; font-size: 1.7rem; }
+    .bk-cal__title { font-size: 1.25rem; }
+    .bk-cal__wd, .bk-cal__grid { gap: 4px; }
+    .bk-cal__wd span { font-size: .72rem; padding-bottom: 2px; }
+    .bk-cal__d { aspect-ratio: auto; height: 54px; border-radius: 12px; gap: 3px; }
+    .bk-cal__d b { font-size: 1.05rem; }
+    .bk-cal__d small { font-size: .7rem; }
+    .bk-cal__d.is-free:active { transform: scale(.92); background: #D6EDE1; }
+    .bk-cal__foot { padding-inline: .2rem; font-size: .78rem; }
+    .bk-slots-wrap { margin-top: 1.2rem; padding-top: 1.1rem; }
+    .bk-slots-h { padding-inline: .2rem; }
+    .bk-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .bk-slots .slot { min-height: 52px; font-size: 1.05rem; border-radius: 12px; }
+    .bk-slots .slot:active { transform: scale(.95); }
+    .bk-bar .btn { min-height: 48px; }
+}
+@media (max-width: 380px) {
+    .booking-grid:not(.is-picking) .booking-panel-main { padding: 1.1rem .55rem; }
+    .bk-cal__wd, .bk-cal__grid { gap: 3px; }
+    .bk-cal__d { height: 52px; border-radius: 10px; }
+    .bk-cal__d b { font-size: .98rem; }
+    .bk-cal__d small { font-size: .66rem; }
+    .bk-slots { gap: 6px; }
+}
+@media (min-width: 560px) and (max-width: 720px) { .bk-cal__d { height: 60px; } .bk-slots { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Запази час — една колона: „Избери ден" → „Избери час" → обобщението отдолу (и на компютър) */
+.booking-grid:not(.is-picking) { grid-template-columns: minmax(0, 1fr); max-width: 720px; margin-inline: auto; }
+.booking-grid:not(.is-picking) .booking-panel-summary { position: static; }
+.bk-h { margin-bottom: 1rem; }
+.bk-h--time { margin-bottom: .9rem; }
+.bk-cal__foot:empty { display: none; }
+@media (min-width: 721px) { .bk-cal { max-width: none; } .bk-cal__d { aspect-ratio: auto; height: 64px; } }
+/* „Натовареност по дни" — избор на период и специалист */
+.ld-tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .7rem; }
+.ld-tabs + .ld-tabs { margin-top: -.2rem; }
+.ld-tab { border: 1px solid #E3DDD3; background: #fff; color: #4D4740; font: inherit; font-size: .8rem; font-weight: 600; padding: .5rem .85rem; min-height: 38px; border-radius: 999px; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: background .15s, border-color .15s; }
+.ld-tab.is-on { background: #4F9E7C; border-color: #4F9E7C; color: #fff; }
+.ld-emps .ld-tab.is-on { background: #2A2622; border-color: #2A2622; }
+@media (hover: hover) { .ld-tab:not(.is-on):hover { border-color: #4F9E7C; } }
+.ld-top em { flex-basis: 100%; font-style: normal; font-size: .78rem; color: #6B8A7C; }
+.ld-row__fill { display: block; }
+.ld-periods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 3px; border-radius: 999px; background: #F3EEE8; }
+.ld-periods .ld-tab { border: 0; background: transparent; padding: .5rem .3rem; white-space: nowrap; }
+.ld-periods .ld-tab.is-on { background: #4F9E7C; color: #fff; box-shadow: 0 2px 8px rgba(79,158,124,.3); }
+.ld-emps { margin-top: 0 !important; }

@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Навигация между стъпки ---
     function goStep(n) {
+        curStep = n;
         panes.forEach(p => p.hidden = (+p.dataset.pane !== n));
         // Стъпка 1 е на цяла ширина (като каталога на началната страница), без обобщението.
         document.querySelector('.booking-grid').classList.toggle('is-picking', n === 1);
@@ -85,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
             s.classList.toggle('active', num === n);
             s.classList.toggle('done', num < n);
         });
+        updateBar();
         window.scrollTo({ top: document.querySelector('.steps').offsetTop - 120, behavior: 'smooth' });
     }
 
@@ -102,7 +104,30 @@ document.addEventListener('DOMContentLoaded', () => {
         $('sum-time').textContent = state.slot ? `${fmtDateBG(state.date)}, ${fmtTime(state.slot)}` : '—';
         $('sum-price').textContent = state.sel ? (n => Number(n) % 1 ? Number(n).toFixed(2) : String(Number(n)))(state.sel.price) + ' €' : '—';
         $('bk-confirm').disabled = !(state.emp && state.srv && state.slot);
+        updateBar();
     }
+
+    // --- Телефон: лента долу „Твоят час … [Потвърди]" ---
+    // Появява се, щом е избран час, и се скрива, когато истинският бутон „Потвърди часа" се вижда.
+    let confirmVisible = false, curStep = 1;
+    function updateBar() {
+        const bar = $('bk-bar');
+        if (!bar) return;
+        const show = curStep === 3 && !!state.slot && !confirmVisible;
+        if (show) { const d = new Date(state.date + 'T00:00:00'); $('bk-bar-when').textContent = `${d.getDate()} ${['яну','фев','мар','апр','май','юни','юли','авг','сеп','окт','ное','дек'][d.getMonth()]}, ${fmtTime(state.slot)}`; }
+        bar.hidden = !show;
+        document.body.classList.toggle('has-bk-bar', show);
+    }
+    if ('IntersectionObserver' in window) {
+        new IntersectionObserver(es => { confirmVisible = es[0].isIntersecting; updateBar(); }, { threshold: .6 })
+            .observe($('bk-confirm'));
+    }
+    // „Преглед" не потвърждава — само плъзга надолу до обобщението на резервацията.
+    $('bk-bar-go').addEventListener('click', () => {
+        const box = document.querySelector('.booking-panel-summary');
+        const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 70;
+        window.scrollTo({ top: box.getBoundingClientRect().top + window.scrollY - navH - 12, behavior: 'smooth' });
+    });
 
     // --- Стъпка 1: каталогът от началната страница (категории → групи → „Запиши") ---
     // Всеки ред в каталога е конкретна услуга при конкретен специалист, така че
@@ -266,126 +291,176 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Стъпка 3: дата и свободни часове ---
+    // --- Стъпка 3: ден и час — месечен календар ---
+    // Отваря се месецът; дните със свободни часове са оцветени и показват колко свободни часа има.
+    // Клик по ден -> отдолу излизат свободните часове. Бекендът дава часовете ден по ден
+    // (/availability), затова проверяваме дните на месеца на порции по 7 (паралелно).
     const pad2 = n => String(n).padStart(2, '0');
     const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const WD = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-    const MON = ['яну', 'фев', 'мар', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
+    const MONTHS = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни', 'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември'];
 
     function todayIso() { return isoDate(new Date()); }
     // Часове се запазват най-много 6 месеца напред (същото правило е и в backend-а).
     const MAX_MONTHS = 6;
     function maxIso() { const d = new Date(); d.setMonth(d.getMonth() + MAX_MONTHS); return isoDate(d); }
+    const ymOf = k => k.slice(0, 7);                       // '2026-10'
+    const ymAdd = (ym, n) => { const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
 
-    function initDate() {
-        const inp = $('bk-date');
-        const iso = todayIso();
-        inp.min = iso;
-        inp.max = maxIso();
-        if (!state.date || state.date < iso) state.date = iso;
-        inp.value = state.date;
-        renderDays();
-        loadSlots();
+    const BATCH = 7;
+    // cal: кеш за текущия специалист + услуга. slots[k] = [] (няма) | [...] (свободни); месец -> 'loading' | 'done' | 'failed'
+    let cal = null;
+    function calKey() { return state.emp && state.srv ? state.emp.id + ':' + state.srv.serviceId : ''; }
+
+    async function fetchSlots(k) {
+        try {
+            const r = await API.get(`/availability?employeeId=${state.emp.id}&serviceId=${state.srv.serviceId}&date=${k}`);
+            return Array.isArray(r) ? r : [];
+        } catch (e) { return null; }
     }
 
-    // Красив избор на ден: чипове за следващите 14 дни.
-    function renderDays() {
-        const box = $('bk-days');
-        if (!box) return;
-        const base = new Date(todayIso() + 'T00:00:00');
-        let html = '';
-        for (let i = 0; i < 14; i++) {
-            const d = new Date(base); d.setDate(base.getDate() + i);
-            const k = isoDate(d);
-            const sel = k === state.date;
-            const top = i === 0 ? 'Днес' : (i === 1 ? 'Утре' : WD[d.getDay()]);
-            const base_s = 'flex:none;min-width:62px;display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.55rem .4rem;border-radius:14px;cursor:pointer;transition:.15s;border:1px solid var(--line);background:var(--ivory)';
-            const sel_s = 'flex:none;min-width:62px;display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.55rem .4rem;border-radius:14px;cursor:pointer;transition:.15s;border:1px solid transparent;background:var(--grad-rose);color:#fff;box-shadow:0 8px 20px rgba(206,122,120,.32)';
-            html += `<button class="bk-day" data-k="${k}" style="${sel ? sel_s : base_s}">
-                <span style="font-size:.72rem;font-weight:600;opacity:${sel ? '.95' : '.7'}">${top}</span>
-                <span style="font-size:.82rem;font-weight:700">${d.getDate()} ${MON[d.getMonth()]}</span>
-            </button>`;
+    // Старт на стъпка 3 (и при смяна на специалист/услуга).
+    function initDate(force) {
+        const key = calKey();
+        if (!key) return;
+        if (force || !cal || cal.key !== key) {
+            cal = { key, ym: ymOf(todayIso()), slots: {}, months: {}, autoJump: true };
+            state.date = null;
         }
-        box.innerHTML = html;
-        box.querySelectorAll('.bk-day').forEach(b => b.addEventListener('click', () => pickDate(b.dataset.k)));
+        renderCal();
+        renderSlots();
+        loadMonth(cal.ym);
     }
 
-    function pickDate(k, preselect) {
-        if (k > maxIso()) {
-            $('bk-date').value = state.date || todayIso();
-            $('bk-slots-wrap').innerHTML = `<div class="alert alert--info">Часове се запазват най-много ${MAX_MONTHS} месеца напред.</div>`;
+    // Проверява всички дни на месеца (от днес нататък, до 6 месеца).
+    async function loadMonth(ym) {
+        const my = cal;
+        if (!my || my.months[ym] === 'loading' || my.months[ym] === 'done') return;
+        my.months[ym] = 'loading';
+        renderCal();
+        const t = todayIso(), last = maxIso();
+        const y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+        const days = [];
+        for (let d = 1; d <= new Date(y, m, 0).getDate(); d++) {
+            const k = `${ym}-${pad2(d)}`;
+            if (k >= t && k <= last && !(k in my.slots)) days.push(k);
+        }
+        let failed = false;
+        for (let i = 0; i < days.length; i += BATCH) {
+            const part = days.slice(i, i + BATCH);
+            const res = await Promise.all(part.map(fetchSlots));
+            if (cal !== my) return;   // сменена е услугата/специалистът
+            if (res.every(r => r === null)) { failed = true; break; }
+            part.forEach((k, j) => { if (res[j] !== null) my.slots[k] = res[j]; });
+            if (my.ym === ym) { renderCal(); renderSlots(); }
+        }
+        my.months[ym] = failed ? 'failed' : 'done';
+        // Ако в този месец няма нито един свободен ден — сами минаваме на следващия (само при първото отваряне).
+        if (!failed && my.autoJump && my.ym === ym && !monthHasFree(ym) && ymAdd(ym, 1) <= ymOf(maxIso())) {
+            my.ym = ymAdd(ym, 1);
+            renderCal();
+            loadMonth(my.ym);
             return;
         }
+        if (my.ym === ym) my.autoJump = false;
+        if (my.ym === ym) { renderCal(); renderSlots(); }
+    }
+    function monthHasFree(ym) { return Object.keys(cal.slots).some(k => ymOf(k) === ym && cal.slots[k].length); }
+
+    function goMonth(n) {
+        if (!cal) return;
+        const ym = ymAdd(cal.ym, n);
+        if (ym < ymOf(todayIso()) || ym > ymOf(maxIso())) return;
+        cal.ym = ym; cal.autoJump = false;
+        // Денят се избира само ръчно; избраният ден остава, докато не се цъкне друг.
+        renderCal();
+        renderSlots();
+        loadMonth(ym);
+    }
+
+    function renderCal() {
+        const box = $('bk-days');
+        if (!box || !cal) return;
+        const ym = cal.ym, y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+        const t = todayIso(), last = maxIso();
+        const st = cal.months[ym];
+        const first = new Date(y, m - 1, 1);
+        const lead = (first.getDay() + 6) % 7;          // седмицата започва от понеделник
+        const nDays = new Date(y, m, 0).getDate();
+        let cells = '<span class="bk-cal__e"></span>'.repeat(lead);
+        for (let d = 1; d <= nDays; d++) {
+            const k = `${ym}-${pad2(d)}`;
+            const s = cal.slots[k];
+            const out = k < t || k > last;
+            const free = s && s.length;
+            const pending = !out && !s && st !== 'failed';
+            const sel = k === state.date;
+            const cls = `bk-cal__d${out ? ' is-out' : ''}${free ? ' is-free' : ''}${!out && s && !s.length ? ' is-full' : ''}${pending ? ' is-wait' : ''}${sel ? ' is-sel' : ''}${k === t ? ' is-today' : ''}`;
+            const lbl = free ? `${d} ${MONTHS[m - 1]} — ${s.length} свободни часа` : `${d} ${MONTHS[m - 1]} — няма свободни часове`;
+            cells += free
+                ? `<button type="button" class="${cls}" data-k="${k}" aria-pressed="${sel}" aria-label="${lbl}"><b>${d}</b><small>${s.length}</small></button>`
+                : `<span class="${cls}" aria-label="${out ? d : lbl}"><b>${d}</b></span>`;
+        }
+        const canPrev = ym > ymOf(t), canNext = ym < ymOf(last);
+        box.innerHTML = `
+            <div class="bk-cal__head">
+                <button type="button" class="bk-cal__nav" data-n="-1" ${canPrev ? '' : 'disabled'} aria-label="Предишен месец">‹</button>
+                <strong class="bk-cal__title">${MONTHS[m - 1]} ${y}</strong>
+                <button type="button" class="bk-cal__nav" data-n="1" ${canNext ? '' : 'disabled'} aria-label="Следващ месец">›</button>
+            </div>
+            <div class="bk-cal__wd"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Нд</span></div>
+            <div class="bk-cal__grid">${cells}</div>
+            <div class="bk-cal__foot">${st === 'loading' ? '<span class="bk-cal__load">Проверяваме свободните часове…</span>'
+                : st === 'failed' ? '<span class="bk-cal__err">Не успяхме да заредим часовете. <button type="button" class="bk-link" id="bk-retry">Опитай пак</button></span>'
+                : st === 'done' && !monthHasFree(ym) ? `<span>През ${MONTHS[m - 1].toLowerCase()} няма свободни часове.${canNext ? ' Виж следващия месец →' : ''}</span>`
+                : ''}</div>`;
+        box.hidden = false;
+        box.querySelectorAll('.bk-cal__nav').forEach(b => b.addEventListener('click', () => goMonth(+b.dataset.n)));
+        box.querySelectorAll('.bk-cal__d[data-k]').forEach(b => b.addEventListener('click', () => pickDate(b.dataset.k)));
+        const r = $('bk-retry');
+        if (r) r.addEventListener('click', () => { delete cal.months[ym]; loadMonth(ym); });
+    }
+
+    function pickDate(k) {
+        if (!cal || !cal.slots[k] || !cal.slots[k].length) return;
+        if (state.date !== k) state.slot = null;
         state.date = k;
-        state.slot = preselect || null;
-        $('bk-date').value = k;
         updateSummary();
-        renderDays();
-        loadSlots(preselect);
-    }
-
-    async function loadSlots(preselect) {
-        const wrap = $('bk-slots-wrap');
-        if (!state.emp || !state.srv || !state.date) return;
-        wrap.innerHTML = `<div class="spinner"></div>`;
-        try {
-            const q = `/availability?employeeId=${state.emp.id}&serviceId=${state.srv.serviceId}&date=${state.date}`;
-            const slots = await API.get(q);
-            if (!slots || !slots.length) {
-                // Няма места за деня — предлагаме да намерим най-скорошния свободен час.
-                wrap.innerHTML = `
-                    <div class="alert alert--info" style="display:flex;align-items:center;gap:.5rem">${Icon('moon', { size: 16 })} За ${fmtDateBG(state.date)} няма свободни часове.</div>
-                    <button class="btn btn--gold bk-find" style="margin-top:.9rem">Искаш ли да намерим най-скорошния свободен час? →</button>
-                    <div class="bk-find-res" style="margin-top:1rem"></div>`;
-                wrap.querySelector('.bk-find').addEventListener('click', findNext);
-                return;
-            }
-            wrap.innerHTML = `<div class="slots">` + slots.map(iso =>
-                `<button class="slot${preselect === iso ? ' selected' : ''}" data-iso="${esc(iso)}">${iso.slice(11, 16)}</button>`).join('') + `</div>`;
-            wrap.querySelectorAll('.slot').forEach(b =>
-                b.addEventListener('click', () => {
-                    wrap.querySelectorAll('.slot').forEach(x => x.classList.remove('selected'));
-                    b.classList.add('selected');
-                    state.slot = b.dataset.iso;
-                    updateSummary();
-                }));
-        } catch (err) {
-            wrap.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
-        }
-    }
-
-    // Търси напред (до 45 дни) първия ден със свободни часове.
-    async function findNext() {
-        const wrap = $('bk-slots-wrap');
-        const res = wrap.querySelector('.bk-find-res');
-        const btn = wrap.querySelector('.bk-find');
-        if (btn) { btn.disabled = true; btn.style.opacity = .7; btn.textContent = 'Търсим…'; }
-        if (res) res.innerHTML = `<div class="spinner"></div>`;
-
-        const base = new Date(state.date + 'T00:00:00');
-        for (let i = 1; i <= 45; i++) {
-            const d = new Date(base); d.setDate(base.getDate() + i);
-            const k = isoDate(d);
-            if (k > maxIso()) break;
-            let slots = [];
-            try { slots = await API.get(`/availability?employeeId=${state.emp.id}&serviceId=${state.srv.serviceId}&date=${k}`); }
-            catch (e) { slots = []; }
-            if (slots && slots.length) {
-                res.innerHTML = `
-                    <div class="alert alert--ok" style="display:flex;align-items:center;gap:.5rem">${Icon('sparkle', { size: 16 })} Най-скорошен свободен час: <strong>${fmtDateBG(k)}</strong></div>
-                    <div class="slots" style="margin-top:.8rem">` + slots.map(iso =>
-                    `<button class="slot bk-found" data-k="${k}" data-iso="${esc(iso)}">${iso.slice(11, 16)}</button>`).join('') + `</div>`;
-                res.querySelectorAll('.bk-found').forEach(b =>
-                    b.addEventListener('click', () => pickDate(b.dataset.k, b.dataset.iso)));
-                return;
+        renderCal();
+        renderSlots();
+        // На телефон часовете са под календара — плъзгаме до тях.
+        if (window.matchMedia('(max-width: 720px)').matches) {
+            const w = $('bk-slots-wrap');
+            const top = w.getBoundingClientRect().top;
+            if (top > window.innerHeight * .55) {
+                const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 70;
+                window.scrollTo({ top: top + window.scrollY - navH - 16, behavior: 'smooth' });
             }
         }
-        res.innerHTML = `<div class="alert alert--info">Няма свободни часове в следващите 45 дни. Пробвай друг специалист или се обади в салона.</div>`;
     }
 
-    $('bk-date').addEventListener('change', (e) => {
-        if (e.target.value) pickDate(e.target.value);
-    });
+    function fmtDateLong(k) {
+        return new Date(k + 'T00:00:00').toLocaleDateString('bg-BG', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+
+    function renderSlots() {
+        const wrap = $('bk-slots-wrap');
+        if (!wrap) return;
+        const slots = cal && state.date ? cal.slots[state.date] : null;
+        if (!slots || !slots.length) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = `<h3 class="bk-h bk-h--time">Избери час</h3>
+            <div class="slots bk-slots">` + slots.map(iso =>
+            `<button type="button" class="slot${state.slot === iso ? ' selected' : ''}" data-iso="${esc(iso)}">${iso.slice(11, 16)}</button>`).join('') + `</div>`;
+        wrap.querySelectorAll('.slot').forEach(b =>
+            b.addEventListener('click', () => {
+                wrap.querySelectorAll('.slot').forEach(x => x.classList.remove('selected'));
+                b.classList.add('selected');
+                state.slot = b.dataset.iso;
+                updateSummary();
+            }));
+    }
+
+    // След „часът е зает" (409): проверяваме отначало.
+    function loadSlots() { state.slot = null; updateSummary(); initDate(true); }
 
     // --- Назад ---
     $('bk-back-1').addEventListener('click', () => goStep(1));

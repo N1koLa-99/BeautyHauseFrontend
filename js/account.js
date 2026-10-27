@@ -618,17 +618,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const hasDayRevenue = Object.keys(perDay).length > 0;
 
-            // Часове по ден от седмицата (всички активни)
-            const WD = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-            const perWd = [0, 0, 0, 0, 0, 0, 0];
-            (cal || []).forEach(b => { perWd[new Date(b.startAt).getDay()]++; });
-            const order = [1, 2, 3, 4, 5, 6, 0];
-            const wdBars = order.map(i => ({ label: WD[i], value: perWd[i] }));
-
             const totalBookings = (cal || []).length;
             const completed = (cal || []).filter(b => b.status === 'completed').length;
-            const busiest = wdBars.reduce((a, b) => b.value > a.value ? b : a, { label: '—', value: 0 });
-            const WDF = { 'Пн': 'Понеделник', 'Вт': 'Вторник', 'Ср': 'Сряда', 'Чт': 'Четвъртък', 'Пт': 'Петък', 'Сб': 'Събота', 'Нд': 'Неделя' };
 
             // Очакван приход до края на месеца = реализирано + стойността на
             // предстоящите записани (booked) часове. Може да варира (отмени/неявявания).
@@ -659,13 +650,86 @@ document.addEventListener('DOMContentLoaded', () => {
                     </section>
                     <section class="st-card">
                         ${sectionTitle('Натовареност по дни', ACC.cal)}
-                        <p class="hint st-sub">Брой часове по ден от седмицата</p>
-                        ${Charts.bars(wdBars, { color: ACC.cal, highlightMax: true, showValues: 'all' })}
+                        <p class="hint st-sub">Колко записани часа има по дни от седмицата (без отменените)</p>
+                        <div class="ld-box"></div>
                     </section>
                 </div>`;
+            mountLoadByDay(dbox.querySelector('.ld-box'));
         } catch (err) {
             dbox.innerHTML = `<div class="alert alert--err">${esc(err.message)}</div>`;
         }
+    }
+
+    // ---- „Натовареност по дни": колко записани часа има във всеки ден от седмицата ----
+    // Период: тази седмица / този месец / общо; специалист: всички или една.
+    // Броят се всички неотменени часове (проведени, неявили се и записани/предстоящи).
+    function mountLoadByDay(box) {
+        if (!box) return;
+        const WD = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+        const WDF = ['Неделя', 'Понеделник', 'Вторник', 'Сряда', 'Четвъртък', 'Петък', 'Събота'];
+        const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const now = new Date();
+        const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7);
+        const nextMonday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7);
+        const far = new Date(now.getFullYear(), now.getMonth() + 7, 1);
+        const PERIODS = {
+            week:  { label: 'Седмица', txt: 'тази седмица', from: iso(monday), to: iso(nextMonday) },
+            month: { label: 'Месец', txt: 'този месец', from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(new Date(now.getFullYear(), now.getMonth() + 1, 1)) },
+            all:   { label: 'Общо', txt: 'за цялото време', from: '2025-01-01', to: iso(far) }
+        };
+        const st = { period: 'month', emp: 'all' };
+        const cache = {};
+        let emps = null;
+        const firstName = n => String(n || '').trim().split(/\s+/)[0];
+        const word = n => n === 1 ? '1 час' : n + ' часа';
+
+        const load = (k) => cache[k] || (cache[k] = API.get(`/reports/calendar?from=${PERIODS[k].from}&to=${PERIODS[k].to}`)
+            .then(r => (r || []).filter(b => b.status !== 'cancelled'))
+            .catch(e => { delete cache[k]; throw e; }));
+
+        let drawId = 0;
+        async function draw() {
+            const my = ++drawId;
+            box.innerHTML = tabsHtml() + `<div class="ld-body"><div class="spinner" style="margin:1.4rem auto"></div></div>`;
+            bind();
+            let rows;
+            try {
+                [rows] = await Promise.all([load(st.period), emps ? null : API.get('/employees').then(e => { emps = e || []; }).catch(() => { emps = []; })]);
+            } catch (err) {
+                if (my === drawId) box.querySelector('.ld-body').innerHTML = `<p class="hint">Не успяхме да заредим данните.</p>`;
+                return;
+            }
+            if (my !== drawId) return;   // междувременно е избран друг период/специалист
+            if (!box.querySelector('.ld-emps') && emps.length > 1) { box.innerHTML = tabsHtml() + `<div class="ld-body"></div>`; bind(); }
+            const list = st.emp === 'all' ? rows : rows.filter(b => String(b.employeeId) === st.emp);
+            const per = [0, 0, 0, 0, 0, 0, 0];
+            list.forEach(b => { per[new Date(b.startAt.slice(0, 10) + 'T12:00:00').getDay()]++; });
+            const order = [1, 2, 3, 4, 5, 6, 0].filter(i => i !== 0 || per[0] > 0);
+            const max = Math.max(...order.map(i => per[i]));
+            const top = order.find(i => per[i] === max);
+            const total = order.reduce((s, i) => s + per[i], 0);
+            const who = st.emp === 'all' ? '' : ' при ' + esc(firstName((emps.find(e => String(e.id) === st.emp) || {}).fullName));
+            box.querySelector('.ld-body').innerHTML = !total
+                ? `<p class="hint" style="margin:.8rem 0 0">Няма записани часове${who} ${PERIODS[st.period].txt}.</p>`
+                : `<div class="ld-top"><b>${WDF[top]}</b><span>е най-натовареният ден — ${word(max)}</span><em>Общо ${PERIODS[st.period].txt}: ${word(total)}${who}</em></div>
+                   <div class="ld-list">${order.map(i => `
+                     <div class="ld-row${i === top ? ' is-max' : ''}${per[i] ? '' : ' is-off'}">
+                        <span class="ld-row__d">${WDF[i]}</span>
+                        <span class="ld-row__track"><span class="ld-row__fill" style="width:${(per[i] / max * 100).toFixed(1)}%"></span></span>
+                        <span class="ld-row__v">${per[i] ? word(per[i]) : 'няма'}</span>
+                     </div>`).join('')}</div>`;
+        }
+        function tabsHtml() {
+            const p = Object.keys(PERIODS).map(k => `<button type="button" class="ld-tab${st.period === k ? ' is-on' : ''}" data-p="${k}">${PERIODS[k].label}</button>`).join('');
+            const e = emps && emps.length > 1 ? `<div class="ld-tabs ld-emps"><button type="button" class="ld-tab${st.emp === 'all' ? ' is-on' : ''}" data-e="all">Всички</button>` +
+                emps.map(x => `<button type="button" class="ld-tab${st.emp === String(x.id) ? ' is-on' : ''}" data-e="${x.id}">${esc(firstName(x.fullName))}</button>`).join('') + `</div>` : '';
+            return `<div class="ld-tabs ld-periods">${p}</div>${e}`;
+        }
+        function bind() {
+            box.querySelectorAll('[data-p]').forEach(b => b.addEventListener('click', () => { st.period = b.dataset.p; draw(); }));
+            box.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { st.emp = b.dataset.e; draw(); }));
+        }
+        draw();
     }
 
     // ---- Раздел ГРАФИК ----

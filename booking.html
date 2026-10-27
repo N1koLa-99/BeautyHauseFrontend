@@ -29,7 +29,7 @@
     <!-- SEO:END -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="css/styles.css?v=20261007r2">
+    <link rel="stylesheet" href="css/styles.css?v=20261027ld4">
 </head>
 <body>
 
@@ -81,17 +81,11 @@
                         <button class="btn btn--ghost" id="bk-back-1" style="margin-top:1.4rem">← Назад</button>
                     </div>
 
-                    <!-- Стъпка 3: дата и час -->
+                    <!-- Стъпка 3: ден и час — месечен календар, свободните дни са оцветени -->
                     <div class="bk-pane" data-pane="3" hidden>
-                        <h3 style="margin-bottom:1.2rem">Избери дата и час</h3>
-                        <div id="bk-days" style="display:flex;gap:.5rem;overflow-x:auto;padding:.2rem .1rem .7rem"></div>
-                        <div class="field" style="max-width:230px;margin-top:.4rem">
-                            <label>Друга дата</label>
-                            <input class="input" type="date" id="bk-date">
-                        </div>
-                        <div id="bk-slots-wrap" style="margin-top:1.2rem">
-                            <p class="hint">Избери дата, за да видиш свободните часове.</p>
-                        </div>
+                        <h3 class="bk-h">Избери ден</h3>
+                        <div class="bk-cal" id="bk-days" hidden></div>
+                        <div id="bk-slots-wrap" class="bk-slots-wrap"></div>
                         <button class="btn btn--ghost" id="bk-back-2" style="margin-top:1.4rem">← Назад</button>
                     </div>
 
@@ -121,6 +115,12 @@
             </div>
         </div>
     </section>
+
+    <!-- Телефон: лента долу с избрания час и „Потвърди" (не се налага да се скролва до обобщението) -->
+    <div class="bk-bar" id="bk-bar" hidden>
+        <div class="bk-bar__txt"><small>Твоят час</small><strong id="bk-bar-when"></strong></div>
+        <button class="btn btn--primary" id="bk-bar-go" type="button">Преглед ↓</button>
+    </div>
 
     <footer class="footer">
         <div class="container">
@@ -154,6 +154,6 @@
     <script src="js/catalog-data.js?v=20260929l"></script>
     <script src="js/portfolio.js?v=20261005a"></script>
     <script src="js/catalog.js?v=20261007buf"></script>
-    <script src="js/booking.js?v=20261007buf"></script>
+    <script src="js/booking.js?v=20261027preview"></script>
 </body>
 </html>
