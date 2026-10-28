@@ -395,9 +395,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const pending = !out && !s && st !== 'failed';
             const sel = k === state.date;
             const cls = `bk-cal__d${out ? ' is-out' : ''}${free ? ' is-free' : ''}${!out && s && !s.length ? ' is-full' : ''}${pending ? ' is-wait' : ''}${sel ? ' is-sel' : ''}${k === t ? ' is-today' : ''}`;
-            const lbl = free ? `${d} ${MONTHS[m - 1]} — ${s.length} свободни часа` : `${d} ${MONTHS[m - 1]} — няма свободни часове`;
+            const lbl = free ? `${d} ${MONTHS[m - 1]} — има свободни часове` : `${d} ${MONTHS[m - 1]} — няма свободни часове`;
             cells += free
-                ? `<button type="button" class="${cls}" data-k="${k}" aria-pressed="${sel}" aria-label="${lbl}"><b>${d}</b><small>${s.length}</small></button>`
+                ? `<button type="button" class="${cls}" data-k="${k}" aria-pressed="${sel}" aria-label="${lbl}"><b>${d}</b></button>`
                 : `<span class="${cls}" aria-label="${out ? d : lbl}"><b>${d}</b></span>`;
         }
         const canPrev = ym > ymOf(t), canNext = ym < ymOf(last);
