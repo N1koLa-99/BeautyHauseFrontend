@@ -403,6 +403,8 @@ window.Calendar = (function () {
             ? `${c.b.startAt.slice(11, 16)}–${(c.b.endAt || '').slice(11, 16)} · ${esc(c.b.clientName || 'Клиент')} · ${esc(c.b.serviceName)}`
             : `${c.r.startAt.slice(11, 16)}–${c.r.endAt.slice(11, 16)} · ${c.r.blockType === 'reserved' ? 'Запазено' : 'Почивка'}${c.r.note ? ' · ' + esc(c.r.note) : ''}`;
         const offsFor = k => { const a = offs[k] || []; return empFilter != null ? a.filter(o => o.employeeId === empFilter) : a; };
+        // Записан час в почивен ден на специалистката -> маркира се, за да се махне ръчно.
+        const inOffDay = b => b.status === 'booked' && (offs[b.startAt.slice(0, 10)] || []).some(o => o.kind === 'off' && o.employeeId === b.employeeId);
         // Почивки/почивни дни: за служител (собствения график) и шефа (чужд / целия салон).
         const canRest = () => !!(cfg.editable && (cfg.staffId || hasEmps()));
         const ITEM_SEL = '.sc-bk, .sc-dayoff, .sc-offtag, .sc-sel.is-pend';
@@ -555,7 +557,7 @@ window.Calendar = (function () {
                 const done = b.status === 'completed' ? '<i class="sc-bk__ok" title="Завършен">✓</i>' : '';
                 // Минал (вече свършил) час -> по-блед; предстоящ -> по-ярък.
                 const past = (b.endAt || b.startAt).slice(0, 16) <= nowStamp;
-                const clash = clashesOf(b).length > 0;
+                const inOff = inOffDay(b), clash = clashesOf(b).length > 0 || inOff;
                 const cls = `sc-bk${clash ? ' is-clash' : ''}${flagged ? ' is-flag' : ''}${b.status === 'completed' ? ' is-done' : ''}${b.status === 'cancelled' ? ' is-cancel' : ''}${past ? ' is-past' : ' is-next'}`;
                 const online = b.isOnline
                     ? `<span class="sc-bk__web" title="Записан онлайн през сайта"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.1c2.4 2.6 2.4 15.2 0 17.8M12 3.1c-2.4 2.6-2.4 15.2 0 17.8"/></svg></span>` : '';
@@ -563,7 +565,7 @@ window.Calendar = (function () {
                     <span class="sc-bk__t">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${mark}</span>
                     <span class="sc-bk__s">${esc(b.serviceName)}</span>
                     <span class="sc-bk__c">${esc(b.clientName || 'Клиент')}${cfg.showEmployee && empFilter == null && view !== 'day' ? ' · ' + esc(firstName(b.employeeName)) : ''}</span>
-                    ${online}${done}${clash ? '<i class="sc-bk__clash" title="Застъпва се с друг час">!</i>' : ''}
+                    ${online}${done}${clash ? `<i class="sc-bk__clash" title="${inOff ? 'Часът е в почивен ден — махни го' : 'Застъпва се с друг час'}">!</i>` : ''}
                 </button>`;
             }).join('');
         }
@@ -766,7 +768,7 @@ window.Calendar = (function () {
                 const dot = cnt ? (cnt > loadR ? '#D9534F' : (cnt > loadY ? '#E7B100' : '#4E9E76')) : '';
                 const items = arr.slice(0, 3).map(b => {
                     const c = (b.noShowCount > 0 || b.status === 'no_show') ? '#D9534F' : empColor(b.employeeId);
-                    const clash = clashesOf(b).length > 0;
+                    const inOff = inOffDay(b), clash = clashesOf(b).length > 0 || inOff;
                     return `<span class="sc-mi${b.status === 'cancelled' ? ' is-cancel' : ''}${clash ? ' is-clash' : ''}" style="--bc:${c}"><b>${b.startAt.slice(11, 16)}</b> ${clash ? '⚠ ' : ''}${esc(b.serviceName)}</span>`;
                 }).join('');
                 return `<button type="button" class="sc-mc${other ? ' is-other' : ''}${workHours[d.getDay()] ? '' : ' is-off'}${k === tk ? ' is-today' : ''}${k === selKey ? ' is-sel' : ''}" data-k="${k}">
@@ -1835,6 +1837,9 @@ window.Calendar = (function () {
             const clashWarn = clashes.length
                 ? `<div class="md-clash"><b>⚠ Застъпва се с:</b>${clashes.map(c => `<span>${clashLabel(c)}</span>`).join('')}
                     <small>Премести или скъси единия, за да не се застъпват.</small></div>` : '';
+            // Часът е в почивен ден (денят е затворен след записването) -> клиентът не е уведомен.
+            const offWarn = inOffDay(b)
+                ? `<div class="md-clash"><b>⚠ Този ден е почивен</b><small>Клиентът не е уведомен автоматично — обади му се и отмени или премести часа.</small></div>` : '';
 
             // Цена, която може да се поправи при затваряне на часа („Присъства“) —
             // напр. клиентът е платил друга сума. Важи и за минали часове.
@@ -1882,7 +1887,7 @@ window.Calendar = (function () {
             backdrop.innerHTML = `
                 <div class="cal-modal">
                     <button class="cal-modal__close" aria-label="Затвори">×</button>
-                    ${warn}${clashWarn}
+                    ${warn}${offWarn}${clashWarn}
                     <div class="cal-modal__title">${esc(b.serviceName)}</div>
                     <div class="cal-modal__meta hint">${b.startAt.slice(11, 16)}–${(b.endAt || '').slice(11, 16)}${cfg.showEmployee ? ' · ' + esc(b.employeeName) : ''} <span class="alert ${st.cls}" style="padding:.12rem .5rem;font-size:.72rem">${st.label}</span></div>
                     <div class="cal-modal__rows">
