@@ -29,7 +29,7 @@
             hours: 'Пн–Пт 09:00–18:30 · Сб 10:00–14:30 · Нд почивен',
             facebook: 'https://www.facebook.com/BeautyHouse19R/',
             mapsQuery: 'Beauty House, пл. Георги Измирлиев 3, Горна Оряховица',
-            instagram: '#', tiktok: '#'
+            instagram: 'https://www.instagram.com/beautyhouse.academy/'
         }
     };
 })();

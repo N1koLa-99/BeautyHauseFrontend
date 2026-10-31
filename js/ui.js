@@ -83,7 +83,7 @@
 
         // --- Попълване на контактни данни от config ---
         const S = window.BH_CONFIG?.SALON || {};
-        const SOCIAL_KEYS = ['instagram', 'facebook', 'tiktok'];
+        const SOCIAL_KEYS = ['instagram', 'facebook'];
         document.querySelectorAll('[data-salon]').forEach(el => {
             const key = el.getAttribute('data-salon');
             if (S[key]) {
