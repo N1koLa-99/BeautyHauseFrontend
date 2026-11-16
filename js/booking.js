@@ -303,6 +303,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Часове се запазват най-много 6 месеца напред (същото правило е и в backend-а).
     const MAX_MONTHS = 6;
     function maxIso() { const d = new Date(); d.setMonth(d.getMonth() + MAX_MONTHS); return isoDate(d); }
+    // Последен ден за онлайн записване при служител, който напуска (Ирина работи до 30.11).
+    const LAST_DAY = { 'ирина': '2026-11-30' };
+    function lastIso() {
+        const first = ((state.emp && state.emp.fullName) || '').trim().split(/\s+/)[0].toLowerCase();
+        const m = maxIso(), l = LAST_DAY[first];
+        return l && l < m ? l : m;
+    }
     const ymOf = k => k.slice(0, 7);                       // '2026-10'
     const ymAdd = (ym, n) => { const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
 
@@ -337,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!my || my.months[ym] === 'loading' || my.months[ym] === 'done') return;
         my.months[ym] = 'loading';
         renderCal();
-        const t = todayIso(), last = maxIso();
+        const t = todayIso(), last = lastIso();
         const y = +ym.slice(0, 4), m = +ym.slice(5, 7);
         const days = [];
         for (let d = 1; d <= new Date(y, m, 0).getDate(); d++) {
@@ -355,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         my.months[ym] = failed ? 'failed' : 'done';
         // Ако в този месец няма нито един свободен ден — сами минаваме на следващия (само при първото отваряне).
-        if (!failed && my.autoJump && my.ym === ym && !monthHasFree(ym) && ymAdd(ym, 1) <= ymOf(maxIso())) {
+        if (!failed && my.autoJump && my.ym === ym && !monthHasFree(ym) && ymAdd(ym, 1) <= ymOf(lastIso())) {
             my.ym = ymAdd(ym, 1);
             renderCal();
             loadMonth(my.ym);
@@ -369,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function goMonth(n) {
         if (!cal) return;
         const ym = ymAdd(cal.ym, n);
-        if (ym < ymOf(todayIso()) || ym > ymOf(maxIso())) return;
+        if (ym < ymOf(todayIso()) || ym > ymOf(lastIso())) return;
         cal.ym = ym; cal.autoJump = false;
         // Денят се избира само ръчно; избраният ден остава, докато не се цъкне друг.
         renderCal();
@@ -381,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const box = $('bk-days');
         if (!box || !cal) return;
         const ym = cal.ym, y = +ym.slice(0, 4), m = +ym.slice(5, 7);
-        const t = todayIso(), last = maxIso();
+        const t = todayIso(), last = lastIso();
         const st = cal.months[ym];
         const first = new Date(y, m - 1, 1);
         const lead = (first.getDay() + 6) % 7;          // седмицата започва от понеделник
