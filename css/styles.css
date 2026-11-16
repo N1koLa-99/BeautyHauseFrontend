@@ -3739,3 +3739,9 @@ html.pf-lock, html.pf-lock body { overflow: hidden; }
 .ld-periods .ld-tab { border: 0; background: transparent; padding: .5rem .3rem; white-space: nowrap; }
 .ld-periods .ld-tab.is-on { background: #4F9E7C; color: #fff; box-shadow: 0 2px 8px rgba(79,158,124,.3); }
 .ld-emps { margin-top: 0 !important; }
+
+/* Предстоящи часове в попъпа на час (16.11.2026) */
+.md-hist .is-up { background: var(--blush-soft); color: var(--rose-deep); }
+.md-hist__d small { display: block; font-size: .72rem; color: var(--ink-soft); }
+.md-hist__gap { height: .9rem; }
+.md-reopen { color: var(--rose-deep); }

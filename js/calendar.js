@@ -1867,10 +1867,13 @@ window.Calendar = (function () {
                 const canEdit = b.status === 'booked' && canAdd();
                 // Изтриване: шефът — всеки час (deleteAny); служителката — предстоящите в своя график.
                 const canDel = !!cfg.deleteBk && (cfg.deleteAny || b.status === 'booked');
+                // Затворен по погрешка (Приключи / Не присъства) -> връща се като записан, без да се пише наново.
+                const canReopen = !!cfg.setStatus && (b.status === 'completed' || b.status === 'no_show');
                 actions = `<div class="cal-modal__actions">
                     ${canEdit ? `<button class="btn btn--primary md-edit">Редактирай часа</button>` : ''}
                     ${cfg.setStatus && !(cfg.hidePrices && b.status === 'completed') ? `<button class="btn btn--gold md-present">${b.status === 'completed' ? 'Запази цената' : 'Приключи часа'}</button>
                     <button class="btn btn--ghost md-absent">Не присъства</button>` : ''}
+                    ${canReopen ? `<button class="btn btn--ghost md-reopen">↺ Отвори часа пак</button>` : ''}
                     ${canCancelWithReason ? `<button class="btn btn--ghost md-cancel" style="color:#D9534F">${b.isOnline ? 'Отмени часа на клиента' : 'Отмени часа'}</button>` : ''}
                     ${canManage ? `
                     <div class="hint" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.4rem">Времетраене
@@ -1952,6 +1955,16 @@ window.Calendar = (function () {
                     else { await saveDiscount(); await cfg.setStatus(b.id, 'completed'); }
                 });
             });
+            const reopen = backdrop.querySelector('.md-reopen');
+            if (reopen) reopen.addEventListener('click', async () => {
+                if (!confirm('Да отворя ли часа пак? Ще стане „Записан“, както преди да го приключиш.')) return;
+                reopen.disabled = true;
+                try { await cfg.setStatus(b.id, 'booked'); close(); await load(); }
+                catch (err) {
+                    msg.innerHTML = `<div class="alert alert--err">Часът не можа да се отвори: ${esc(err.message)}</div>`;
+                    reopen.disabled = false;
+                }
+            });
             const absent = backdrop.querySelector('.md-absent');
             if (absent) absent.addEventListener('click', () => run(() => cfg.setStatus(b.id, 'no_show')));
             const cancelWithReason = backdrop.querySelector('.md-cancel');
@@ -1979,19 +1992,24 @@ window.Calendar = (function () {
             }
         }
 
-        // Минали часове на клиентката (явила се или не) — най-отдолу в попъпа на часа.
+        // Предстоящи + минали часове на клиентката — най-отдолу в попъпа на часа.
         async function loadHistory(b, box, alive) {
             if (!box || !b.clientKey || b.clientKey === 'n') return;
             box.hidden = false;
-            box.innerHTML = `<div class="md-hist__h">Минали часове</div><div class="hint" style="font-size:.8rem">Зареждане…</div>`;
+            box.innerHTML = `<div class="md-hist__h">Часове на клиентката</div><div class="hint" style="font-size:.8rem">Зареждане…</div>`;
             let h;
             try { h = await window.API.get(`/clients/history?key=${encodeURIComponent(b.clientKey)}`); }
             catch (e) { if (alive()) box.hidden = true; return; }
             if (!alive()) return;
             const now = new Date();
-            const past = (h && h.bookings || [])
-                .filter(x => x.id !== b.id && new Date(x.startAt) < now)
+            const all = (h && h.bookings || []).filter(x => x.id !== b.id);
+            const past = all
+                .filter(x => new Date(x.startAt) < now)
                 .sort((x, y) => new Date(y.startAt) - new Date(x.startAt));
+            // Предстоящи: от сега нататък, без отменените; най-близкият най-отгоре.
+            const next = all
+                .filter(x => new Date(x.startAt) >= now && x.status !== 'cancelled')
+                .sort((x, y) => new Date(x.startAt) - new Date(y.startAt));
             const HS = {
                 completed: ['Дошла', 'is-ok'], no_show: ['Не дошла', 'is-no'],
                 cancelled: ['Отменен', 'is-x'], booked: ['Без отметка', 'is-x']
@@ -1999,6 +2017,16 @@ window.Calendar = (function () {
             const nOk = past.filter(x => x.status === 'completed').length;
             const nNo = past.filter(x => x.status === 'no_show').length;
             const d = iso => { const t = new Date(iso); return `${pad(t.getDate())}.${pad(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)}`; };
+            const NS = {
+                booked: ['Записан', 'is-up'], completed: ['Приключен', 'is-ok'], no_show: ['Не дошла', 'is-no']
+            };
+            const rowNext = x => {
+                const [lbl, cls] = NS[x.status] || [x.status, 'is-x'];
+                const pr = (!cfg.hidePrices && x.price != null) ? `<em>${(+x.price).toLocaleString('bg-BG', { maximumFractionDigits: 2 })} €</em>` : '';
+                return `<li><span class="md-hist__d">${d(x.startAt)}<small>${x.startAt.slice(11, 16)}</small></span>
+                    <span class="md-hist__s">${esc(x.serviceName)}<small>${esc(firstName(x.employeeName))}</small></span>
+                    ${pr}<i class="md-hist__st ${cls}">${lbl}</i></li>`;
+            };
             const row = x => {
                 const [lbl, cls] = HS[x.status] || [x.status, 'is-x'];
                 const pr = (!cfg.hidePrices && x.price != null) ? `<em>${(+x.price).toLocaleString('bg-BG', { maximumFractionDigits: 2 })} €</em>` : '';
@@ -2007,7 +2035,12 @@ window.Calendar = (function () {
                     ${pr}<i class="md-hist__st ${cls}">${lbl}</i></li>`;
             };
             const SHOW = 6;
-            box.innerHTML = `<div class="md-hist__h">Минали часове <span>${past.length}</span></div>`
+            const nextHtml = next.length
+                ? `<div class="md-hist__h">Предстоящи часове <span>${next.length}</span></div>
+                   <ul class="md-hist__list md-hist__list--next">${next.map(rowNext).join('')}</ul>
+                   <div class="md-hist__gap"></div>`
+                : '';
+            box.innerHTML = nextHtml + `<div class="md-hist__h">Минали часове <span>${past.length}</span></div>`
                 + (past.length
                     ? `<div class="md-hist__sum"><b class="is-ok">${nOk} дошла</b>${nNo ? `<b class="is-no">${nNo} не дошла</b>` : ''}</div>
                        <ul class="md-hist__list">${past.slice(0, SHOW).map(row).join('')}</ul>
